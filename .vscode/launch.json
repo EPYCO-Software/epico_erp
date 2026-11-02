@@ -3,11 +3,18 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "ng serve",
+      "name": "ng serve erp",
       "type": "chrome",
       "request": "launch",
       "preLaunchTask": "npm: start",
       "url": "http://localhost:4200/"
+    },
+    {
+      "name": "ng serve portal",
+      "type": "chrome",
+      "request": "launch",
+      "preLaunchTask": "npm: start:portal",
+      "url": "http://localhost:4201/"
     },
     {
       "name": "ng test",

@@ -1,53 +1,123 @@
-# EPICO ERP
+# EPICO
 
-ERP para una concretera. Angular 22 standalone + TypeScript estricto, diseño glassmorphism en tema oscuro.
+Workspace Angular 22 multi-app para concreteras. Diseño glassmorphism en tema oscuro.
+
+| Proyecto | Tipo | Usuarios | Puerto dev |
+|---|---|---|---|
+| `erp` | app | Concreteras (mis clientes): operación, flota, laboratorio, facturación… | 4200 |
+| `portal` | app | Clientes de las concreteras (constructoras): sus obras, pedidos, remisiones, facturas y laboratorio | 4201 |
+| `ui` | librería | Código compartido entre ambas apps | — |
 
 ## Stack
 
-- Angular 22 (standalone, signals, zoneless por defecto, OnPush por defecto)
-- Tailwind CSS v4 vía PostCSS (`.postcssrc.json` → `@tailwindcss/postcss`)
-- PrimeNG 22 + `@primeuix/themes` (preset Aura extendido) + `tailwindcss-primeui` + PrimeIcons
-  - No usar `@primeng/themes` (obsoleto) ni `provideAnimations*` (PrimeNG 22 ya no lo requiere).
-  - Tema: `src/app/theme/glass-preset.ts`, registrado en `app.config.ts` con `darkModeSelector: '.app-dark'`
-    y `cssLayer` `primeng`. La clase `app-dark` está fija en el `<html>` de `index.html`.
+- Angular 22 (standalone, signals, zoneless y OnPush por defecto), TypeScript 6 estricto
+- Tailwind CSS v4 vía PostCSS (`.postcssrc.json` en la raíz, aplica a todo el workspace)
+- PrimeNG 22 + `@primeuix/themes` (Aura extendido) + `tailwindcss-primeui` + PrimeIcons + `@angular/cdk`
+  - No usar `@primeng/themes` (obsoleto) ni `provideAnimations*` (PrimeNG 22 no lo requiere).
+  - Sin clave en `providePrimeNG({ license })`, PrimeNG muestra un aviso de licencia.
 - Pruebas: Vitest (`ng test`)
 
 ## Estructura
 
 ```
-src/app/
-  core/      servicios globales, interceptors, guards (placeholders por ahora)
-  shared/    componentes reutilizables: glass-card, page-header, kpi-card
-  layout/    shell (sidebar + topbar), nav-items.ts define el menú
-  features/  una carpeta por módulo; cada página es ruta lazy (loadComponent, export default)
-  theme/     preset de PrimeNG
+.postcssrc.json            Tailwind para todo el workspace
+tsconfig.json              paths: "ui" → ./projects/ui/src/public-api.ts (sin compilar la lib en dev)
+projects/
+  erp/
+    public/  src/
+      styles.css           importa tailwind, primeui, primeicons, ../../ui/styles/base.css y glass.css
+      app/
+        core/              guards, interceptors, servicios globales (placeholders)
+        layout/            shell, sidebar colapsable + drawer móvil, topbar, nav-items.ts
+        features/          una carpeta por módulo, cada página es ruta lazy (export default)
+  portal/
+    public/  src/
+      styles.css           mismo esquema que el ERP
+      app/
+        layout/shell.ts    topbar con logo, menú (drawer en móvil) y avatar
+        features/          obras, pedidos, remisiones, facturas, laboratorio (lazy)
+  ui/
+    styles/base.css        tema oscuro (color-scheme) y fondo con gradientes
+    styles/glass.css       @utility glass / glass-strong
+    src/public-api.ts      todo lo exportado
+    src/lib/
+      theme/               GlassPreset (PrimeNG)
+      components/          ui-glass-card, ui-kpi-card, ui-page-header
+      time/                pipe fechaZona + token DEFAULT_TIMEZONE
+      models/              Cliente, Planta, Obra, Pedido, Remision, MuestraLaboratorio (+ tipos *Vista)
 ```
 
-Para agregar un módulo: crea `features/<nombre>/<nombre>.ts` con `export default class`, agrega la ruta
-hija en `app.routes.ts` y el ítem en `layout/nav-items.ts`.
+## Qué va en `ui` y qué en cada app
+
+- **`ui`**: lo que ambas apps usan igual. Tema, utilidades CSS, componentes de presentación sin lógica de
+  negocio ni servicios, y modelos de dominio. Selector con prefijo `ui-`. No puede importar nada de `erp` ni
+  de `portal`. Si agregas una dependencia nueva, decláralo en `projects/ui/package.json` (`peerDependencies`).
+- **Cada app**: layout, navegación, rutas, guards, interceptors, servicios con estado, páginas y datos mock.
+  Si algo de una app empieza a repetirse en la otra, se mueve a `ui`.
+- Importar siempre `from 'ui'`, nunca con rutas relativas hacia `projects/ui`. La excepción es el CSS
+  (`@import '../../ui/styles/base.css'`, `glass.css` y `@source '../../ui/src'`).
+
+## Modelos
+
+- Modelo de dominio: solo ids para las relaciones (`clienteId`, `obraId`, `pedidoId`, `remisionId`).
+- Tipo de vista (`PedidoVista`, `ObraVista`, `RemisionVista`, `MuestraLaboratorioVista`): extiende el
+  modelo y agrega los nombres a mostrar (`clienteNombre`, `obraNombre`…). Las tablas usan el tipo de vista.
+- Estados como union type en snake_case (`EstadoPedido`); las etiquetas en español se resuelven en la vista.
+
+## Fechas y zonas horarias
+
+Las plantas están en zonas distintas (Quintana Roo UTC−5 `America/Cancun`; Yucatán y Campeche UTC−6
+`America/Merida`). La hora que se muestra es la de la planta, nunca la del navegador.
+
+- Fechas siempre como string ISO 8601 **con offset** (`2026-11-02T07:30:00-05:00`).
+- Cada `Planta` tiene `zonaHoraria` (IANA). Los modelos llevan `plantaId` y los tipos de vista traen
+  `zonaHoraria` (y `plantaNombre`) ya resueltos.
+- Mostrar fechas con el pipe `fechaZona` de `ui`, nunca con `DatePipe` (no acepta zonas IANA):
+  `{{ p.fechaHoraEntrega | fechaZona: p.zonaHoraria : 'HH:mm' }}`. Tokens: `yyyy`, `MM`, `dd`, `HH`, `mm`;
+  formato por defecto `dd/MM/yyyy HH:mm`.
+- Si no viene zona se usa `DEFAULT_TIMEZONE` (`America/Merida`). Una app puede cambiarlo con
+  `{ provide: DEFAULT_TIMEZONE, useValue: 'America/Cancun' }`. Una zona inválida cae al default con
+  `console.warn`.
 
 ## Convenciones
 
-- Textos de UI en español; código (nombres de archivos/clases) puede ir en español según el dominio.
+- Textos de UI en español; nombres de dominio en español.
 - Componentes standalone con `input()`/`output()`, signals, `inject()`, `@if`/`@for`.
 - Estilos con utilidades Tailwind en el template; CSS de componente solo si no hay utilidad.
-- Accesibilidad: botones de solo icono con `aria-label`, iconos decorativos con `aria-hidden="true"`.
+- Accesibilidad: botones de solo icono con `aria-label`, iconos decorativos con `aria-hidden="true"`,
+  `ariaCurrentWhenActive="page"` en los enlaces de navegación.
+- Para agregar una página: `features/<nombre>/<nombre>.ts` con `export default class`, la ruta hija en
+  `app.routes.ts` y el enlace en la navegación (`layout/nav-items.ts` en el ERP, `NAV` en el shell del portal).
 
-## Utilidades glass (`src/styles.css`)
+## Estilos compartidos
+
+- `projects/ui/styles/base.css`: `color-scheme: dark` y fondo con gradientes (el blur necesita algo detrás).
+  Si una app necesita otro fondo (p. ej. la marca de una concretera), no lo importa y define el suyo.
+- `projects/ui/styles/glass.css`: solo las utilidades `glass` y `glass-strong`.
+- Ambas apps importan los dos después de `tailwindcss`.
+
+### Utilidades glass
 
 - `glass`: tarjetas y contenedores normales (bg-white/10, blur-xl, borde white/15, rounded-2xl, sombra).
 - `glass-strong`: capas encima de otras (drawer, diálogos, popovers propios).
-- Usar `backdrop-filter` (glass) solo en contenedores: sidebar, topbar, cards, diálogos. Nunca en filas
-  de tabla ni elementos repetidos: cuesta mucho al renderizar. Las tablas van dentro de una `app-glass-card`
-  y el preset deja sus filas transparentes.
+- Usar `backdrop-filter` (glass) solo en contenedores: sidebar, topbar, cards, diálogos. Nunca en filas de
+  tabla ni en elementos repetidos. Las tablas van dentro de una `ui-glass-card` y el preset deja sus filas
+  transparentes.
 - Sobre componentes PrimeNG usa `styleClass="glass-strong!"` (el `!` gana a la capa `primeng`).
 - Orden de capas: `@layer theme, base, primeng, utilities;` (utilidades Tailwind > PrimeNG).
 
 ## Comandos
 
-- `npm start` / `ng serve`: servidor de desarrollo en http://localhost:4200
-- `ng build`: build de producción en `dist/epico-erp`
-- `ng test`: pruebas unitarias
+| Comando | Qué hace |
+|---|---|
+| `npm run start:erp` (o `npm start`) | `ng serve erp` en http://localhost:4200 |
+| `npm run start:portal` | `ng serve portal` en http://localhost:4201 |
+| `npm run build:erp` / `build:portal` / `build:ui` | Build de producción en `dist/<proyecto>` |
+| `npm run build:all` | ui → erp → portal |
+| `ng test` / `ng test erp` | Pruebas de todo el workspace o de un proyecto |
+
+No existe `defaultProject`: indica siempre el proyecto en `ng serve`/`ng build`/`ng generate`
+(`ng g c foo --project portal`).
 
 ---
 

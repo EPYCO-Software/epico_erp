@@ -1,0 +1,9 @@
+/* Utilidades glass compartidas. Importar desde el styles.css de cada app, después de 'tailwindcss'.
+   Usar solo en contenedores (sidebar, topbar, cards, diálogos), nunca en filas de tabla. */
+@utility glass {
+  @apply rounded-2xl border border-white/15 bg-white/10 shadow-lg shadow-black/20 backdrop-blur-xl;
+}
+
+@utility glass-strong {
+  @apply rounded-2xl border border-white/25 bg-white/20 shadow-xl shadow-black/30 backdrop-blur-2xl;
+}
