@@ -1,0 +1,32 @@
+@layer theme, base, primeng, utilities;
+
+@import 'tailwindcss';
+@import 'tailwindcss-primeui';
+@import 'primeicons/primeicons.css';
+
+@custom-variant dark (&:where(.app-dark, .app-dark *));
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply min-h-dvh text-slate-100 antialiased;
+    background-color: #0b1120;
+    background-image:
+      radial-gradient(60rem 40rem at 10% -10%, rgb(37 99 235 / 0.35), transparent 60%),
+      radial-gradient(50rem 40rem at 100% 20%, rgb(20 184 166 / 0.25), transparent 60%),
+      radial-gradient(40rem 30rem at 40% 110%, rgb(14 165 233 / 0.2), transparent 60%);
+    background-attachment: fixed;
+  }
+}
+
+/* Contenedores de vidrio: usar solo en contenedores (sidebar, topbar, cards, diálogos), nunca en filas. */
+@utility glass {
+  @apply rounded-2xl border border-white/15 bg-white/10 shadow-lg shadow-black/20 backdrop-blur-xl;
+}
+
+@utility glass-strong {
+  @apply rounded-2xl border border-white/25 bg-white/20 shadow-xl shadow-black/30 backdrop-blur-2xl;
+}
