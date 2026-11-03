@@ -22,12 +22,20 @@
               {
                 "glob": "**/*",
                 "input": "projects/erp/public"
+              },
+              {
+                "glob": "**/*",
+                "input": "projects/ui/assets",
+                "output": "ui"
               }
             ],
             "styles": [
               "projects/erp/src/styles.css"
             ],
-            "outputPath": "dist/erp"
+            "outputPath": "dist/erp",
+            "allowedCommonJsDependencies": [
+              "leaflet"
+            ]
           },
           "configurations": {
             "production": {
@@ -88,13 +96,21 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "projects/portal/public"
+                "input": "projects/ui/assets",
+                "output": "ui"
               }
             ],
             "styles": [
               "projects/portal/src/styles.css"
             ],
-            "outputPath": "dist/portal"
+            "outputPath": "dist/portal",
+            "allowedCommonJsDependencies": [
+              "core-js",
+              "html2canvas",
+              "raf",
+              "rgbcolor",
+              "leaflet"
+            ]
           },
           "configurations": {
             "production": {

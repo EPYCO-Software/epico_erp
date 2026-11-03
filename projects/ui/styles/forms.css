@@ -1,0 +1,74 @@
+/* Controles de formulario EPICO sobre elementos nativos. Importar desde el styles.css de cada app.
+   El alto, el padding interno y el tamaño de texto se ponen en cada uso (h-12, h-15, pl-10…). */
+
+/* input, select y textarea */
+@utility campo {
+  @apply w-full rounded-[0.625rem] border border-acero-oscuro bg-white text-carbon transition-colors placeholder:text-texto-suave hover:border-carbon;
+
+  &:focus {
+    border-color: var(--color-epico);
+    outline: 3px solid color-mix(in srgb, var(--color-epico) 25%, transparent);
+  }
+
+  &[aria-invalid='true'] {
+    border-color: var(--color-critico);
+  }
+}
+
+/* checkbox nativo */
+@utility casilla {
+  @apply size-5 shrink-0 cursor-pointer accent-epico;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-epico);
+    outline-offset: 2px;
+  }
+}
+
+/* botón de acción principal: rojo EPICO */
+@utility boton-primario {
+  @apply flex w-full items-center justify-center gap-3 rounded-[0.625rem] bg-epico font-semibold text-white shadow-lg shadow-epico/25 transition-colors hover:bg-epico-oscuro disabled:cursor-wait disabled:opacity-80;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-epico);
+    outline-offset: 3px;
+  }
+}
+
+/* interruptor (switch) sobre checkbox nativo: usar con role="switch" */
+@utility interruptor {
+  @apply relative h-7 w-12 shrink-0 cursor-pointer appearance-none rounded-full bg-acero-oscuro transition-colors checked:bg-epico;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 9999px;
+    background: white;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+    transition: transform 150ms ease-out;
+  }
+
+  &:checked::before {
+    transform: translateX(20px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-epico);
+    outline-offset: 2px;
+  }
+}
+
+/* opción de un control segmentado: <label class="segmento"><input type="radio" class="sr-only">Texto</label>
+   dentro de un contenedor con role="radiogroup" */
+@utility segmento {
+  @apply flex min-h-10 cursor-pointer items-center justify-center rounded-lg px-2 text-center text-sm font-medium text-carbon transition-colors hover:bg-white/80 has-checked:bg-epico has-checked:font-semibold has-checked:text-white has-checked:shadow-md has-checked:shadow-epico/25;
+
+  &:has(:focus-visible) {
+    outline: 2px solid var(--color-epico);
+    outline-offset: 2px;
+  }
+}

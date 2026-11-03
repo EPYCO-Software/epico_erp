@@ -1,17 +1,29 @@
-/* Base compartida: tema oscuro y fondo con gradientes (el blur necesita algo detrás).
+/* Identidad EPICO: tokens de color y fondo de concreto claro con halos rojos.
    Si una app necesita otro fondo (p. ej. la marca de una concretera), no importa este archivo y define el suyo. */
+@theme {
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+
+  --color-epico: #d3181e;
+  --color-epico-oscuro: #a31217; /* hover / texto rojo sobre tintes claros (contraste AA) */
+  --color-carbon: #1a1a1c;
+  --color-concreto: #f3f3f1;
+  --color-acero: #aeb4b8; /* bordes decorativos */
+  --color-acero-oscuro: #8a9196; /* bordes de campos: 3:1 sobre blanco (WCAG 1.4.11) */
+  --color-texto-suave: #696d71; /* 4.7:1 sobre concreto, 5.2:1 sobre blanco */
+
+  --color-info: #3b82a0;
+  --color-atencion: #d99a2b;
+  --color-correcto: #3f8065;
+  --color-critico: #b9473e;
+}
+
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
-    @apply min-h-dvh text-slate-100 antialiased;
-    background-color: #0b1120;
-    background-image:
-      radial-gradient(60rem 40rem at 10% -10%, rgb(37 99 235 / 0.35), transparent 60%),
-      radial-gradient(50rem 40rem at 100% 20%, rgb(20 184 166 / 0.25), transparent 60%),
-      radial-gradient(40rem 30rem at 40% 110%, rgb(14 165 233 / 0.2), transparent 60%);
-    background-attachment: fixed;
+    @apply min-h-dvh text-carbon antialiased;
+    background: var(--color-concreto) url('/ui/fondos/fondo-concreto.webp') center / cover no-repeat fixed;
   }
 }

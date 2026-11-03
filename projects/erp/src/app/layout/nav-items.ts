@@ -1,6 +1,21 @@
+import {
+  Box,
+  ChartLine,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  Fuel,
+  House,
+  IconNode,
+  Settings,
+  Truck,
+  Users,
+  Wrench,
+} from 'lucide';
+
 export interface NavItem {
   label: string;
-  icon: string;
+  icon: IconNode;
   path: string;
 }
 
@@ -10,30 +25,30 @@ export interface NavGroup {
 }
 
 export const NAV_GROUPS: NavGroup[] = [
-  { label: 'General', items: [{ label: 'Dashboard', icon: 'pi-home', path: '/dashboard' }] },
+  { label: 'General', items: [{ label: 'Dashboard', icon: House, path: '/dashboard' }] },
   {
     label: 'Operación',
     items: [
-      { label: 'Pedidos', icon: 'pi-clipboard', path: '/pedidos' },
-      { label: 'Flota', icon: 'pi-truck', path: '/flota' },
-      { label: 'Combustible', icon: 'pi-gauge', path: '/combustible' },
+      { label: 'Pedidos', icon: ClipboardList, path: '/pedidos' },
+      { label: 'Flota', icon: Truck, path: '/flota' },
+      { label: 'Combustible', icon: Fuel, path: '/combustible' },
     ],
   },
-  { label: 'Calidad', items: [{ label: 'Laboratorio', icon: 'pi-filter', path: '/laboratorio' }] },
+  { label: 'Calidad', items: [{ label: 'Laboratorio', icon: FlaskConical, path: '/laboratorio' }] },
   {
     label: 'Activos',
     items: [
-      { label: 'Mantenimiento', icon: 'pi-wrench', path: '/mantenimiento' },
-      { label: 'Inventario', icon: 'pi-box', path: '/inventario' },
+      { label: 'Mantenimiento', icon: Wrench, path: '/mantenimiento' },
+      { label: 'Inventario', icon: Box, path: '/inventario' },
     ],
   },
   {
     label: 'Comercial',
     items: [
-      { label: 'Clientes', icon: 'pi-users', path: '/clientes' },
-      { label: 'Ventas', icon: 'pi-chart-line', path: '/ventas' },
-      { label: 'Facturación', icon: 'pi-file', path: '/facturacion' },
+      { label: 'Clientes', icon: Users, path: '/clientes' },
+      { label: 'Ventas', icon: ChartLine, path: '/ventas' },
+      { label: 'Facturación', icon: FileText, path: '/facturacion' },
     ],
   },
-  { label: 'Configuración', items: [{ label: 'Configuración', icon: 'pi-cog', path: '/configuracion' }] },
+  { label: 'Configuración', items: [{ label: 'Configuración', icon: Settings, path: '/configuracion' }] },
 ];

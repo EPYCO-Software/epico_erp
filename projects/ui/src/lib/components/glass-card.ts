@@ -5,7 +5,7 @@ import { Component, input } from '@angular/core';
   host: { class: 'glass block p-5' },
   template: `
     @if (heading()) {
-      <h2 class="mb-3 text-base font-semibold text-white">{{ heading() }}</h2>
+      <h2 class="mb-3 text-base font-semibold text-carbon">{{ heading() }}</h2>
     }
     <ng-content />
   `,

@@ -1,11 +1,7 @@
-@layer theme, base, primeng, utilities;
-
 @import 'tailwindcss';
-@import 'tailwindcss-primeui';
-@import 'primeicons/primeicons.css';
+@import '@angular/cdk/overlay-prebuilt.css';
 @import '../../ui/styles/base.css';
 @import '../../ui/styles/glass.css';
+@import '../../ui/styles/forms.css';
 
 @source '../../ui/src';
-
-@custom-variant dark (&:where(.app-dark, .app-dark *));

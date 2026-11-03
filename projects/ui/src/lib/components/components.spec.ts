@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Gauge } from 'lucide';
 import { GlassCard } from './glass-card';
 import { KpiCard } from './kpi-card';
 import { PageHeader } from './page-header';
@@ -9,12 +10,13 @@ describe('ui components', () => {
     fixture.componentRef.setInput('label', 'Litros de diésel');
     fixture.componentRef.setInput('value', '4,850');
     fixture.componentRef.setInput('unit', 'L');
-    fixture.componentRef.setInput('icon', 'pi-gauge');
+    fixture.componentRef.setInput('icon', Gauge);
     await fixture.whenStable();
     const text = (fixture.nativeElement as HTMLElement).textContent;
     expect(text).toContain('Litros de diésel');
     expect(text).toContain('4,850');
     expect(text).toContain('L');
+    expect((fixture.nativeElement as HTMLElement).querySelector('ui-icon svg')).not.toBeNull();
   });
 
   it('GlassCard solo renderiza el encabezado si se pasa heading', async () => {

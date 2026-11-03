@@ -1,0 +1,187 @@
+<!--
+  Escritorio (lg): el mockup es un lienzo de 1586×992 que se escala completo, sin deformarse, al tamaño de la
+  ventana. --u = 1 px del mockup; --spacing = 4u, así que las clases de Tailwind usan medidas del mockup ÷ 4
+  (p. ej. h-15 = 60 px del mockup). Los textos y controles tienen un mínimo legible (max(14px, …)).
+  Celular: diseño apilado; las medidas verticales escalan con el alto (dvh) para que no haya scroll.
+-->
+<div
+  class="flex min-h-dvh items-center justify-center bg-concreto bg-[url(/ui/fondos/fondo-login.webp)] bg-cover bg-center
+    [--boton:clamp(2.75rem,6.4dvh,3.875rem)] [--campo:clamp(2.75rem,6.2dvh,3.75rem)] [--hueco:clamp(0.75rem,2.4dvh,1.5rem)]
+    [--hueco-lg:clamp(1rem,4.4dvh,2.75rem)] [--pad-y:clamp(1.25rem,5.6dvh,3.5rem)]
+    lg:overflow-hidden lg:[--u:min(100vw/1586,100dvh/992,1.25px)] lg:[--spacing:calc(var(--u)*4)]
+    lg:[--boton:max(40px,calc(var(--u)*62))] lg:[--campo:max(40px,calc(var(--u)*60))]"
+>
+  <div
+    class="grid w-full content-center gap-y-(--hueco) px-4 py-(--hueco) sm:px-10
+      lg:h-248 lg:w-396.5 lg:grid-cols-[minmax(0,1fr)_calc(var(--spacing)*141)] lg:content-start lg:items-start lg:gap-0 lg:py-0 lg:pr-29 lg:pl-41.25"
+  >
+    <!-- Marca -->
+    <section aria-labelledby="portal-titulo" class="lg:pt-50">
+      <img
+        ngSrc="/ui/marca/logo-epico-erp-horizontal.webp"
+        width="1200"
+        height="383"
+        priority
+        alt="EPICO ERP"
+        class="h-[clamp(2.25rem,6dvh,3rem)] w-auto lg:h-23.25"
+      />
+
+      <p class="mt-(--hueco) hidden text-[0.9375rem] font-medium tracking-[0.4em] text-texto-suave sm:block lg:mt-9 lg:text-[max(12px,calc(var(--u)*15))]">
+        PORTAL DEL CLIENTE
+      </p>
+      <h1
+        id="portal-titulo"
+        class="mt-[clamp(0.5rem,1.6dvh,1rem)] text-[clamp(1.625rem,4dvh,2.25rem)] leading-[1.05] font-bold tracking-[-0.02em] text-carbon lg:mt-4.5 lg:text-[max(28px,calc(var(--u)*56))] lg:leading-[1.04]"
+      >
+        Tu proyecto,<br />siempre a la mano
+      </h1>
+      <p class="hidden text-texto-suave lg:mt-7.75 lg:block lg:max-w-110 lg:text-[max(16px,calc(var(--u)*22))] lg:leading-[1.36]">
+        Solicita cotizaciones, revisa propuestas<br />y consulta tus pedidos en un solo lugar.
+      </p>
+    </section>
+
+    <!-- Acceso -->
+    <main class="w-full lg:mt-30">
+      <form
+        class="glass w-full rounded-[1.75rem] border-white/90 bg-white/55 px-5 pt-(--pad-y) pb-[clamp(0.75rem,3.2dvh,2rem)] shadow-2xl shadow-carbon/10 backdrop-blur-xl sm:px-10
+          lg:rounded-[calc(var(--u)*36)] lg:px-14 lg:pt-13.5 lg:pb-7"
+        novalidate
+        aria-labelledby="form-titulo"
+        (submit)="entrar($event)"
+      >
+        <p class="hidden text-[0.8125rem] font-medium tracking-[0.25em] text-texto-suave sm:block lg:text-[max(11px,calc(var(--u)*13))]">
+          ACCESO DE CLIENTES
+        </p>
+        <h2
+          id="form-titulo"
+          class="text-[clamp(1.625rem,4dvh,2.375rem)] leading-tight font-bold tracking-[-0.01em] text-carbon sm:mt-[clamp(0.25rem,1.2dvh,0.75rem)] lg:mt-1.75 lg:text-[max(26px,calc(var(--u)*36))]"
+        >
+          Bienvenido
+        </h2>
+        <p class="mt-1 text-[clamp(1rem,1.9dvh,1.125rem)] text-texto-suave lg:mt-2 lg:text-[max(14px,calc(var(--u)*18))] [@media(max-height:680px)]:max-lg:hidden">
+          Inicia sesión para continuar
+        </p>
+
+        <div class="mt-(--hueco-lg) space-y-[clamp(0.625rem,2dvh,1.25rem)] lg:mt-9 lg:space-y-5.5">
+          <div>
+            <label for="correo" class="mb-[clamp(0.375rem,1.2dvh,0.75rem)] block font-semibold text-carbon lg:mb-2.25 lg:text-[max(14px,calc(var(--u)*16))]">
+              Correo electrónico
+            </label>
+            <div class="relative">
+              <ui-icon
+                [icono]="iconos.correo"
+                [tamano]="22"
+                class="pointer-events-none absolute top-1/2 left-5 -translate-y-1/2 text-texto-suave lg:[&_svg]:size-5.5"
+              />
+              <input
+                id="correo"
+                type="email"
+                autocomplete="username"
+                placeholder="nombre@empresa.com"
+                class="campo h-(--campo) pr-4 pl-15 text-[1.0625rem] lg:text-[max(14px,calc(var(--u)*17))]"
+                [formField]="f.correo"
+                [attr.aria-invalid]="f.correo().touched() && f.correo().invalid()"
+                aria-describedby="correo-error"
+              />
+            </div>
+            <ui-field-error [campo]="f.correo" errorId="correo-error" />
+          </div>
+
+          <div>
+            <label for="password" class="mb-[clamp(0.375rem,1.2dvh,0.75rem)] block font-semibold text-carbon lg:mb-2.25 lg:text-[max(14px,calc(var(--u)*16))]">
+              Contraseña
+            </label>
+            <div class="relative">
+              <ui-icon
+                [icono]="iconos.candado"
+                [tamano]="22"
+                class="pointer-events-none absolute top-1/2 left-5 -translate-y-1/2 text-texto-suave lg:[&_svg]:size-5.5"
+              />
+              <input
+                id="password"
+                [type]="verPassword() ? 'text' : 'password'"
+                autocomplete="current-password"
+                class="campo h-(--campo) pr-16 pl-15 text-[1.0625rem] lg:text-[max(14px,calc(var(--u)*17))]"
+                [formField]="f.password"
+                [attr.aria-invalid]="f.password().touched() && f.password().invalid()"
+                aria-describedby="password-error"
+              />
+              <button
+                type="button"
+                class="absolute top-1/2 right-1 flex size-11 min-h-[24px] min-w-[24px] -translate-y-1/2 items-center justify-center rounded-lg text-texto-suave hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico lg:right-2"
+                [attr.aria-label]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                [attr.aria-pressed]="verPassword()"
+                (click)="verPassword.update((v) => !v)"
+              >
+                <ui-icon [icono]="verPassword() ? iconos.ocultar : iconos.ver" [tamano]="22" class="lg:[&_svg]:size-5.5" />
+              </button>
+            </div>
+            <ui-field-error [campo]="f.password" errorId="password-error" />
+          </div>
+        </div>
+
+        <div class="mt-(--hueco) flex flex-wrap items-center justify-between gap-x-3 gap-y-1 lg:mt-5.5">
+          <div class="flex min-h-11 items-center gap-3 lg:min-h-6">
+            <input id="recordar" type="checkbox" class="casilla min-h-[16px] min-w-[16px]" [formField]="f.recordar" />
+            <label for="recordar" class="text-sm text-texto-suave sm:text-base lg:text-[max(13px,calc(var(--u)*16))]">Recordarme</label>
+          </div>
+          <button
+            type="button"
+            class="min-h-11 rounded text-sm font-semibold text-epico hover:text-epico-oscuro hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico sm:text-[0.9375rem] lg:min-h-6 lg:text-[max(13px,calc(var(--u)*15))]"
+            (click)="aviso.set(avisos.recuperar)"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
+
+        <div aria-live="polite" class="text-sm">
+          @if (error()) {
+            <p class="mt-2 flex items-center gap-2 font-medium text-critico" role="alert">
+              <ui-icon [icono]="iconos.error" [tamano]="18" />{{ error() }}
+            </p>
+          } @else if (aviso()) {
+            <p class="mt-2 flex items-start gap-2 text-carbon">
+              <ui-icon [icono]="iconos.info" [tamano]="18" class="text-info" />{{ aviso() }}
+            </p>
+          }
+        </div>
+
+        <button
+          type="submit"
+          class="boton-primario mt-[clamp(0.5rem,1.8dvh,1rem)] h-(--boton) text-[clamp(1.0625rem,2dvh,1.1875rem)] lg:mt-6.75 lg:text-[max(15px,calc(var(--u)*19))]"
+          [disabled]="f().submitting()"
+          [attr.aria-busy]="f().submitting()"
+        >
+          @if (f().submitting()) {
+            <ui-icon [icono]="iconos.cargando" [tamano]="22" class="animate-spin lg:[&_svg]:size-5.5" />Entrando…
+          } @else {
+            Iniciar sesión<ui-icon [icono]="iconos.flecha" [tamano]="22" class="lg:[&_svg]:size-5.5" />
+          }
+        </button>
+
+        <!-- En celular los dos accesos secundarios comparten una fila; en escritorio van separados como en el mockup. -->
+        <div class="mt-(--hueco) flex flex-wrap items-center justify-center gap-x-2 border-t border-acero/50 pt-[clamp(0.25rem,1.6dvh,1rem)] lg:mt-6.75 lg:block lg:pt-6.25">
+          <p class="text-center text-sm text-texto-suave sm:text-[1.0625rem] lg:border-b lg:border-acero/50 lg:pb-7.25 lg:text-[max(14px,calc(var(--u)*17))]">
+            <span class="hidden lg:inline">¿Aún no tienes acceso?</span>
+            <button
+              type="button"
+              class="min-h-11 rounded font-semibold text-epico underline underline-offset-4 hover:text-epico-oscuro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico lg:ml-1 lg:min-h-0"
+              (click)="aviso.set(avisos.acceso)"
+            >
+              Solicitar acceso
+            </button>
+          </p>
+          <div class="text-center lg:pt-5">
+            <button
+              type="button"
+              class="inline-flex min-h-11 items-center gap-2 rounded-lg px-1 text-sm font-semibold text-epico hover:bg-epico/5 hover:text-epico-oscuro focus-visible:outline-2 focus-visible:outline-epico sm:gap-3 sm:px-3 sm:text-base lg:text-[max(13px,calc(var(--u)*16))]"
+              (click)="aviso.set(avisos.atencion)"
+            >
+              <ui-icon [icono]="iconos.atencion" [tamano]="22" class="lg:[&_svg]:size-6" />Atención al cliente
+            </button>
+          </div>
+        </div>
+      </form>
+    </main>
+  </div>
+</div>

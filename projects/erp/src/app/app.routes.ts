@@ -1,11 +1,16 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/guards/auth.guard';
-import { Shell } from './layout/shell';
+import { authGuard, guestGuard } from 'ui';
 
 export const routes: Routes = [
   {
+    path: 'login',
+    title: 'Iniciar sesión · EPICO ERP',
+    canActivate: [guestGuard],
+    loadComponent: () => import('./features/auth/login'),
+  },
+  {
     path: '',
-    component: Shell,
+    loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     canActivate: [authGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },

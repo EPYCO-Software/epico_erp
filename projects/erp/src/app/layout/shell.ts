@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { Drawer } from 'primeng/drawer';
+import { Drawer } from 'ui';
 import { SidebarNav } from './sidebar-nav';
 import { Topbar } from './topbar';
 
@@ -16,14 +16,9 @@ import { Topbar } from './topbar';
       <app-sidebar-nav [collapsed]="collapsed()" />
     </aside>
 
-    <p-drawer
-      [(visible)]="mobileOpen"
-      header="EPICO ERP"
-      ariaCloseLabel="Cerrar menú"
-      styleClass="w-72! glass-strong! rounded-l-none!"
-    >
+    <ui-drawer [(abierto)]="mobileOpen" titulo="EPICO ERP">
       <app-sidebar-nav (navigate)="mobileOpen.set(false)" />
-    </p-drawer>
+    </ui-drawer>
 
     <div class="flex min-w-0 flex-1 flex-col gap-4">
       <app-topbar

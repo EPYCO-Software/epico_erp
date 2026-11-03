@@ -1,0 +1,135 @@
+@if (s.paso() !== 'enviar') {
+  <!--
+    Escritorio: la página ocupa el alto de la ventana (--alto-contenido, definido en el shell) y cada columna
+    tiene su propio scroll. Celular: scroll normal de página (pb extra para la barra fija inferior).
+  -->
+  <div class="grid grid-cols-1 gap-4 pb-28 lg:h-(--alto-contenido) lg:grid-cols-[minmax(0,1fr)_25rem] lg:gap-4 lg:pb-0 xl:grid-cols-[minmax(0,1fr)_28rem] 2xl:grid-cols-[minmax(0,1fr)_31rem]">
+    <section aria-labelledby="cotizador-titulo" class="glass flex flex-col p-4 sm:p-5 lg:min-h-0">
+      <!-- Encabezado compacto + pasos -->
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <h1 id="cotizador-titulo" class="text-xl font-bold tracking-[-0.01em]">Configuremos tu pedido</h1>
+          <span class="mt-1 block h-1 w-10 rounded-full bg-epico" aria-hidden="true"></span>
+        </div>
+
+        <ol aria-label="Pasos de la configuración" class="flex shrink-0 items-center gap-1 sm:gap-2">
+          @for (nombre of pasos; track nombre; let i = $index; let ultimo = $last) {
+            <li class="flex items-center gap-1 sm:gap-2" [attr.aria-current]="numeroPaso() === i + 1 ? 'step' : null">
+              <button
+                type="button"
+                class="flex min-h-10 items-center gap-2 rounded-lg px-1.5 text-sm focus-visible:outline-2 focus-visible:outline-epico"
+                [class]="numeroPaso() === i + 1 ? 'cursor-default font-semibold text-carbon' : numeroPaso() > i + 1 ? 'text-carbon hover:bg-carbon/5' : 'text-texto-suave hover:bg-carbon/5 hover:text-carbon'"
+                [attr.aria-disabled]="numeroPaso() === i + 1 || null"
+                (click)="irAPaso(i + 1)"
+              >
+                <span
+                  class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  [class]="numeroPaso() >= i + 1 ? 'bg-epico text-white' : 'border-2 border-acero bg-white text-texto-suave'"
+                  aria-hidden="true"
+                >
+                  {{ i + 1 }}
+                </span>
+                <!-- En celular solo se lee la etiqueta del paso actual; los demás quedan con su número. -->
+                <span [class.max-sm:sr-only]="numeroPaso() !== i + 1"><span class="sr-only">Paso {{ i + 1 }}: </span>{{ nombre }}</span>
+                @if (numeroPaso() > i + 1) {
+                  <span class="sr-only">(completado, volver a este paso)</span>
+                } @else if (numeroPaso() < i + 1) {
+                  <span class="sr-only">(ir a este paso)</span>
+                }
+              </button>
+              @if (!ultimo) {
+                <ui-icon [icono]="iconos.siguiente" [tamano]="16" class="text-texto-suave" />
+              }
+            </li>
+          }
+        </ol>
+      </div>
+
+      <!-- Contenido del paso: solo esta zona se desplaza en escritorio -->
+      <!-- relative: contiene los inputs sr-only (absolute) para que no alarguen la página. -->
+      <div #contenido uiDesvanecer class="sin-barra relative -mx-2 mt-4 px-2 pt-1 pb-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        @if (s.paso() !== 1 && s.solucion(); as sol) {
+          <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-[#FDF2F2] text-carbon/80">
+              <ui-icon [icono]="sol.icono" [tamano]="32" class="[&_svg]:stroke-[1.5]" />
+            </span>
+            <p class="text-2xl font-bold tracking-[-0.01em]">{{ s.nombre() }}</p>
+            <span class="hidden h-7 w-px bg-acero sm:block" aria-hidden="true"></span>
+            <button
+              type="button"
+              class="flex min-h-11 items-center gap-2 rounded font-semibold text-epico underline underline-offset-4 hover:text-epico-oscuro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico"
+              (click)="s.paso.set(1)"
+            >
+              <ui-icon [icono]="iconos.cambiar" [tamano]="18" />Cambiar solución
+            </button>
+          </div>
+        }
+
+        @switch (s.paso()) {
+          @case (1) {
+            <app-paso-solucion />
+          }
+          @case (2) {
+            <app-paso-especificaciones />
+          }
+          @case (3) {
+            <app-paso-servicios />
+          }
+        }
+
+        <!-- Navegación del paso -->
+        <div class="mt-5 flex items-center justify-between gap-3">
+          @if (s.paso() !== 1) {
+            <button
+              type="button"
+              class="flex h-11 items-center gap-2 rounded-xl px-3 font-semibold text-carbon hover:bg-carbon/5 focus-visible:outline-2 focus-visible:outline-epico"
+              (click)="irAPaso(numeroPaso() - 1)"
+            >
+              <ui-icon [icono]="iconos.volver" [tamano]="18" />Atrás
+            </button>
+          } @else {
+            <span></span>
+          }
+          <button type="button" class="boton-primario h-12 w-auto px-6" (click)="s.siguiente()">
+            @if (s.paso() === 3) {
+              <ui-icon [icono]="iconos.agregar" />
+            }
+            {{ s.textoAccion() }}
+            @if (s.paso() !== 3) {
+              <ui-icon [icono]="iconos.siguiente" />
+            }
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Resumen con scroll propio en escritorio -->
+    <div uiDesvanecer class="sin-barra relative lg:-mx-1 lg:min-h-0 lg:overflow-y-auto lg:px-1 lg:pb-1">
+      <app-resumen />
+    </div>
+  </div>
+
+  <!-- Celular: la acción del paso siempre a la mano. data-barra-inferior: la burbuja del chat se sube sobre ella. -->
+  <div data-barra-inferior class="glass-strong fixed inset-x-3 bottom-3 z-20 flex items-center gap-3 p-3 lg:hidden">
+    <div class="min-w-0 flex-1">
+      <p class="text-xs text-texto-suave">Paso {{ numeroPaso() }} de 3 · {{ pasos[numeroPaso() - 1] }}</p>
+      <p class="truncate text-sm font-semibold">{{ s.solucion() ? s.nombre() : 'Elige una solución' }}</p>
+    </div>
+    <!-- Texto corto por espacio; el nombre accesible es el completo. -->
+    <button type="button" class="boton-primario h-12 w-auto shrink-0 px-5" [attr.aria-label]="s.textoAccion()" (click)="s.siguiente()">
+      @switch (s.paso()) {
+        @case (1) {
+          Especificaciones<ui-icon [icono]="iconos.siguiente" />
+        }
+        @case (2) {
+          Confirmar<ui-icon [icono]="iconos.siguiente" />
+        }
+        @default {
+          <ui-icon [icono]="iconos.agregar" />Agregar
+        }
+      }
+    </button>
+  </div>
+} @else {
+  <app-resumen-cotizacion />
+}

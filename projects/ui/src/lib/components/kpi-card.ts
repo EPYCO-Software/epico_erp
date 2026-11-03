@@ -1,25 +1,25 @@
 import { Component, input } from '@angular/core';
+import { IconNode } from 'lucide';
+import { Icon } from './icon';
 
 @Component({
   selector: 'ui-kpi-card',
+  imports: [Icon],
   host: { class: 'glass flex items-center gap-4 p-5' },
   template: `
-    <span
-      class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-sky-400/15 text-sky-300"
-      aria-hidden="true"
-    >
-      <i [class]="'pi ' + icon() + ' text-xl'"></i>
+    <span class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-epico/10 text-epico">
+      <ui-icon [icono]="icon()" [tamano]="22" />
     </span>
     <div class="min-w-0">
-      <p class="text-sm text-slate-300">{{ label() }}</p>
-      <p class="text-2xl font-semibold text-white">
+      <p class="text-sm text-texto-suave">{{ label() }}</p>
+      <p class="text-2xl font-semibold text-carbon">
         {{ value() }}
         @if (unit()) {
-          <span class="text-base font-normal text-slate-300">{{ unit() }}</span>
+          <span class="text-base font-normal text-texto-suave">{{ unit() }}</span>
         }
       </p>
       @if (hint()) {
-        <p class="text-xs text-slate-300">{{ hint() }}</p>
+        <p class="text-xs text-texto-suave">{{ hint() }}</p>
       }
     </div>
   `,
@@ -27,7 +27,7 @@ import { Component, input } from '@angular/core';
 export class KpiCard {
   readonly label = input.required<string>();
   readonly value = input.required<string | number>();
-  readonly icon = input.required<string>();
+  readonly icon = input.required<IconNode>();
   readonly unit = input<string>();
   readonly hint = input<string>();
 }

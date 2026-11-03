@@ -1,6 +1,6 @@
 # EPICO
 
-Workspace Angular 22 multi-app para concreteras. Diseño glassmorphism en tema oscuro.
+Workspace Angular 22 multi-app para concreteras. Identidad EPICO: tema claro de concreto, glass blanco discreto y rojo EPICO como acento.
 
 | Proyecto | Tipo | Usuarios | Puerto dev |
 |---|---|---|---|
@@ -12,9 +12,11 @@ Workspace Angular 22 multi-app para concreteras. Diseño glassmorphism en tema o
 
 - Angular 22 (standalone, signals, zoneless y OnPush por defecto), TypeScript 6 estricto
 - Tailwind CSS v4 vía PostCSS (`.postcssrc.json` en la raíz, aplica a todo el workspace)
-- PrimeNG 22 + `@primeuix/themes` (Aura extendido) + `tailwindcss-primeui` + PrimeIcons + `@angular/cdk`
-  - No usar `@primeng/themes` (obsoleto) ni `provideAnimations*` (PrimeNG 22 no lo requiere).
-  - Sin clave en `providePrimeNG({ license })`, PrimeNG muestra un aviso de licencia.
+- UI: HTML nativo + Tailwind + Angular CDK (MIT) para lo que necesita comportamiento accesible (menús).
+- Iconos: Lucide (`lucide`, ISC) a través de `<ui-icon [icono]="Mail" />`.
+- **Solo dependencias con licencia libre** (MIT, ISC, Apache, OFL…). Nada de pago ni que pida clave.
+  PrimeNG/PrimeIcons/`@primeuix` se retiraron porque desde la v22 exigen licencia comercial (PrimeUI).
+  Antes de instalar algo, revisar su campo `license`.
 - Pruebas: Vitest (`ng test`)
 
 ## Estructura
@@ -25,26 +27,70 @@ tsconfig.json              paths: "ui" → ./projects/ui/src/public-api.ts (sin 
 projects/
   erp/
     public/  src/
-      styles.css           importa tailwind, primeui, primeicons, ../../ui/styles/base.css y glass.css
+      styles.css           importa tailwind, overlay del CDK y ../../ui/styles/{base,glass,forms}.css
+      public/img/          planta-login.webp (panel del login)
       app/
-        core/              guards, interceptors, servicios globales (placeholders)
+        core/              interceptors, servicios globales (placeholders)
         layout/            shell, sidebar colapsable + drawer móvil, topbar, nav-items.ts
+        features/auth/     login del ERP (/login)
         features/          una carpeta por módulo, cada página es ruta lazy (export default)
   portal/
     public/  src/
       styles.css           mismo esquema que el ERP
       app/
-        layout/shell.ts    topbar con logo, menú (drawer en móvil) y avatar
-        features/          obras, pedidos, remisiones, facturas, laboratorio (lazy)
+        layout/shell.ts    topbar con logo, menú (drawer en móvil) y menú de usuario
+        features/auth/     login del portal (/login)
+        core/services/     CotizacionService (diseños guardados y partidas), ObrasService (obras del cliente con
+                           dirección y GPS) y ChatService (atención al cliente):
+                           hoy en memoria; reemplazar por HTTP/canal real sin tocar la UI
+        layout/chat-flotante.ts  burbuja de atención al cliente: fija abajo a la derecha, z-70, en todas las páginas
+        features/catalogo/ cotizador "Configuremos tu pedido" (destino tras el login):
+                           datos.ts (soluciones, opciones, servicios), reglas.ts (etiquetas, recomendaciones técnicas,
+                           bombeo ↔ servicios; con pruebas), cotizador.state.ts (estado de la página, provisto en el
+                           componente), paso-solucion / paso-especificaciones / paso-servicios / resumen,
+                           entrega.ts (fecha estimada: mín. 24 h, máx. 6 meses; 18:00–07:00 agrega y bloquea
+                           "colado-nocturno"), presupuesto.ts (shortcut: tarifario de referencia, líneas, IVA 16 %,
+                           planta por municipio), pdf-cotizacion.ts (formato de la cotización impresa
+                           EPI-PRES-…, sin logos; jsPDF + jspdf-autotable, MIT, cargados con import() al descargar)
+                           y resumen-cotizacion (precios + "Descargar y guardar" por defecto / "Solo guardar" /
+                           "Solo descargar"; folio provisional EPI-WEB-{planta}-{AA}{nnn})
+        features/cotizaciones/ Mis cotizaciones: una tarjeta por serie (versión vigente + anteriores anidadas);
+                           cotizacion-fila: resumen desplegable en la página (sin modal), Ver PDF (pestaña nueva),
+                           Descargar, Modificar (CotizacionService.editar 'revision' → folio …-R1, -R2; la original
+                           no cambia) y Usar como base ('base' → serie nueva con baseId). Hay dos cotizaciones demo.
+                           cotizacion.ts (/cotizaciones/:folio): detalle con flujo y "Aceptar y generar pedido".
+        features/obras/    Mis obras y obra.ts (/obras/:id). obra-form: alta y edición (lo usa también el cotizador) con
+                           responsable (nombre + foto opcional) y contactos (lada +52 por defecto, extranjeros 6–14
+                           dígitos; telefono.ts con pruebas). Una obra con pedido en curso no se edita
+                           (PedidosService.obraConPedidoEnCurso).
+        features/pedidos/  Mis pedidos: totales (total, pagado, pendiente), tabla con hover; clic = vista previa a la
+                           derecha (pedido-previa), doble clic o el folio = abre el pedido, la obra enlaza a /obras/:id.
+                           Pedido.cobro: por_facturar | en_facturacion | facturado | pagado (+ importe y facturaFolio).
+                           Seguimiento de camiones (seguimiento.ts con pruebas, seguimiento-entrega,
+                           SeguimientoService): un pedido en planta/en ruta/en obra muestra sus camiones (ViajeCamion,
+                           uno o varios) en `ui-mapa-seguimiento` (Leaflet + OpenStreetMap, sin API key; CSS
+                           importado en styles.css) y en texto. Señal: en vivo (<2 min), perdida (última posición) o
+                           sin GPS (solo horarios). shortcut: viajes simulados (demo PED-26-0140, 3 camiones).
+                           pedido.ts (/pedidos/:folio) y flujo.ts: etapas Cotización → Pedido →
+                           En entrega → Entregado para `ui-pipeline` (barra tipo Odoo en el encabezado; cada etapa
+                           enlaza a su documento para ir y volver). Pedido.cotizacionId liga el pedido con su
+                           cotización; PedidosService (demo PED-26-0141 ← EPI-WEB-CZM-26002) genera uno por partida.
+                           Rutas con :folio usan withComponentInputBinding (input `folio`).
+        features/          obras, remisiones, facturas, laboratorio (lazy)
   ui/
-    styles/base.css        tema oscuro (color-scheme) y fondo con gradientes
+    assets/                marca/ (logo, isotipo, favicons) y fondos/; se sirven en /ui/… en ambas apps
+    styles/base.css        tokens de color (@theme), color-scheme claro y fondo de concreto
     styles/glass.css       @utility glass / glass-strong
+    styles/forms.css       @utility campo / casilla / boton-primario (controles nativos)
     src/public-api.ts      todo lo exportado
     src/lib/
-      theme/               GlassPreset (PrimeNG)
-      components/          ui-glass-card, ui-kpi-card, ui-page-header
+      auth/                AuthService, authGuard, guestGuard, destinoSeguro, AUTH_STORAGE_KEY
+      components/          ui-icon, ui-drawer, ui-user-menu, ui-field-error, ui-mapa, ui-glass-card, ui-kpi-card, ui-pipeline,
+                           ui-page-header
       time/                pipe fechaZona + token DEFAULT_TIMEZONE
-      models/              Cliente, Planta, Obra, Pedido, Remision, MuestraLaboratorio (+ tipos *Vista)
+      models/              Cliente, Planta, Obra, Pedido, Remision, MuestraLaboratorio, cotización
+                           (EspecificacionConcreto, ConfiguracionConcreto, PartidaCotizacion, DisenoGuardado)
+                           (+ tipos *Vista)
 ```
 
 ## Qué va en `ui` y qué en cada app
@@ -55,7 +101,7 @@ projects/
 - **Cada app**: layout, navegación, rutas, guards, interceptors, servicios con estado, páginas y datos mock.
   Si algo de una app empieza a repetirse en la otra, se mueve a `ui`.
 - Importar siempre `from 'ui'`, nunca con rutas relativas hacia `projects/ui`. La excepción es el CSS
-  (`@import '../../ui/styles/base.css'`, `glass.css` y `@source '../../ui/src'`).
+  (`@import '../../ui/styles/base.css'`, `glass.css`, `forms.css` y `@source '../../ui/src'`).
 
 ## Modelos
 
@@ -79,6 +125,60 @@ Las plantas están en zonas distintas (Quintana Roo UTC−5 `America/Cancun`; Yu
   `{ provide: DEFAULT_TIMEZONE, useValue: 'America/Cancun' }`. Una zona inválida cae al default con
   `console.warn`.
 
+## Identidad visual
+
+Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-epico`, `text-texto-suave`.
+
+| Token Tailwind | Valor | Uso |
+|---|---|---|
+| `epico` | #D3181E | Botón primario, selección activa, enlaces, detalles importantes. Con moderación |
+| `epico-oscuro` | #A31217 | Hover y texto rojo sobre tintes claros (contraste AA) |
+| `carbon` | #1A1A1C | Texto principal y superficies oscuras |
+| `concreto` | #F3F3F1 | Fondo principal |
+| `acero` | #AEB4B8 | Bordes decorativos (tarjetas, separadores) |
+| `acero-oscuro` | #8A9196 | Borde de campos de formulario (3:1, WCAG 1.4.11) |
+| `texto-suave` | #696D71 | Texto secundario (4.7:1 sobre concreto) |
+| `info` / `atencion` / `correcto` / `critico` | #3B82A0 / #D99A2B / #3F8065 / #B9473E | Estados. En texto pequeño usar tinte de fondo + texto oscurecido (ver etiquetas de estado del dashboard) |
+
+- Marca de la app (en `projects/ui/assets/marca/`, servida en `/ui/marca/…`). No redibujar ni alterar:
+  - `logo-epico-erp-horizontal.webp` (1200×383): wordmark "ΞPICO® ERP", logo principal sobre fondos claros
+    (login del portal).
+  - `logo-epico-erp.webp` (800×662): logo con planta y revolvedora (login del ERP). Su texto es oscuro: sobre
+    fondos oscuros va en una placa clara (ver login del ERP).
+  - `isotipo-epico-erp.webp` (400×307): topbars y espacios pequeños, junto al nombre de la app en texto.
+  - `iconos/`: favicons (32, 192) y `apple-touch-icon` (180, fondo blanco) a partir del isotipo.
+  - Siempre con `<img ngSrc … width height>` (tamaño intrínseco) y el alto por clase (`h-9`, `h-24`).
+- Tipografía: **Figtree** (Google Fonts, cargada en el `index.html` de cada app; `--font-sans` en base.css).
+  Títulos en bold con `tracking-[-0.02em]`; etiquetas tipo eyebrow en mayúsculas con tracking amplio.
+- Fondos (`/ui/fondos/`, WebP sin pérdida: no recomprimir, los degradados se arruinan): `fondo-concreto.webp`
+  (app) y `fondo-login.webp` (con losas de concreto, login).
+- Logins sin scroll y con las proporciones del mockup:
+  - Escritorio (lg): el mockup es un lienzo de 1586×992 que se escala completo. `--u = min(100vw/1586, 100dvh/992)`
+    y `--spacing = 4u`, así que las clases de Tailwind se escriben con las medidas del mockup ÷ 4 (`h-15` = 60 px
+    del mockup). Textos con mínimo legible: `text-[max(14px,calc(var(--u)*17))]`. Mínimos en px, no en spacing.
+  - Celular: diseño apilado con medidas `clamp(…, Ndvh, …)` (`--campo`, `--boton`, `--hueco`).
+  - Probar en 1920×945, 1536×730, 1366×657, 1280×610, 390×750 y 360×640.
+- Referencia de proporciones: login del portal (`projects/portal/src/app/features/auth/login.html`): campos
+  `h-15` con texto de 17px e iconos de 22px, botón primario `h-15.5`, tarjeta `rounded-[2.25rem]` con `p-14`.
+- Nunca comunicar un estado solo con color: acompañar con texto, icono, peso o `aria-*`.
+- Animaciones: solo transiciones breves de color/opacidad.
+
+## Autenticación
+
+- Todas las rutas de cada app viven bajo un shell con `canActivate: [authGuard]`; `/login` usa `guestGuard`.
+  Sin sesión, una ruta privada manda a `/login?returnUrl=…`; al entrar se vuelve ahí con `destinoSeguro()`
+  (solo rutas internas). Destino por defecto: `/dashboard` (ERP) y `/obras` (portal).
+- `AuthService` (en `ui`) guarda la sesión en localStorage si el usuario marca "Mantener sesión/Recordarme",
+  si no en sessionStorage. Cada app provee su `AUTH_STORAGE_KEY` (`epico.erp.sesion`, `epico.portal.sesion`)
+  para que ERP y portal nunca compartan sesión.
+- **Hoy el login es estático** (`shortcut:` en `AuthService.login` y en el `DEMO` de cada login): acepta
+  cualquier credencial y el formulario viene lleno para entrar con un clic. Para conectar el backend: reemplazar
+  el cuerpo de `login()` por la llamada HTTP (que lance error si falla), vaciar `DEMO` y, si aplica, agregar el
+  token en `core/interceptors/api.interceptor.ts` del ERP. Las pantallas no cambian.
+- Errores de login: mensaje genérico, sin revelar qué dato falló.
+- Formularios nuevos con Signal Forms (`form`, `[formField]`, `submit`) y `ui-field-error` enlazado con
+  `aria-describedby`; al enviar inválido, mover el foco al primer campo con error.
+
 ## Convenciones
 
 - Textos de UI en español; nombres de dominio en español.
@@ -91,20 +191,45 @@ Las plantas están en zonas distintas (Quintana Roo UTC−5 `America/Cancun`; Yu
 
 ## Estilos compartidos
 
-- `projects/ui/styles/base.css`: `color-scheme: dark` y fondo con gradientes (el blur necesita algo detrás).
+- `projects/ui/styles/base.css`: tokens de color, `color-scheme: light` y fondo de concreto con halos rojos.
   Si una app necesita otro fondo (p. ej. la marca de una concretera), no lo importa y define el suyo.
-- `projects/ui/styles/glass.css`: solo las utilidades `glass` y `glass-strong`.
-- Ambas apps importan los dos después de `tailwindcss`.
+- `projects/ui/styles/glass.css`: `glass`, `glass-strong` y utilidades de contenedores con scroll:
+  - `sin-barra`: oculta la barra de scroll (sigue funcionando rueda, touch y teclado).
+  - `desvanecer-abajo`: degradado inferior; no se usa a mano, lo pone la directiva `uiDesvanecer` (en `ui`)
+    mientras quede contenido abajo y lo quita al llegar al final. Uso: `<div uiDesvanecer class="sin-barra overflow-y-auto">`.
+- Páginas con columnas de scroll independiente (catálogo del portal): alto `h-(--alto-contenido)`, definido en el
+  shell del portal; solo en escritorio, en celular scroll normal de página.
+- `projects/ui/styles/forms.css`: controles nativos con la identidad EPICO. El alto, padding y tamaño de texto van
+  en cada uso:
+  - `campo`: `<input>`, `<select>` (con `appearance-none` + `ui-icon` ChevronDown) y `<textarea>`. Foco rojo
+    visible y borde `critico` con `aria-invalid="true"`.
+  - `casilla`: checkbox nativo (`accent-color` rojo).
+  - `interruptor`: switch sobre checkbox nativo (usar con `role="switch"`).
+  - `segmento`: opción de un control segmentado (radio `sr-only` dentro de `<label class="segmento">`).
+  - `boton-primario`: botón principal rojo; en carga, `[disabled]` + `aria-busy` + icono LoaderCircle con `animate-spin`.
+- Ambas apps importan los tres después de `tailwindcss`.
+
+### Piezas interactivas de `ui`
+
+- `ui-mapa`: Google Maps embebido en modo libre (sin API key ni costo). Con GPS muestra el punto exacto; si no,
+  busca la dirección. Uso: `<ui-mapa class="h-60" [ubicacion]="obra.ubicacion" [direccion]="…" titulo="Mapa de …" />`.
+
+- `ui-drawer`: panel lateral sobre `<dialog>` nativo (`showModal`): trampa de foco, Esc, fondo inerte y
+  devolución del foco los da el navegador. Uso: `<ui-drawer [(abierto)]="x" titulo="Menú">…</ui-drawer>`.
+- `ui-user-menu`: menú del avatar con Angular CDK Menu (flechas, Esc, roles ARIA). Los popups del CDK se pintan
+  al final de `<body>`: envolver el contenido en una región con nombre para que axe no marque "region".
+- `ui-icon`: importar cada icono por nombre desde `lucide` y exponerlo en el componente
+  (`protected readonly iconos = { correo: Mail }`). Siempre decorativo (`aria-hidden`).
 
 ### Utilidades glass
 
-- `glass`: tarjetas y contenedores normales (bg-white/10, blur-xl, borde white/15, rounded-2xl, sombra).
+- `glass`: tarjetas y contenedores normales (bg-white/65, blur-md, borde white/80, rounded-2xl, sombra ligera).
 - `glass-strong`: capas encima de otras (drawer, diálogos, popovers propios).
 - Usar `backdrop-filter` (glass) solo en contenedores: sidebar, topbar, cards, diálogos. Nunca en filas de
-  tabla ni en elementos repetidos. Las tablas van dentro de una `ui-glass-card` y el preset deja sus filas
+  tabla ni en elementos repetidos. Las tablas son `<table>` nativas dentro de una `ui-glass-card`, con filas
   transparentes.
-- Sobre componentes PrimeNG usa `styleClass="glass-strong!"` (el `!` gana a la capa `primeng`).
-- Orden de capas: `@layer theme, base, primeng, utilities;` (utilidades Tailwind > PrimeNG).
+- No poner CSS de componente (`styles:`) que compita con utilidades: queda fuera de las capas y le gana a
+  Tailwind (p. ej. rompe `lg:hidden`). Preferir clases en el template.
 
 ## Comandos
 

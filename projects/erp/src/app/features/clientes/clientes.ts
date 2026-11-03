@@ -8,10 +8,10 @@ import { GlassCard, PageHeader } from 'ui';
     <ui-page-header title="Clientes" subtitle="Cartera de clientes y obras" />
     <div class="grid gap-4 md:grid-cols-2">
       <ui-glass-card heading="Clientes activos">
-        <p class="text-sm text-slate-300">Próximamente.</p>
+        <p class="text-sm text-texto-suave">Próximamente.</p>
       </ui-glass-card>
       <ui-glass-card heading="Obras en curso">
-        <p class="text-sm text-slate-300">Próximamente.</p>
+        <p class="text-sm text-texto-suave">Próximamente.</p>
       </ui-glass-card>
     </div>
   `,

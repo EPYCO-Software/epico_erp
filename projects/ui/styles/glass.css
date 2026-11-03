@@ -1,9 +1,25 @@
-/* Utilidades glass compartidas. Importar desde el styles.css de cada app, después de 'tailwindcss'.
+/* Utilidades glass compartidas. Importar desde el styles.css de cada app, después de base.css.
+   Vidrio blanco discreto: legible primero, decorativo después.
    Usar solo en contenedores (sidebar, topbar, cards, diálogos), nunca en filas de tabla. */
 @utility glass {
-  @apply rounded-2xl border border-white/15 bg-white/10 shadow-lg shadow-black/20 backdrop-blur-xl;
+  @apply rounded-2xl border border-white/80 bg-white/65 shadow-lg shadow-carbon/5 backdrop-blur-md;
 }
 
 @utility glass-strong {
-  @apply rounded-2xl border border-white/25 bg-white/20 shadow-xl shadow-black/30 backdrop-blur-2xl;
+  @apply rounded-2xl border border-white/90 bg-white/80 shadow-xl shadow-carbon/10 backdrop-blur-xl;
+}
+
+/* Contenedores con scroll: barra invisible (se sigue desplazando con rueda, touch y teclado). */
+@utility sin-barra {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Degradado inferior "hay más abajo". Lo pone/quita la directiva uiDesvanecer según la posición del scroll.
+   Es una máscara (no una capa encima): funciona sobre el vidrio y no bloquea clics. */
+@utility desvanecer-abajo {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent);
 }

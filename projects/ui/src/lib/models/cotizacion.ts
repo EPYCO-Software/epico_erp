@@ -1,0 +1,90 @@
+/** Cómo se lleva el concreto del camión al elemento. */
+export type Colocacion = 'directa' | 'bombeo';
+
+/** Ambiente al que queda expuesto el elemento; define cemento y aditivos recomendados. */
+export type Exposicion = 'normal' | 'humedad' | 'marina';
+
+/** RS = resistente a sulfatos (recomendado en ambiente marino). */
+export type TipoCemento = 'CPC 30R' | 'CPC 40' | 'CPC 30R RS';
+
+export type Aditivo = 'acelerante' | 'retardante' | 'impermeabilizante' | 'fibra-sintetica' | 'fibra-metalica';
+
+export type ServicioObra =
+  | 'bomba-estacionaria'
+  | 'bomba-pluma'
+  | 'muestreo-laboratorio'
+  | 'colado-nocturno'
+  | 'asesoria-tecnica'
+  | 'renta-maquinaria';
+
+/** Equipo disponible en "Renta de maquinaria". */
+export type Maquinaria = 'aplanadora' | 'vibrador' | 'allanadora';
+
+export interface RentaMaquinaria {
+  tipo: Maquinaria;
+  dias: number;
+}
+
+export interface EspecificacionConcreto {
+  /** f'c: compresión; MR: módulo de ruptura (pavimentos). En kg/cm². */
+  tipoResistencia: 'fc' | 'mr';
+  resistenciaKgCm2: number;
+  edadDias: number;
+  revenimientoCm: number;
+  /** Tamaño máximo de agregado. */
+  tmaMm: number;
+  cemento: TipoCemento;
+  exposicion: Exposicion;
+  colocacion: Colocacion;
+  aditivos: Aditivo[];
+}
+
+/** Configuración que el cliente arma en el cotizador (una partida antes de agregarse). */
+export interface ConfiguracionConcreto {
+  solucionId: string;
+  especificacion: EspecificacionConcreto;
+  volumenM3: number;
+  servicios: ServicioObra[];
+  /** Solo con el servicio "renta-maquinaria". */
+  maquinaria: RentaMaquinaria[];
+  /** Obra de entrega de esta partida. */
+  obraId: string;
+  /** Fecha y hora de entrega estimada, ISO 8601 con offset. Entre 24 h y 6 meses después de capturarla. */
+  entrega: string;
+}
+
+export interface PartidaCotizacion extends ConfiguracionConcreto {
+  id: string;
+  /** Nombre visible, p. ej. "Pavimento" o el nombre del diseño guardado. */
+  nombre: string;
+}
+
+export interface DisenoGuardado {
+  id: string;
+  nombre: string;
+  solucionId: string;
+  especificacion: EspecificacionConcreto;
+  favorito: boolean;
+}
+
+/** Cotización que el cliente guardó (o descargó) desde el portal. */
+export interface CotizacionGuardada {
+  id: string;
+  /** Folio provisional del portal (p. ej. EPI-WEB-ESC-26001); el ERP asigna el definitivo. */
+  folio: string;
+  /** ISO 8601 */
+  fecha: string;
+  partidas: PartidaCotizacion[];
+  /**
+   * Serie: folio de la primera versión. Modificar una cotización crea otra versión de la misma serie
+   * (EPI-WEB-ESC-26001-R1, -R2…); la más reciente sustituye a las anteriores.
+   */
+  serie: string;
+  /** 0 = original; 1, 2… = revisiones dentro de la serie. */
+  revision: number;
+  /** Cotización de la que se partió (revisión o nueva cotización tomada de base). */
+  baseId?: string;
+}
+
+/** Cómo se guardará la cotización que se está editando a partir de una guardada. */
+export type ModoEdicion = 'revision' | 'base';
