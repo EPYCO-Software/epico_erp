@@ -1,0 +1,21 @@
+# Probar las dos apps como quedarían en producción: docker compose up --build
+#   ERP:    http://localhost:8080
+#   Portal: http://localhost:8081
+services:
+  erp:
+    build:
+      context: .
+      args:
+        APP: erp
+    image: epico-erp
+    ports:
+      - '8080:8080'
+
+  portal:
+    build:
+      context: .
+      args:
+        APP: portal
+    image: epico-portal
+    ports:
+      - '8081:8080'

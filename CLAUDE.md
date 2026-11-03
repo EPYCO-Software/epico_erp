@@ -240,6 +240,17 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 | `npm run build:erp` / `build:portal` / `build:ui` | Build de producción en `dist/<proyecto>` |
 | `npm run build:all` | ui → erp → portal |
 | `ng test` / `ng test erp` | Pruebas de todo el workspace o de un proyecto |
+| `docker compose up --build` | Ambas apps en contenedores como en producción: ERP en :8080, portal en :8081 |
+
+## Docker y CI
+
+- `Dockerfile` único con `--build-arg APP=erp|portal`: compila con Node 24 y sirve `dist/<app>/browser` con
+  nginx sin root en el puerto 8080 (`docker/nginx.conf`: fallback SPA a `index.html`, `index.html` sin caché y JS/CSS
+  con hash cacheados un año).
+- `.github/workflows/docker.yml`: en cada push a `main` (o a mano) construye las dos imágenes y las sube a GHCR
+  (`ghcr.io/<usuario>/epico_erp-erp` y `-portal`, etiquetas `latest` y `sha-…`). El job `deploy` está vacío.
+- Probar siempre lo que dependa de librerías CommonJS cargadas con `import()` (p. ej. Leaflet) en el build de
+  producción: ahí el módulo puede llegar bajo `default`.
 
 No existe `defaultProject`: indica siempre el proyecto en `ng serve`/`ng build`/`ng generate`
 (`ng g c foo --project portal`).

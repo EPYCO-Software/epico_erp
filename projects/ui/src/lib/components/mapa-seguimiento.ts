@@ -44,8 +44,9 @@ export class MapaSeguimiento {
   constructor() {
     afterNextRender(async () => {
       try {
-        this.L = await import('leaflet');
-        const L = this.L;
+        // Leaflet es CommonJS: en el build de producción el módulo llega bajo `default`; en desarrollo, directo.
+        const modulo = (await import('leaflet')) as typeof Leaflet & { default?: typeof Leaflet };
+        const L = (this.L = modulo.default ?? modulo);
         this.mapa = L.map(this.lienzo().nativeElement, { zoomControl: false, attributionControl: true });
         L.control.zoom({ zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(this.mapa);
         this.mapa.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
@@ -56,7 +57,8 @@ export class MapaSeguimiento {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         }).addTo(this.mapa);
         this.sincronizar();
-      } catch {
+      } catch (e) {
+        console.error('No se pudo cargar el mapa', e);
         this.error.set(true);
       }
     });
