@@ -4,7 +4,9 @@
   "tasks": [
     {
       "type": "npm",
+      "path": "Frontend",
       "script": "start",
+      "label": "npm: start",
       "isBackground": true,
       "problemMatcher": {
         "owner": "typescript",
@@ -22,7 +24,9 @@
     },
     {
       "type": "npm",
+      "path": "Frontend",
       "script": "start:portal",
+      "label": "npm: start:portal",
       "isBackground": true,
       "problemMatcher": {
         "owner": "typescript",
@@ -40,7 +44,9 @@
     },
     {
       "type": "npm",
+      "path": "Frontend",
       "script": "test",
+      "label": "npm: test",
       "isBackground": true,
       "problemMatcher": {
         "owner": "typescript",

@@ -5,6 +5,10 @@ name: Docker
 on:
   push:
     branches: [main]
+    # Solo cuando cambia el frontend; los cambios del Backend no reconstruyen estas imágenes.
+    paths:
+      - 'Frontend/**'
+      - '.github/workflows/docker.yml'
   workflow_dispatch:
 
 jobs:
@@ -38,7 +42,7 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./Frontend
           build-args: APP=${{ matrix.app }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}

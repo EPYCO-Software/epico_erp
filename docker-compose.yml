@@ -4,7 +4,7 @@
 services:
   erp:
     build:
-      context: .
+      context: ./Frontend
       args:
         APP: erp
     image: epico-erp
@@ -13,7 +13,7 @@ services:
 
   portal:
     build:
-      context: .
+      context: ./Frontend
       args:
         APP: portal
     image: epico-portal
