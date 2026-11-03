@@ -1,177 +1,216 @@
-<div class="grid min-h-dvh lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-  <!-- Panel de marca: oscuro con planta en escala de grises -->
-  <section
-    class="relative isolate overflow-hidden bg-carbon px-6 pt-8 pb-16 text-white sm:px-10 lg:min-h-dvh lg:px-16 lg:py-20 lg:[clip-path:polygon(0_0,100%_0,88%_100%,0_100%)]"
-    aria-labelledby="erp-titulo"
-  >
-    <img
-      ngSrc="/img/planta-login.webp"
-      fill
-      priority
-      alt=""
-      class="-z-20 object-cover opacity-40"
-    />
-    <div class="absolute inset-0 -z-10 bg-linear-to-br from-carbon/95 via-carbon/80 to-carbon/55" aria-hidden="true"></div>
+<!--
+  Mismo esquema que el login del portal.
+  Escritorio (lg): el mockup es un lienzo de 1586×992 que se escala completo al tamaño de la ventana. --u = 1 px del
+  mockup; --spacing = 4u, así que las clases de Tailwind usan medidas del mockup ÷ 4 (h-15.5 = 62 px del mockup).
+  Celular: franja oscura con la marca arriba y el formulario debajo; medidas con clamp(…dvh…) para que no haya scroll.
+-->
+<div
+  class="flex min-h-dvh justify-center overflow-hidden lg:items-center
+    [--boton:clamp(2.75rem,6.4dvh,3.875rem)] [--campo:clamp(2.625rem,6dvh,3.4375rem)] [--hueco:clamp(0.625rem,2dvh,1.5rem)]
+    lg:[--u:min(100vw/1586,100dvh/992,1.25px)] lg:[--spacing:calc(var(--u)*4)]
+    lg:[--boton:max(40px,calc(var(--u)*62))] lg:[--campo:max(40px,calc(var(--u)*55))]"
+>
+  <div class="relative isolate flex w-full flex-col lg:block lg:h-248 lg:w-396.5 lg:shrink-0">
+    <!-- Toda la parte izquierda va 45 px del mockup más a la izquierda y el formulario 40 px más a la derecha
+         que en el mockup, para abrir aire entre ambos. -->
+    <app-capas-glass class="hidden lg:block lg:-translate-x-11.25" />
 
-    <!-- El logo es oscuro: sobre el panel carbón va en una placa clara para no alterarlo. -->
-    <span class="inline-block rounded-2xl border border-white/60 bg-white/90 px-4 py-3 shadow-lg shadow-black/30">
-      <img ngSrc="/ui/marca/logo-epico-erp.webp" width="800" height="662" priority alt="EPICO ERP" class="h-20 w-auto sm:h-24" />
-    </span>
-
-    <p class="mt-10 flex items-center gap-3 text-xs font-semibold tracking-[0.3em] text-neutral-300 lg:mt-16">
-      <span class="h-0.5 w-8 bg-epico" aria-hidden="true"></span>PLATAFORMA INTERNA
-    </p>
-    <h1 id="erp-titulo" class="mt-4 max-w-xl text-3xl font-bold leading-tight tracking-[-0.02em] sm:text-4xl lg:text-5xl">
-      Operación conectada.<br />Decisiones claras.
-    </h1>
-    <p class="mt-4 max-w-md text-base text-neutral-300 lg:text-lg">
-      Accede a las herramientas de ventas, planta, logística y gestión que tienes autorizadas.
-    </p>
-
-    <!-- Decoración: módulos conectados. Solo escritorio. -->
-    <div class="relative mt-14 hidden h-68 w-104 lg:block" aria-hidden="true">
-      <svg class="absolute inset-0 size-full text-white/30" viewBox="0 0 416 272" fill="none">
-        <path d="M72 124 H150 V36 H184" stroke="currentColor" />
-        <path d="M256 36 H290 V156 H328" stroke="currentColor" />
-        <path d="M36 160 V236 H128" stroke="currentColor" />
-        <path d="M200 236 H250 V156" stroke="currentColor" />
-        <circle cx="150" cy="80" r="4" class="fill-epico" />
-        <circle cx="250" cy="156" r="4" class="fill-epico" />
-        <circle cx="290" cy="96" r="3" fill="currentColor" />
-        <circle cx="80" cy="236" r="3" fill="currentColor" />
-      </svg>
-      @for (m of modulos; track m.clase) {
-        <span
-          class="absolute flex size-18 items-center justify-center rounded-2xl border border-white/25 bg-white/10 text-white/90 shadow-lg shadow-black/30 backdrop-blur-sm {{ m.clase }}"
-        >
-          <ui-icon [icono]="m.icon" [tamano]="28" />
-        </span>
-      }
-    </div>
-  </section>
-
-  <!-- Formulario -->
-  <main class="-mt-8 flex items-start justify-center px-4 pb-10 sm:px-8 lg:mt-0 lg:items-center lg:py-12">
-    <form
-      class="glass-strong w-full max-w-md rounded-[1.75rem] p-6 shadow-2xl shadow-carbon/10 sm:p-10"
-      novalidate
-      aria-labelledby="form-titulo"
-      (submit)="entrar($event)"
+    <!-- Marca -->
+    <section
+      aria-labelledby="erp-titulo"
+      class="text-white max-lg:rounded-b-[2rem] max-lg:bg-linear-to-br max-lg:from-carbon max-lg:to-[#3d4045] max-lg:px-6 max-lg:pt-[clamp(0.875rem,3.5dvh,2rem)] max-lg:pb-[clamp(2.25rem,6.4dvh,3.5rem)] sm:max-lg:px-10
+        lg:absolute lg:top-39 lg:left-15"
     >
-      <p class="flex items-center gap-3 text-sm text-texto-suave">
-        <span class="h-0.5 w-8 bg-epico" aria-hidden="true"></span>Acceso del equipo
+      <img
+        ngSrc="/ui/marca/logo-epico-erp-blanco.webp"
+        width="1200"
+        height="184"
+        priority
+        alt="EPICO ERP"
+        class="entrada-nitido h-[clamp(1.75rem,4.6dvh,2.5rem)] w-auto [animation-delay:250ms] lg:h-15.25"
+      />
+
+      <p
+        class="mt-[clamp(0.75rem,2.6dvh,1.5rem)] flex items-center gap-3 text-xs font-medium tracking-[0.35em] text-white/75 max-lg:hidden
+          lg:mt-13.5 lg:gap-4.5 lg:text-[max(11px,calc(var(--u)*14))] lg:tracking-[0.38em]"
+      >
+        <span class="entrada-barra h-0.5 w-7 bg-epico [animation-delay:600ms] lg:h-0.75 lg:w-7.5" aria-hidden="true"></span>
+        <span class="entrada-subir [animation-delay:700ms]">PLATAFORMA INTERNA</span>
       </p>
-      <h2 id="form-titulo" class="mt-2 text-3xl font-bold tracking-[-0.01em] text-carbon">Iniciar sesión</h2>
+      <h1
+        id="erp-titulo"
+        class="mt-[clamp(0.5rem,1.6dvh,1rem)] text-[clamp(1.375rem,3.6dvh,2.125rem)] leading-[1.08] font-bold tracking-[-0.02em]
+          lg:mt-4 lg:text-[max(28px,calc(var(--u)*55))]"
+      >
+        <span class="entrada-nitido block [animation-delay:750ms]">Operación conectada.</span>
+        <span class="entrada-nitido block [animation-delay:880ms]">Decisiones claras.</span>
+      </h1>
+      <p
+        class="entrada-subir mt-2 max-w-md text-white/75 [animation-delay:1050ms] [@media(max-height:760px)]:max-lg:hidden
+          lg:mt-4.5 lg:max-w-118 lg:text-[max(15px,calc(var(--u)*26))] lg:leading-[1.3]"
+      >
+        Accede a las herramientas de ventas, planta, logística y gestión que tienes autorizadas.
+      </p>
+    </section>
 
-      <div class="mt-8 space-y-5">
-        <div>
-          <label for="correo" class="mb-2 block font-semibold">Correo corporativo</label>
-          <div class="relative">
-            <ui-icon [icono]="iconos.correo" class="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-texto-suave" />
-            <input
-              id="correo"
-              type="email"
-              autocomplete="username"
-              placeholder="usuario@empresa.com"
-              class="campo h-13 pr-4 pl-12"
-              [formField]="f.correo"
-              [attr.aria-invalid]="f.correo().touched() && f.correo().invalid()"
-              aria-describedby="correo-error"
-            />
+    <!-- Acceso -->
+    <main class="-mt-[clamp(1.75rem,5dvh,2.5rem)] w-full self-center px-4 pb-(--hueco) sm:max-w-lg sm:px-0 lg:absolute lg:top-37.25 lg:left-236.75 lg:mt-0 lg:w-144.5 lg:max-w-none lg:p-0">
+      <form
+        class="entrada-flotar glass w-full rounded-[1.75rem] [animation-delay:150ms] border-white bg-white/45 px-5 pt-[clamp(1rem,3.2dvh,2.5rem)] pb-[clamp(0.75rem,2.4dvh,2rem)] shadow-2xl shadow-carbon/10 backdrop-blur-xl sm:px-9
+          lg:rounded-[calc(var(--u)*28)] lg:px-11.5 lg:pt-11 lg:pb-11.5"
+        novalidate
+        aria-labelledby="form-titulo"
+        (submit)="entrar($event)"
+      >
+        <p class="entrada-subir flex items-center gap-3 text-sm text-texto-suave [animation-delay:420ms] [@media(max-height:680px)]:max-lg:hidden lg:gap-4.25 lg:text-[max(13px,calc(var(--u)*17))]">
+          <span class="entrada-barra h-0.5 w-7 bg-epico [animation-delay:480ms] lg:h-0.75 lg:w-7.5" aria-hidden="true"></span>Acceso del equipo
+        </p>
+        <h2
+          id="form-titulo"
+          class="entrada-subir mt-1 text-[clamp(1.625rem,4dvh,2.25rem)] leading-tight [animation-delay:490ms] font-bold tracking-[-0.02em] text-carbon lg:mt-2 lg:text-[max(26px,calc(var(--u)*47))] lg:leading-[1.1]"
+        >
+          Iniciar sesión
+        </h2>
+
+        <div class="mt-(--hueco) space-y-[clamp(0.5rem,1.8dvh,1.25rem)] lg:mt-6.5 lg:space-y-5.75">
+          <div class="entrada-subir [animation-delay:560ms]">
+            <label for="correo" class="mb-[clamp(0.25rem,1dvh,0.625rem)] block font-medium text-carbon lg:mb-2 lg:text-[max(14px,calc(var(--u)*17))]">
+              Correo corporativo
+            </label>
+            <div class="relative">
+              <ui-icon
+                [icono]="iconos.correo"
+                [tamano]="22"
+                [grosor]="1.6"
+                class="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-texto-suave lg:left-5.5 lg:[&_svg]:size-5.5"
+              />
+              <input
+                id="correo"
+                type="email"
+                autocomplete="username"
+                placeholder="usuario@empresa.com"
+                class="campo bg-white/75! h-(--campo) pr-4 pl-13 text-[1.0625rem] lg:pl-15.5 lg:text-[max(14px,calc(var(--u)*17))]"
+                [formField]="f.correo"
+                [attr.aria-invalid]="f.correo().touched() && f.correo().invalid()"
+                aria-describedby="correo-error"
+              />
+            </div>
+            <ui-field-error [campo]="f.correo" errorId="correo-error" />
           </div>
-          <ui-field-error [campo]="f.correo" errorId="correo-error" />
+
+          <div class="entrada-subir [animation-delay:630ms]">
+            <label for="password" class="mb-[clamp(0.25rem,1dvh,0.625rem)] block font-medium text-carbon lg:mb-2 lg:text-[max(14px,calc(var(--u)*17))]">
+              Contraseña
+            </label>
+            <div class="relative">
+              <ui-icon
+                [icono]="iconos.candado"
+                [tamano]="22"
+                [grosor]="1.6"
+                class="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-texto-suave lg:left-5.5 lg:[&_svg]:size-5.5"
+              />
+              <input
+                id="password"
+                [type]="verPassword() ? 'text' : 'password'"
+                autocomplete="current-password"
+                class="campo bg-white/75! h-(--campo) pr-14 pl-13 text-[1.0625rem] lg:pl-15.5 lg:text-[max(14px,calc(var(--u)*17))]"
+                [formField]="f.password"
+                [attr.aria-invalid]="f.password().touched() && f.password().invalid()"
+                aria-describedby="password-error"
+              />
+              <button
+                type="button"
+                class="absolute top-1/2 right-1 flex size-11 min-h-[24px] min-w-[24px] -translate-y-1/2 items-center justify-center rounded-lg text-texto-suave hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico lg:right-2.5"
+                [attr.aria-label]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                [attr.aria-pressed]="verPassword()"
+                (click)="verPassword.update((v) => !v)"
+              >
+                <ui-icon [icono]="verPassword() ? iconos.ver : iconos.ocultar" [tamano]="22" [grosor]="1.6" class="lg:[&_svg]:size-5.5" />
+              </button>
+            </div>
+            <ui-field-error [campo]="f.password" errorId="password-error" />
+          </div>
+
+          <div class="entrada-subir [animation-delay:700ms]">
+            <label for="empresa" class="mb-[clamp(0.25rem,1dvh,0.625rem)] block font-medium text-carbon lg:mb-2 lg:text-[max(14px,calc(var(--u)*17))]">
+              Empresa
+            </label>
+            <div class="relative">
+              <ui-icon
+                [icono]="iconos.empresa"
+                [tamano]="22"
+                [grosor]="1.6"
+                class="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-texto-suave lg:left-5.5 lg:[&_svg]:size-5.5"
+              />
+              <select
+                id="empresa"
+                class="campo bg-white/75! h-(--campo) appearance-none pr-12 pl-13 text-[1.0625rem] lg:pl-15.5 lg:text-[max(14px,calc(var(--u)*17))]"
+                [formField]="f.empresaId"
+                [attr.aria-invalid]="f.empresaId().touched() && f.empresaId().invalid()"
+                aria-describedby="empresa-error"
+              >
+                <option value="" disabled>Selecciona tu empresa</option>
+                @for (e of empresas; track e.id) {
+                  <option [value]="e.id">{{ e.nombre }}</option>
+                }
+              </select>
+              <ui-icon
+                [icono]="iconos.abajo"
+                [tamano]="22"
+                [grosor]="1.6"
+                class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-texto-suave lg:right-5.5 lg:[&_svg]:size-5.5"
+              />
+            </div>
+            <ui-field-error [campo]="f.empresaId" errorId="empresa-error" />
+          </div>
         </div>
 
-        <div>
-          <label for="password" class="mb-2 block font-semibold">Contraseña</label>
-          <div class="relative">
-            <ui-icon [icono]="iconos.candado" class="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-texto-suave" />
-            <input
-              id="password"
-              [type]="verPassword() ? 'text' : 'password'"
-              autocomplete="current-password"
-              class="campo h-13 pr-14 pl-12"
-              [formField]="f.password"
-              [attr.aria-invalid]="f.password().touched() && f.password().invalid()"
-              aria-describedby="password-error"
-            />
-            <button
-              type="button"
-              class="absolute top-1/2 right-1.5 flex size-11 -translate-y-1/2 items-center justify-center rounded-lg text-texto-suave hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico"
-              [attr.aria-label]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
-              [attr.aria-pressed]="verPassword()"
-              (click)="verPassword.update((v) => !v)"
-            >
-              <ui-icon [icono]="verPassword() ? iconos.ocultar : iconos.ver" />
-            </button>
-          </div>
-          <ui-field-error [campo]="f.password" errorId="password-error" />
-        </div>
-
-        <div>
-          <label for="empresa" class="mb-2 block font-semibold">Empresa</label>
-          <div class="relative">
-            <ui-icon [icono]="iconos.empresa" class="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-texto-suave" />
-            <select
-              id="empresa"
-              class="campo h-13 appearance-none pr-12 pl-12"
-              [formField]="f.empresaId"
-              [attr.aria-invalid]="f.empresaId().touched() && f.empresaId().invalid()"
-              aria-describedby="empresa-error"
-            >
-              <option value="" disabled>Selecciona tu empresa</option>
-              @for (e of empresas; track e.id) {
-                <option [value]="e.id">{{ e.nombre }}</option>
-              }
-            </select>
-            <ui-icon [icono]="iconos.abajo" class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-texto-suave" />
-          </div>
-          <ui-field-error [campo]="f.empresaId" errorId="empresa-error" />
-        </div>
-
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-2.5">
-            <input id="recordar" type="checkbox" class="casilla" [formField]="f.recordar" />
-            <label for="recordar">Mantener sesión</label>
+        <div class="entrada-subir mt-(--hueco) flex items-center justify-between [animation-delay:770ms] gap-x-2 text-[0.78rem] whitespace-nowrap min-[400px]:text-sm sm:text-base lg:mt-6.5">
+          <div class="flex min-h-11 items-center gap-2 min-[400px]:gap-3 lg:min-h-6.5 lg:gap-3.75">
+            <input id="recordar" type="checkbox" class="casilla lg:size-6.5" [formField]="f.recordar" />
+            <label for="recordar" class="text-carbon lg:text-[max(14px,calc(var(--u)*17))]">Mantener sesión</label>
           </div>
           <button
             type="button"
-            class="rounded text-sm font-semibold text-epico underline underline-offset-4 hover:text-epico-oscuro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico"
+            class="min-h-11 rounded font-medium text-epico underline underline-offset-4 hover:text-epico-oscuro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico lg:min-h-6 lg:text-[max(13px,calc(var(--u)*16))]"
             (click)="aviso.set('Si no puedes entrar, contacta al administrador de sistemas de tu empresa.')"
           >
             ¿Problemas para ingresar?
           </button>
         </div>
-      </div>
 
-      <div aria-live="polite" class="text-sm">
-        @if (error()) {
-          <p class="mt-5 flex items-center gap-2 font-medium text-critico" role="alert">
-            <ui-icon [icono]="iconos.error" [tamano]="18" />{{ error() }}
-          </p>
-        } @else if (aviso()) {
-          <p class="mt-5 flex items-start gap-2">
-            <ui-icon [icono]="iconos.info" [tamano]="18" class="text-info" />{{ aviso() }}
-          </p>
-        }
-      </div>
+        <div aria-live="polite" class="text-sm">
+          @if (error()) {
+            <p class="mt-2 flex items-center gap-2 font-medium text-critico" role="alert">
+              <ui-icon [icono]="iconos.error" [tamano]="18" />{{ error() }}
+            </p>
+          } @else if (aviso()) {
+            <p class="mt-2 flex items-start gap-2 text-carbon">
+              <ui-icon [icono]="iconos.info" [tamano]="18" class="text-info" />{{ aviso() }}
+            </p>
+          }
+        </div>
 
-      <button
-        type="submit"
-        class="boton-primario mt-6 h-14 text-lg"
-        [disabled]="f().submitting()"
-        [attr.aria-busy]="f().submitting()"
-      >
-        @if (f().submitting()) {
-          <ui-icon [icono]="iconos.cargando" class="animate-spin" />Entrando…
-        } @else {
-          Entrar al ERP<ui-icon [icono]="iconos.flecha" />
-        }
-      </button>
+        <button
+          type="submit"
+          class="entrada-subir boton-primario mt-[clamp(0.5rem,1.8dvh,1rem)] [animation-delay:840ms] h-(--boton) font-medium tracking-[0.02em] shadow-epico/15! text-[clamp(1.0625rem,2dvh,1.25rem)] lg:mt-7 lg:rounded-[calc(var(--u)*10)] lg:text-[max(15px,calc(var(--u)*21))]"
+          [disabled]="f().submitting()"
+          [attr.aria-busy]="f().submitting()"
+        >
+          @if (f().submitting()) {
+            <ui-icon [icono]="iconos.cargando" [tamano]="22" class="animate-spin lg:[&_svg]:size-5.5" />Entrando…
+          } @else {
+            Entrar al ERP<ui-icon [icono]="iconos.flecha" [tamano]="22" class="lg:[&_svg]:size-5.5" />
+          }
+        </button>
 
-      <p class="mt-8 flex items-center gap-2 border-t border-acero/60 pt-6 text-sm text-texto-suave">
-        <ui-icon [icono]="iconos.escudo" [tamano]="18" />Acceso exclusivo para personal autorizado.
-      </p>
-    </form>
-  </main>
+        <p
+          class="entrada-subir mt-(--hueco) flex items-center gap-2.5 border-t [animation-delay:910ms] border-acero/50 pt-[clamp(0.5rem,1.8dvh,1rem)] text-sm text-texto-suave
+            lg:mt-7 lg:gap-4 lg:pt-6.5 lg:text-[max(12px,calc(var(--u)*14))]"
+        >
+          <ui-icon [icono]="iconos.escudo" [tamano]="22" [grosor]="1.6" class="text-carbon/70 lg:[&_svg]:size-6" />Acceso exclusivo para personal autorizado.
+        </p>
+      </form>
+    </main>
+  </div>
 </div>

@@ -29,12 +29,16 @@ tsconfig.json              paths: "ui" → ./projects/ui/src/public-api.ts (sin 
 projects/
   erp/
     public/  src/
-      styles.css           importa tailwind, overlay del CDK y ../../ui/styles/{base,glass,forms}.css
-      public/img/          planta-login.webp (panel del login)
+      styles.css           importa tailwind, overlay del CDK, ../../ui/styles/{base,glass,forms}.css y entrada-login.css
+      public/img/          planta-login.webp (sin uso desde el login nuevo)
       app/
         core/              interceptors, servicios globales (placeholders)
         layout/            shell, sidebar colapsable + drawer móvil, topbar, nav-items.ts
-        features/auth/     login del ERP (/login)
+        features/auth/     login del ERP (/login) y capas-glass.ts: baraja de 3 cartas de vidrio (la principal con cara
+                           oscura SVG y dos detrás, pegadas, que se reparten al entrar; los vidrios son HTML con
+                           backdrop-filter recortado con clipPath objectBoundingBox), tarjetas de módulos inclinadas y
+                           red de conexiones. Todo dentro del lienzo escalado; la parte izquierda va 45 px a la izquierda
+                           y el formulario 40 px a la derecha del mockup, para dar aire entre ambos
         features/          una carpeta por módulo, cada página es ruta lazy (export default)
   portal/
     public/  src/
@@ -145,8 +149,10 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 - Marca de la app (en `projects/ui/assets/marca/`, servida en `/ui/marca/…`). No redibujar ni alterar:
   - `logo-epico-erp-horizontal.webp` (1200×383): wordmark "ΞPICO® ERP", logo principal sobre fondos claros
     (login del portal).
-  - `logo-epico-erp.webp` (800×662): logo con planta y revolvedora (login del ERP). Su texto es oscuro: sobre
-    fondos oscuros va en una placa clara (ver login del ERP).
+  - `logo-epico-erp.webp` (800×662): logo con planta y revolvedora. Su texto es oscuro: sobre fondos oscuros va
+    en una placa clara.
+  - `logo-epico-erp-blanco.webp` (1200×184): wordmark "ΞPICO® | ERP" en blanco, fondo transparente, para fondos
+    oscuros (login del ERP).
   - `isotipo-epico-erp.webp` (400×307): topbars y espacios pequeños, junto al nombre de la app en texto.
   - `iconos/`: favicons (32, 192) y `apple-touch-icon` (180, fondo blanco) a partir del isotipo.
   - Siempre con `<img ngSrc … width height>` (tamaño intrínseco) y el alto por clase (`h-9`, `h-24`).
@@ -163,7 +169,10 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 - Referencia de proporciones: login del portal (`projects/portal/src/app/features/auth/login.html`): campos
   `h-15` con texto de 17px e iconos de 22px, botón primario `h-15.5`, tarjeta `rounded-[2.25rem]` con `p-14`.
 - Nunca comunicar un estado solo con color: acompañar con texto, icono, peso o `aria-*`.
-- Animaciones: solo transiciones breves de color/opacidad.
+- Animaciones: solo transiciones breves de color/opacidad. Excepción: la entrada del login del ERP
+  (`projects/erp/src/entrada-login.css`, utilidades `entrada-*`): coreografía de menos de 5 s, sin bucles, apagada con
+  `prefers-reduced-motion`. Nunca animar opacity/filter en un contenedor de un elemento con backdrop-filter (se vuelve
+  backdrop root y el vidrio deja de ver el fondo): se anima cada elemento.
 
 ## Autenticación
 

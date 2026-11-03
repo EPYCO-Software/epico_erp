@@ -3,5 +3,6 @@
 @import '../../ui/styles/base.css';
 @import '../../ui/styles/glass.css';
 @import '../../ui/styles/forms.css';
+@import './entrada-login.css';
 
 @source '../../ui/src';

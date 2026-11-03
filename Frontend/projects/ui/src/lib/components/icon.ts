@@ -13,12 +13,14 @@ import { IconNode, createElement } from 'lucide';
 export class Icon {
   readonly icono = input.required<IconNode>();
   readonly tamano = input(20);
+  /** Grosor del trazo; más fino (1.5) para iconos grandes decorativos. */
+  readonly grosor = input(2);
 
   constructor() {
     const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
     effect(() => {
       const t = this.tamano();
-      host.replaceChildren(createElement(this.icono(), { width: t, height: t, 'stroke-width': 2 }));
+      host.replaceChildren(createElement(this.icono(), { width: t, height: t, 'stroke-width': this.grosor() }));
     });
   }
 }

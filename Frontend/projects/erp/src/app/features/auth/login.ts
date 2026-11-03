@@ -4,22 +4,19 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormField, email, form, required, submit } from '@angular/forms/signals';
 import {
   ArrowRight,
-  Box,
   Building2,
-  ChartColumn,
   ChevronDown,
   CircleX,
   Eye,
   EyeOff,
-  Factory,
   Info,
   LoaderCircle,
   Lock,
   Mail,
-  ShieldCheck,
-  Truck,
+  Shield,
 } from 'lucide';
 import { AuthService, FieldError, Icon, destinoSeguro } from 'ui';
+import { CapasGlass } from './capas-glass';
 
 interface LoginErp {
   correo: string;
@@ -34,16 +31,10 @@ const DEMO: LoginErp = { correo: 'operaciones@epicoconcretos.mx', password: 'dem
 
 const EMPRESAS = [{ id: 'epico', nombre: 'EPICO Concretos' }];
 
-const MODULOS = [
-  { icon: ChartColumn, clase: 'left-0 top-22' },
-  { icon: Factory, clase: 'left-46 top-0' },
-  { icon: Truck, clase: 'left-82 top-30' },
-  { icon: Box, clase: 'left-32 top-50' },
-];
 
 @Component({
   selector: 'app-login',
-  imports: [NgOptimizedImage, FormField, FieldError, Icon],
+  imports: [NgOptimizedImage, FormField, FieldError, Icon, CapasGlass],
   templateUrl: './login.html',
 })
 export default class Login {
@@ -52,7 +43,6 @@ export default class Login {
   private readonly route = inject(ActivatedRoute);
 
   protected readonly empresas = EMPRESAS;
-  protected readonly modulos = MODULOS;
   protected readonly iconos = {
     correo: Mail,
     candado: Lock,
@@ -64,7 +54,7 @@ export default class Login {
     info: Info,
     flecha: ArrowRight,
     cargando: LoaderCircle,
-    escudo: ShieldCheck,
+    escudo: Shield,
   };
   protected readonly verPassword = signal(false);
   protected readonly error = signal('');

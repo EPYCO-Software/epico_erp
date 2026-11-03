@@ -1,0 +1,255 @@
+/* Coreografía de entrada del login del ERP. Es la excepción a "solo transiciones breves de color/opacidad":
+   el login se pidió como una experiencia de entrada.
+   - Todo el movimiento vive dentro de prefers-reduced-motion: no-preference. Con movimiento reducido cada
+     elemento aparece directo en su estado final.
+   - Termina en menos de 5 s y no se repite (WCAG 2.2.2).
+   - Vidrio: nunca animar opacity ni filter en un CONTENEDOR de un elemento con backdrop-filter; eso lo vuelve
+     "backdrop root" y el vidrio deja de ver el fondo mientras dura la animación. Se anima cada elemento.
+   - El retraso de cada pieza va en el template ([animation-delay:…] o [style.animation-delay.ms]). */
+
+@theme {
+  --ease-entrada: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes entrada-subir {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+
+@keyframes entrada-flotar {
+  from {
+    opacity: 0;
+    translate: 0 28px;
+    scale: 0.985;
+  }
+}
+
+@keyframes entrada-nitido {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+    filter: blur(8px);
+  }
+}
+
+@keyframes entrada-barra {
+  from {
+    scale: 0 1;
+  }
+}
+
+@keyframes entrada-aparecer {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Panel oscuro (SVG: px = unidades del mockup) */
+@keyframes entrada-placa {
+  from {
+    opacity: 0;
+    translate: -48px 0;
+  }
+}
+
+/* Cartas de la baraja: salen de detrás de la principal desde (--dx, --dy) px del mockup.
+   HTML usa --u para escalar con el lienzo; SVG ya está en unidades del mockup. */
+@keyframes entrada-carta {
+  from {
+    opacity: 0;
+    translate: calc(var(--u) * var(--dx, 0)) calc(var(--u) * var(--dy, 0));
+  }
+}
+
+@keyframes entrada-carta-svg {
+  from {
+    opacity: 0;
+    translate: calc(var(--dx, 0) * 1px) calc(var(--dy, 0) * 1px);
+  }
+}
+
+@keyframes entrada-tarjeta {
+  from {
+    translate: 0 calc(var(--u) * 24);
+    scale: 0.86;
+  }
+}
+
+/* Con pathLength="1": la línea se dibuja de principio a fin */
+@keyframes entrada-trazo {
+  from {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes entrada-crecer {
+  from {
+    scale: 1 0;
+  }
+}
+
+@keyframes entrada-punto {
+  0% {
+    opacity: 0;
+    scale: 0;
+  }
+  55% {
+    opacity: 1;
+    scale: 1.6;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes entrada-latido {
+  50% {
+    opacity: 1;
+    scale: 1.8;
+  }
+}
+
+/* Reflejo que cruza el panel oscuro una sola vez (SVG) */
+@keyframes entrada-reflejo {
+  0% {
+    opacity: 0;
+    translate: 0 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 1900px 0;
+  }
+}
+
+/* Destello que recorre una carta de vidrio (HTML, % de su propio ancho) */
+@keyframes entrada-destello {
+  0% {
+    opacity: 0;
+    translate: -100% 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 260% 0;
+  }
+}
+
+@utility entrada-subir {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-subir 0.8s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-flotar {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-flotar 1s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-nitido {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-nitido 0.9s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-barra {
+  transform-origin: left;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-barra 0.6s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-aparecer {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-aparecer 0.6s ease-out both;
+  }
+}
+
+@utility entrada-placa {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-placa 1.2s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-carta {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-carta 1.3s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-carta-svg {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-carta-svg 1.3s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-tarjeta {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-tarjeta 0.8s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-trazo {
+  @media (prefers-reduced-motion: no-preference) {
+    stroke-dasharray: 1;
+    animation: entrada-trazo 0.6s ease-in-out both;
+  }
+}
+
+@utility entrada-crecer {
+  transform-box: fill-box;
+  transform-origin: bottom;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-crecer 0.5s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-punto {
+  transform-box: fill-box;
+  transform-origin: center;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-punto 0.6s var(--ease-entrada) both;
+  }
+}
+
+@utility entrada-latido {
+  transform-box: fill-box;
+  transform-origin: center;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-latido 1.2s ease-in-out both;
+  }
+}
+
+@utility entrada-reflejo {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-reflejo 1.8s ease-in-out both;
+  }
+}
+
+@utility entrada-destello {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: entrada-destello 1.6s ease-in-out both;
+  }
+}
