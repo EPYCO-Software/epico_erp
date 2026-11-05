@@ -7,15 +7,25 @@ export * from './lib/auth/auth.guards';
 
 export * from './lib/components/desvanecer';
 export * from './lib/components/drawer';
+export * from './lib/components/estado-pedido';
 export * from './lib/components/field-error';
 export * from './lib/components/glass-card';
 export * from './lib/components/icon';
 export * from './lib/components/kpi-card';
 export * from './lib/components/mapa';
 export * from './lib/components/mapa-seguimiento';
+export * from './lib/components/mapa-selector';
 export * from './lib/components/page-header';
 export * from './lib/components/pipeline';
+export * from './lib/components/resumen-cotizacion';
 export * from './lib/components/user-menu';
+
+export * from './lib/cotizacion/formato';
+export * from './lib/cotizacion/plantas';
+export * from './lib/cotizacion/catalogo';
+export * from './lib/cotizacion/reglas';
+export * from './lib/cotizacion/entrega';
+export * from './lib/cotizacion/pdf';
 
 export * from './lib/time/fecha-zona.pipe';
 

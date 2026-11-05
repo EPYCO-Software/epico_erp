@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { AUTH_STORAGE_KEY } from 'ui';
-import { DatosFacturacionEntrada, PerfilService } from './perfil.service';
+import { AUTH_STORAGE_KEY, DatosFacturacionEntrada } from 'ui';
+import { PerfilService } from './perfil.service';
 
 const fiscal = (alias: string, predeterminado = false): DatosFacturacionEntrada => ({
   alias,

@@ -2,12 +2,8 @@ import { Component, computed, inject } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormField } from '@angular/forms/signals';
 import { CalendarClock, Check, ChevronRight, Folder, MapPin, Plus, Send, ShieldCheck, Trash2 } from 'lucide';
-import { Icon } from 'ui';
+import { Icon, MAQUINARIA, SERVICIOS, buscarSolucion, deInputLocal, fechaHoraCorta, textoResistencia } from 'ui';
 import { CotizadorState } from './cotizador.state';
-import { MAQUINARIA, SERVICIOS, buscarSolucion } from './datos';
-import { deInputLocal } from './entrega';
-import { fechaHoraCorta } from './presupuesto';
-import { textoResistencia } from './reglas';
 
 /** Columna derecha: lo que se está configurando ("Tu selección") y las partidas ya agregadas ("Tu cotización"). */
 @Component({

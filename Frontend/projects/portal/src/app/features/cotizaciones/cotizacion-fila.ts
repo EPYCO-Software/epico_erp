@@ -1,14 +1,24 @@
 import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
-import { ChevronDown, ClipboardCheck, CopyPlus, Download, ExternalLink, LoaderCircle, MapPin, PencilLine } from 'lucide';
-import { AuthService, CotizacionGuardada, Icon, ModoEdicion } from 'ui';
+import { ChevronDown, ClipboardCheck, CopyPlus, Download, ExternalLink, LoaderCircle, PencilLine } from 'lucide';
+import {
+  AuthService,
+  CotizacionGuardada,
+  ESTADO_PEDIDO,
+  Icon,
+  ModoEdicion,
+  ResumenCotizacion,
+  abrirCotizacionPdf,
+  agruparPorObra,
+  descargarCotizacionPdf,
+  fechaHoraCorta,
+  pesos,
+  totalesCotizacion,
+} from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { ObrasService } from '../../core/services/obras.service';
-import { ESTADO_PEDIDO, PedidosService } from '../../core/services/pedidos.service';
-import { MAQUINARIA, SERVICIOS } from '../catalogo/datos';
-import { agruparPorObra, fechaHoraCorta, lineasPartida, pesos, totales } from '../catalogo/presupuesto';
-import { etiquetas } from '../catalogo/reglas';
+import { PedidosService } from '../../core/services/pedidos.service';
 
 /**
  * Una cotización guardada: datos clave, acciones (PDF, modificar, usar como base) y un resumen que se despliega
@@ -16,7 +26,7 @@ import { etiquetas } from '../catalogo/reglas';
  */
 @Component({
   selector: 'app-cotizacion-fila',
-  imports: [DecimalPipe, Icon, RouterLink],
+  imports: [DecimalPipe, Icon, ResumenCotizacion, RouterLink],
   template: `
     <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div class="min-w-0">
@@ -88,46 +98,15 @@ import { etiquetas } from '../catalogo/reglas';
     <p class="mt-1 text-sm font-medium text-[#8E332C] empty:hidden" aria-live="polite">{{ error() }}</p>
 
     @if (abierta()) {
-      <div [id]="'detalle-' + c().id" class="mt-4 space-y-4 border-t border-acero/60 pt-4">
-        @for (g of grupos(); track g.obra.id) {
-          <section [attr.aria-label]="'Entrega en ' + g.obra.nombre">
-            <p role="heading" [attr.aria-level]="anidada() ? 4 : 3" class="flex flex-wrap items-center gap-1.5 font-semibold">
-              <ui-icon [icono]="iconos.obra" [tamano]="16" class="text-epico" />{{ g.obra.nombre }}
-              <span class="font-normal text-texto-suave">· {{ g.obra.direccion }}, {{ g.obra.municipio }}</span>
-            </p>
-            <ul class="mt-2 space-y-2">
-              @for (p of g.partidas; track p.id) {
-                <li class="rounded-xl bg-white/80 p-3 text-sm">
-                  <p class="flex flex-wrap justify-between gap-x-4">
-                    <span class="font-semibold">{{ p.nombre }} · {{ p.volumenM3 | number: '1.0-1' }} m³</span>
-                    <span>Entrega {{ fecha(p.entrega) }}</span>
-                  </p>
-                  <p class="mt-0.5 text-texto-suave">{{ etiquetas(p).join(' · ') }}</p>
-                  @if (servicios(p); as sv) {
-                    <p class="mt-0.5 text-texto-suave">Servicios: {{ sv }}</p>
-                  }
-                  <ul class="mt-2 divide-y divide-acero/30 border-t border-acero/40">
-                    @for (l of lineas(p); track $index) {
-                      <li class="flex justify-between gap-4 py-1">
-                        <span>{{ l.concepto }} <span class="text-texto-suave">({{ l.cantidad | number: '1.0-2' }} {{ l.unidad }} × \${{ pesos(l.precio) }})</span></span>
-                        <span class="font-medium whitespace-nowrap">\${{ pesos(l.importe) }}</span>
-                      </li>
-                    }
-                  </ul>
-                </li>
-              }
-            </ul>
-          </section>
-        }
-        <dl class="ml-auto grid max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
-          <dt class="text-texto-suave">Subtotal</dt>
-          <dd class="text-right">\${{ pesos(total().subtotal) }}</dd>
-          <dt class="text-texto-suave">IVA 16%</dt>
-          <dd class="text-right">\${{ pesos(total().iva) }}</dd>
-          <dt class="font-bold">Neto</dt>
-          <dd class="text-right font-bold">\${{ pesos(total().neto) }}</dd>
-        </dl>
-      </div>
+      <!-- Mismo resumen que la vista previa del ERP (ui-resumen-cotizacion) -->
+      <ui-resumen-cotizacion
+        [id]="'detalle-' + c().id"
+        class="mt-4 border-t border-acero/60 pt-4"
+        [partidas]="c().partidas"
+        [descuento]="c().descuento"
+        [obras]="obrasService.obras()"
+        [nivel]="anidada() ? 4 : 3"
+      />
     }
   `,
 })
@@ -143,7 +122,7 @@ export class CotizacionFila {
   readonly enlazar = input(true);
 
   private readonly cotizacion = inject(CotizacionService);
-  private readonly obrasService = inject(ObrasService);
+  protected readonly obrasService = inject(ObrasService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly pedidosService = inject(PedidosService);
@@ -152,7 +131,7 @@ export class CotizacionFila {
 
   protected readonly iconos = {
     desplegar: ChevronDown, abrir: ExternalLink, descargar: Download, cargando: LoaderCircle,
-    modificar: PencilLine, base: CopyPlus, obra: MapPin, pedido: ClipboardCheck,
+    modificar: PencilLine, base: CopyPlus, pedido: ClipboardCheck,
   };
   protected readonly boton =
     'inline-flex h-10 items-center gap-1.5 rounded-lg border border-acero-oscuro bg-white px-3 text-sm font-semibold hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico disabled:opacity-60';
@@ -162,30 +141,22 @@ export class CotizacionFila {
 
   protected readonly fecha = fechaHoraCorta;
   protected readonly pesos = pesos;
-  protected readonly lineas = lineasPartida;
-  protected readonly etiquetas = (p: CotizacionGuardada['partidas'][number]) => etiquetas(p.especificacion);
   protected readonly grupos = computed(() => agruparPorObra(this.c().partidas, this.obrasService.obras()));
   protected readonly obras = computed(() => this.grupos().map((g) => g.obra.nombre).join(', '));
   protected readonly volumen = computed(() => this.c().partidas.reduce((t, p) => t + p.volumenM3, 0));
-  protected readonly total = computed(() => totales(this.c().partidas.flatMap(lineasPartida)));
+  protected readonly total = computed(() => totalesCotizacion(this.c()));
   protected readonly referencia = computed(() => this.cotizacion.referencia(this.c()));
-
-  protected servicios(p: CotizacionGuardada['partidas'][number]): string {
-    const sv = SERVICIOS.filter((s) => p.servicios.includes(s.id) && s.id !== 'renta-maquinaria').map((s) => s.nombre);
-    const mq = p.maquinaria.map((m) => `${MAQUINARIA.find((x) => x.id === m.tipo)!.nombre} (${m.dias} ${m.dias === 1 ? 'día' : 'días'})`);
-    return [...sv, ...mq].join(', ');
-  }
 
   protected async verPdf(modo: 'abrir' | 'descargar'): Promise<void> {
     const c = this.c();
     this.pdf.set(modo);
     this.error.set('');
     try {
-      const { abrirCotizacionPdf, descargarCotizacionPdf } = await import('../catalogo/pdf-cotizacion');
       const datos = {
         folio: c.folio, fecha: new Date(c.fecha), partidas: c.partidas, obras: this.obrasService.obras(),
         cliente: this.auth.sesion()?.usuario ?? { nombre: 'Cliente', correo: '' },
         referencia: this.referencia() ?? undefined,
+        descuento: c.descuento,
       };
       await (modo === 'abrir' ? abrirCotizacionPdf(datos) : descargarCotizacionPdf(datos));
     } catch {

@@ -1,9 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { FormField } from '@angular/forms/signals';
 import { ChevronDown, Info, TriangleAlert } from 'lucide';
-import { Aditivo, Colocacion, EspecificacionConcreto, Exposicion, FieldError, Icon, TipoCemento } from 'ui';
+import { ADITIVOS, Aditivo, CEMENTO_LABEL, Colocacion, EXPOSICIONES, EspecificacionConcreto, Exposicion, FieldError, Icon, OPCIONES, TipoCemento } from 'ui';
 import { CotizadorState } from './cotizador.state';
-import { ADITIVOS, CEMENTO_LABEL, EXPOSICIONES, OPCIONES } from './datos';
 
 const EDAD_LABEL: Record<number, string> = { 28: '28 días (estándar)', 14: '14 días', 7: '7 días (rápido)', 3: '3 días (muy rápido)' };
 

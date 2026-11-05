@@ -9,7 +9,9 @@
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
     "lucide": "^1.66.0",
-    "leaflet": "^1.9.4"
+    "leaflet": "^1.9.4",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9"
   },
   "dependencies": {
     "tslib": "^2.3.0"

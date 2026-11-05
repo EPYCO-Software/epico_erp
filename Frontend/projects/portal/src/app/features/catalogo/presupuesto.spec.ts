@@ -1,5 +1,4 @@
-import { PartidaCotizacion } from 'ui';
-import { conceptoConcreto, fechaHoraCorta, lineasPartida, pesos, plantaPara, precioConcreto, totales } from './presupuesto';
+import { PartidaCotizacion, conceptoConcreto, fechaHoraCorta, lineasPartida, pesos, plantaPara, precioConcreto, totales } from 'ui';
 
 const partida = (cambios: Partial<PartidaCotizacion> = {}): PartidaCotizacion => ({
   id: 'p1',
@@ -25,7 +24,7 @@ describe('presupuesto', () => {
       ['M³', 500, 20, 10000],
     ]);
     expect(conceptoConcreto(partida())).toBe('Concreto premezclado f´c: 200 kg/cm², Rev. 14 cm, Edad 28 días, TMA 19 mm.');
-    expect(totales(l)).toEqual({ subtotal: 84000, iva: 13440, neto: 97440 });
+    expect(totales(l)).toEqual({ subtotal: 84000, descuento: 0, iva: 13440, neto: 97440 });
   });
 
   it('aplica mínimos de bombeo (10 m³ estacionaria, 20 m³ pluma)', () => {

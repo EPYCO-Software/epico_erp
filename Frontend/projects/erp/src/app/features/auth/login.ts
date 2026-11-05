@@ -17,6 +17,7 @@ import {
 } from 'lucide';
 import { AuthService, FieldError, Icon, destinoSeguro } from 'ui';
 import { CapasGlass } from './capas-glass';
+import { EMPRESAS } from '../../core/empresas';
 
 interface LoginErp {
   correo: string;
@@ -27,9 +28,8 @@ interface LoginErp {
 
 // shortcut: mientras el login es estático el formulario viene lleno para entrar con un clic.
 // Al conectar el backend, dejar correo y password vacíos.
-const DEMO: LoginErp = { correo: 'operaciones@epicoconcretos.mx', password: 'demo-epico', empresaId: 'epico', recordar: true };
+const DEMO: LoginErp = { correo: 'operaciones@epicoconcretos.mx', password: 'demo-epico', empresaId: 'demo', recordar: true };
 
-const EMPRESAS = [{ id: 'epico', nombre: 'EPICO Concretos' }];
 
 
 @Component({
@@ -74,7 +74,7 @@ export default class Login {
     await submit(this.f, async () => {
       try {
         await this.auth.login(this.modelo());
-        await this.router.navigateByUrl(destinoSeguro(this.route.snapshot.queryParamMap.get('returnUrl'), '/dashboard'));
+        await this.router.navigateByUrl(destinoSeguro(this.route.snapshot.queryParamMap.get('returnUrl'), '/inicio'));
       } catch {
         // Mensaje genérico: no revelar si falló el correo, la contraseña o la empresa.
         this.error.set('No pudimos iniciar sesión. Revisa tus datos e intenta de nuevo.');

@@ -2,11 +2,10 @@ import { Component, computed, inject, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ArrowRight, Truck } from 'lucide';
-import { FechaZonaPipe, Icon, PedidoVista, Pipeline } from 'ui';
+import { EstadoPedidoEtiqueta, FechaZonaPipe, Icon, PedidoVista, Pipeline } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { SeguimientoService } from '../../core/services/seguimiento.service';
 import { CobroPedido } from './cobro-pedido';
-import { EstadoPedidoEtiqueta } from './estado-pedido';
 import { etapasFlujo } from './flujo';
 import { senal } from './seguimiento';
 import { porEntregarse } from './seguimiento-entrega';
@@ -18,7 +17,7 @@ import { porEntregarse } from './seguimiento-entrega';
   template: `
     <div class="flex flex-wrap items-start justify-between gap-2">
       <h2 id="previa-titulo" class="text-lg font-bold">Pedido {{ p().folio }}</h2>
-      <app-estado-pedido [estado]="p().estado" />
+      <ui-estado-pedido [estado]="p().estado" />
     </div>
     <ui-pipeline class="mt-3" [etapas]="etapas()" etiqueta="Flujo del pedido" />
 

@@ -34,6 +34,10 @@
             ],
             "outputPath": "dist/erp",
             "allowedCommonJsDependencies": [
+              "core-js",
+              "html2canvas",
+              "raf",
+              "rgbcolor",
               "leaflet"
             ]
           },

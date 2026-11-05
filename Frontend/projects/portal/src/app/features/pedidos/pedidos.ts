@@ -2,11 +2,18 @@ import { Component, Injector, afterNextRender, computed, inject, signal } from '
 import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { MousePointerClick, RotateCcw } from 'lucide';
-import { FechaZonaPipe, Icon, PageHeader, PedidoVista } from 'ui';
-import { ESTADO_COBRO, ESTADO_PEDIDO, PedidosService } from '../../core/services/pedidos.service';
-import { pesos } from '../catalogo/presupuesto';
-import { EstadoCobroEtiqueta } from './estado-cobro';
-import { EstadoPedidoEtiqueta } from './estado-pedido';
+import {
+  ESTADO_COBRO,
+  ESTADO_PEDIDO,
+  EstadoCobroEtiqueta,
+  EstadoPedidoEtiqueta,
+  FechaZonaPipe,
+  Icon,
+  PageHeader,
+  PedidoVista,
+  pesos,
+} from 'ui';
+import { PedidosService } from '../../core/services/pedidos.service';
 import { FiltroFecha, FiltroMultiple } from './filtros-pedidos';
 import { PedidoPrevia } from './pedido-previa';
 
@@ -141,11 +148,11 @@ const OPCIONES_COBRO = Object.entries(ESTADO_COBRO).map(([valor, etiqueta]) => (
                       <td class="px-3 whitespace-nowrap">
                         {{ p.fechaHoraEntrega | fechaZona: p.zonaHoraria }}
                       </td>
-                      <td class="px-3"><app-estado-pedido [estado]="p.estado" /></td>
+                      <td class="px-3"><ui-estado-pedido [estado]="p.estado" /></td>
                       <td class="px-3 text-right font-medium whitespace-nowrap">
                         \${{ pesos(p.importe) }}
                       </td>
-                      <td class="px-3"><app-estado-cobro [cobro]="p.cobro" [corto]="true" /></td>
+                      <td class="px-3"><ui-estado-cobro [cobro]="p.cobro" [corto]="true" /></td>
                     </tr>
                   }
                 } @else {

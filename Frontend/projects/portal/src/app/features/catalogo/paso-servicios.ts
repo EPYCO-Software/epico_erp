@@ -1,9 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CalendarClock, Moon } from 'lucide';
-import { Icon } from 'ui';
+import { Icon, MAQUINARIA, SERVICIOS, aInputLocal, limitesEntrega } from 'ui';
 import { CotizadorState } from './cotizador.state';
-import { MAQUINARIA, SERVICIOS } from './datos';
-import { aInputLocal, limitesEntrega } from './entrega';
 import { ObraEntrega } from './obra-entrega';
 
 @Component({

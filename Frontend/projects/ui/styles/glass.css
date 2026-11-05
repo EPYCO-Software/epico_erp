@@ -1,12 +1,91 @@
 /* Utilidades glass compartidas. Importar desde el styles.css de cada app, después de base.css.
    Vidrio blanco discreto: legible primero, decorativo después.
    Usar solo en contenedores (sidebar, topbar, cards, diálogos), nunca en filas de tabla. */
+/* Receta: blanco translúcido + desenfoque y saturación de lo que hay detrás (los halos del fondo se cuelan con
+   color), brillo diagonal encima, filo de luz arriba (inset) y sombra amplia y suave. Para cambiar el tono basta
+   con bg-white/NN; el brillo y el filo se mantienen. */
 @utility glass {
-  @apply rounded-2xl border border-white/80 bg-white/65 shadow-lg shadow-carbon/5 backdrop-blur-md;
+  @apply rounded-2xl border border-white/80 bg-white/60 shadow-[0_12px_32px_-14px_rgb(26_26_28/0.2)] inset-shadow-[0_1px_0_rgb(255_255_255/0.9)] backdrop-blur-xl backdrop-saturate-150;
+  background-image: linear-gradient(140deg, rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.05) 45%, rgb(255 255 255 / 0.2));
 }
 
 @utility glass-strong {
-  @apply rounded-2xl border border-white/90 bg-white/80 shadow-xl shadow-carbon/10 backdrop-blur-xl;
+  @apply rounded-2xl border border-white/90 bg-white/78 shadow-[0_18px_44px_-16px_rgb(26_26_28/0.28)] inset-shadow-[0_1px_0_rgb(255_255_255)] backdrop-blur-2xl backdrop-saturate-150;
+  background-image: linear-gradient(140deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.1) 50%);
+}
+
+/* Liquid Glass (prueba: vista previa de Cotizaciones). A diferencia de glass (vidrio esmerilado: blanco translúcido muy
+   desenfocado), es un vidrio más claro que dobla lo que hay detrás en el borde, como una lente, con brillos en el filo
+   y una luz que sigue al puntero (--luz-x / --luz-y). Se arma con capas hermanas (borde, cuerpo, brillo) dentro de un
+   contenedor sin backdrop-filter: si el contenedor lo tuviera, las capas ya no verían la página de atrás. El doblez del
+   borde es un filtro SVG (#vidrio-liquido) que solo pintan Chrome y Edge; los demás se quedan con el desenfoque. Con
+   "reducir transparencia" o "más contraste" del sistema se vuelve sólido. */
+@utility vidrio-liquido {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1.75rem;
+  box-shadow:
+    0 24px 60px -24px rgb(26 26 28 / 0.38),
+    0 2px 8px rgb(26 26 28 / 0.08);
+}
+
+/* Capa de abajo: el filo dobla la página nítida de atrás (filtro SVG; sin él, un desenfoque leve). */
+@utility vidrio-liquido-borde {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgb(255 255 255 / 0.14);
+  backdrop-filter: blur(2px) saturate(2) brightness(1.08);
+
+  @supports (backdrop-filter: url(#vidrio-liquido)) {
+    backdrop-filter: url(#vidrio-liquido) saturate(2) brightness(1.08);
+  }
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    display: none;
+  }
+}
+
+/* Encima: el cuerpo esmerilado, solo adentro; se difumina en el filo (1 rem) para que ahí se vea el doblez. Opaco y
+   poco saturado a propósito: el texto encima pasa AA aunque atrás esté el halo rojo (como Apple en paneles con texto). */
+@utility vidrio-liquido-cuerpo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.84) 30%, rgb(255 255 255 / 0.7) 60%, rgb(255 255 255 / 0.76));
+  backdrop-filter: blur(14px) saturate(1.2) brightness(1.04);
+  -webkit-mask:
+    linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1rem), transparent),
+    linear-gradient(to bottom, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+  -webkit-mask-composite: source-in;
+  mask:
+    linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1rem), transparent),
+    linear-gradient(to bottom, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
+  mask-composite: intersect;
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    background: rgb(255 255 255 / 0.96);
+    backdrop-filter: none;
+    -webkit-mask: none;
+    mask: none;
+  }
+}
+
+@utility vidrio-liquido-brillo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    radial-gradient(22rem circle at var(--luz-x, 15%) var(--luz-y, -5%), rgb(255 255 255 / 0.7), transparent 60%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.35), transparent 5rem);
+  box-shadow:
+    inset 2px 2px 0 rgb(255 255 255 / 0.95),
+    inset -1.5px -1.5px 0 rgb(255 255 255 / 0.55),
+    inset 0 0 0 1px rgb(255 255 255 / 0.3),
+    inset 0 -1.5rem 2.5rem -2rem rgb(26 26 28 / 0.2);
 }
 
 /* Contenedores con scroll: barra invisible (se sigue desplazando con rueda, touch y teclado). */
@@ -15,6 +94,122 @@
 
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* Caja con scroll propio (tabla, panel, historial, menús, diálogos): barra fina tipo píldora, 6 px visibles, sin
+   riel y separada de las esquinas redondeadas; gris tenue que se oscurece al pasar el mouse. En Chrome, Edge y Safari
+   la dibujan las reglas ::-webkit-scrollbar (el scrollbar-color heredado de html las anularía, por eso vuelve a auto);
+   Firefox no las tiene y usa su barra fina con los mismos colores. El scroll no pasa a la página al llegar al final. */
+@utility scroll-caja {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(26 26 28 / 0.28) transparent;
+
+  @supports selector(::-webkit-scrollbar) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
+  &::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 12px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background: rgb(26 26 28 / 0.22) padding-box;
+  }
+
+  &::-webkit-scrollbar-thumb:hover,
+  &::-webkit-scrollbar-thumb:active {
+    background-color: rgb(26 26 28 / 0.42);
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Columna (ERP, escritorio) que se desplaza con todo y caja, como en las apps de celular: sin barra; al bajar se van
+   las esquinas de arriba de la caja y al final aparecen las de abajo. Su caja (el hijo) lleva aire arriba y abajo y,
+   si cabe, llena el alto. Donde la caja queda cortada, una niebla la desvanece: ::before arriba y ::after abajo,
+   pegados a las orillas (la columna no lleva relleno arriba ni abajo porque sticky lo respeta), con el mismo fondo fijo
+   del body (base.css) y un degradado: la caja parece disolverse en la página. No es una máscara en la columna porque
+   esa le quitaría al vidrio de adentro la página que difumina (backdrop-filter). Cada niebla aparece o se va en los
+   primeros o últimos 2rem del scroll (animación ligada al scroll); si no hay scroll no se ve, y sin soporte (Firefox,
+   por ahora) no hay niebla. scroll-padding: con Tab, lo enfocado no queda bajo la niebla. */
+@utility columna-caja {
+  padding-inline: 0.75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 2rem;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  & > * {
+    min-height: calc(100% - 1.75rem);
+    margin-block: 0.5rem 1.25rem;
+  }
+
+  &::before,
+  &::after {
+    content: '';
+    position: sticky;
+    z-index: 1;
+    display: block;
+    height: 2rem;
+    margin-inline: -0.75rem;
+    pointer-events: none;
+    background: var(--color-concreto) url('/ui/fondos/fondo-concreto.webp') center / cover no-repeat fixed;
+    opacity: 0;
+  }
+
+  &::before {
+    top: 0;
+    margin-bottom: -2rem;
+    mask-image: linear-gradient(to bottom, #000, transparent);
+  }
+
+  &::after {
+    bottom: 0;
+    margin-top: -2rem;
+    mask-image: linear-gradient(to top, #000, transparent);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    &::before,
+    &::after {
+      animation-name: niebla;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: scroll(nearest);
+    }
+
+    &::before {
+      animation-range: 0 2rem;
+    }
+
+    &::after {
+      animation-direction: reverse;
+      animation-range: calc(100% - 2rem) 100%;
+    }
+  }
+}
+
+@keyframes niebla {
+  to {
+    opacity: 1;
   }
 }
 

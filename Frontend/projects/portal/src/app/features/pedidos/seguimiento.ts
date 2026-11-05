@@ -1,5 +1,4 @@
-import { EstadoViaje, UbicacionGps, ViajeCamion } from 'ui';
-import { aIsoConOffset } from '../catalogo/entrega';
+import { EstadoViaje, UbicacionGps, ViajeCamion, aIsoConOffset } from 'ui';
 
 /** Calidad del seguimiento de un camión. */
 export type Senal = 'en_vivo' | 'perdida' | 'sin_gps';

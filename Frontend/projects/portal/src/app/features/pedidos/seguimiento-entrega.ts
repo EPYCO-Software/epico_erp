@@ -1,10 +1,9 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { CircleCheck, Clock, Factory, MapPin, Radio, Truck, WifiOff } from 'lucide';
-import { FechaZonaPipe, Icon, MapaSeguimiento, PedidoVista, PuntoMapa, ViajeCamion } from 'ui';
+import { FechaZonaPipe, Icon, MapaSeguimiento, PedidoVista, PuntoMapa, ViajeCamion, plantaPara } from 'ui';
 import { ObrasService } from '../../core/services/obras.service';
 import { SeguimientoService } from '../../core/services/seguimiento.service';
-import { plantaPara } from '../catalogo/presupuesto';
 import { ESTADO_VIAJE, MINUTOS_SENAL, Senal, minutosDesde, minutosParaLlegar, senal } from './seguimiento';
 
 /** Pedidos cuya entrega está en marcha: se ofrece el seguimiento de camiones. */

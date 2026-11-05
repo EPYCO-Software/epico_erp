@@ -1,5 +1,7 @@
-import { Obra, PartidaCotizacion } from 'ui';
-import { agruparPorObra, fechaHoraCorta, fechaLarga, lineasPartida, pesos, plantaPara, totales } from './presupuesto';
+import { PartidaCotizacion } from '../models/cotizacion';
+import { Obra } from '../models/obra';
+import { agruparPorObra, fechaHoraCorta, lineasPartida, pesos, totales } from './formato';
+import { fechaLarga, plantaPara } from './plantas';
 
 export interface DatosPdf {
   folio: string;
@@ -9,6 +11,12 @@ export interface DatosPdf {
   obras: Obra[];
   /** Línea bajo el folio, p. ej. "Sustituye a: EPI-WEB-ESC-26001" o "Basada en: …". */
   referencia?: string;
+  /** % de descuento que dio la concretera (CotizacionGuardada.descuento). */
+  descuento?: number;
+  /** El documento: la cotización (por omisión) o la orden de venta de un pedido, con el mismo formato. */
+  tipo?: 'cotizacion' | 'orden';
+  /** La emite la concretera (ERP): sin la nota de "precios de referencia generados en el portal". */
+  emitida?: boolean;
 }
 
 // Colores de la cotización impresa (EPI-PRES-ESC-26085).
@@ -40,8 +48,8 @@ export async function abrirCotizacionPdf(d: DatosPdf): Promise<void> {
 }
 
 /**
- * Genera el PDF con el formato de la cotización impresa de EPICO (sin logos por ahora).
- * jsPDF se carga solo aquí, al generar, para no pesar en la carga del portal.
+ * Genera el PDF con el formato de la cotización impresa de EPICO (sin logos por ahora), igual en el portal y el ERP.
+ * jsPDF se carga solo aquí, al generar, para no pesar en la carga de las apps.
  */
 async function generar(d: DatosPdf) {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
@@ -69,7 +77,11 @@ async function generar(d: DatosPdf) {
 
   // Introducción
   const obrasTexto = grupos.map((g) => `"${g.obra.nombre.toUpperCase()}", ubicada en ${g.obra.municipio.replace(/\.$/, '')}`).join('; ');
-  const intro = `Estimado cliente por este medio sometemos a su consideración nuestra propuesta para el suministro de Concreto Premezclado, para ${grupos.length === 1 ? 'la obra' : 'las obras'} ${obrasTexto}.`;
+  const orden = d.tipo === 'orden';
+  const para = `para ${grupos.length === 1 ? 'la obra' : 'las obras'} ${obrasTexto}.`;
+  const intro = orden
+    ? `Estimado cliente por este medio le confirmamos su orden de venta para el suministro de Concreto Premezclado, ${para}`
+    : `Estimado cliente por este medio sometemos a su consideración nuestra propuesta para el suministro de Concreto Premezclado, ${para}`;
   doc.setFontSize(11);
   const lineasIntro = doc.splitTextToSize(intro, ancho - 2 * m);
   doc.text(lineasIntro, m, 200, { lineHeightFactor: 1.35 });
@@ -78,7 +90,7 @@ async function generar(d: DatosPdf) {
   // Una tabla por obra
   const todas = grupos.flatMap((g) => g.partidas.flatMap(lineasPartida));
   grupos.forEach((g, i) => {
-    const titulo = `${i + 1}.- COTIZACIÓN DE CONCRETO${grupos.length > 1 ? ` - OBRA ${g.obra.nombre.toUpperCase()}` : ''}`;
+    const titulo = `${i + 1}.- ${orden ? 'ORDEN DE VENTA' : 'COTIZACIÓN'} DE CONCRETO${grupos.length > 1 ? ` - OBRA ${g.obra.nombre.toUpperCase()}` : ''}`;
     doc.setFont('helvetica', 'bold').setFontSize(11);
     if (y > alto - 160) {
       doc.addPage();
@@ -90,7 +102,7 @@ async function generar(d: DatosPdf) {
 
     const filas = g.partidas.flatMap((p) =>
       lineasPartida(p).map((l, j) => [
-        j === 0 ? `${l.concepto}\nEntrega estimada: ${fechaHoraCorta(p.entrega)}` : l.concepto,
+        j === 0 ? `${l.concepto}\nEntrega ${orden ? 'programada' : 'estimada'}: ${fechaHoraCorta(p.entrega)}` : l.concepto,
         l.unidad,
         pesos(l.precio),
         l.cantidad.toFixed(2),
@@ -117,12 +129,13 @@ async function generar(d: DatosPdf) {
   });
 
   // Totales (alineados a la columna de importe, como en la impresa)
-  const t = totales(todas);
+  const t = totales(todas, d.descuento);
   autoTable(doc, {
     startY: y - 14,
     margin: { left: ancho - m - 170, right: m, bottom: 90 },
     body: [
       ['Subtotal', `$  ${pesos(t.subtotal)}`],
+      ...(t.descuento ? [[`Descuento ${d.descuento}%`, `−$  ${pesos(t.descuento)}`]] : []),
       ['IVA 16%', `$  ${pesos(t.iva)}`],
       ['Neto', `$  ${pesos(t.neto)}`],
     ],
@@ -130,7 +143,7 @@ async function generar(d: DatosPdf) {
     styles: { font: 'times', fontSize: 11, textColor: 0, lineColor: 0, lineWidth: 0.5, cellPadding: { top: 3, bottom: 3, left: 5, right: 5 } },
     columnStyles: { 0: { halign: 'center', cellWidth: 70 }, 1: { halign: 'right', fontStyle: 'bold', cellWidth: 100 } },
     didParseCell: (c) => {
-      if (c.row.index === 2) c.cell.styles.fillColor = AMARILLO;
+      if (c.row.index === c.table.body.length - 1) c.cell.styles.fillColor = AMARILLO;
     },
   });
   y = finalY() + 26;
@@ -140,13 +153,15 @@ async function generar(d: DatosPdf) {
     { texto: 'Pago por adelantado.' },
     { texto: 'Precios antes de IVA.' },
     { texto: 'Precios en Moneda Nacional (MXN).' },
-    { texto: 'Precios válidos hasta 20 km de la ubicación de la planta.' },
+    { texto: `Precios válidos hasta ${d.partidas.find((p) => p.traslado)?.traslado?.incluidosKm ?? 20} km de la ubicación de la planta.` },
     ...(planta.clave === 'ESC' ? [{ texto: MAPA_ESC, enlace: MAPA_ESC }] : []),
     { texto: 'En caso de ocupar a una distancia mayor se negociarán costos por traslado adicional.' },
     { texto: `Precios válidos hasta el 31 de diciembre del ${d.fecha.getFullYear()}`, negrita: true },
     { texto: 'Nuestros concretos se encuentran regulados bajo la Norma Mexicana NMX C-155.' },
-    { texto: 'Precios de referencia generados en el portal; sujetos a confirmación de su asesor.', negrita: true },
-    { texto: 'Fechas de entrega estimadas, sujetas a confirmación de disponibilidad. Entregas de 18:00 a 07:00 se cotizan como colado nocturno.' },
+    ...(d.emitida ? [] : [{ texto: 'Precios de referencia generados en el portal; sujetos a confirmación de su asesor.', negrita: true }]),
+    orden
+      ? { texto: 'Fecha de entrega programada; cualquier cambio, con su asesor. Entregas de 18:00 a 07:00 se cotizan como colado nocturno.' }
+      : { texto: 'Fechas de entrega estimadas, sujetas a confirmación de disponibilidad. Entregas de 18:00 a 07:00 se cotizan como colado nocturno.' },
   ];
   if (y > alto - 230) {
     doc.addPage();

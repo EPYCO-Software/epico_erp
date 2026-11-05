@@ -1,55 +1,5 @@
 import { Service, inject, signal } from '@angular/core';
-import { AuthService } from 'ui';
-
-export interface PerfilUsuario {
-  nombre: string;
-  apellidos: string;
-  correo: string;
-  telefono: string;
-  puesto: string;
-  representaEmpresa: boolean;
-  empresa: DatosEmpresaRepresentada;
-}
-
-export interface DatosEmpresaRepresentada {
-  razonSocial: string;
-  nombreComercial: string;
-  rfc: string;
-  giro: string;
-  correo: string;
-  telefono: string;
-  sitioWeb: string;
-  domicilioFiscal: string;
-  cargoRepresentante: string;
-}
-
-export type TipoDocumentoFiscal =
-  'Constancia de situación fiscal' | 'Carátula bancaria' | 'Comprobante de domicilio' | 'Otro';
-
-export interface DocumentoFiscal {
-  id: string;
-  nombre: string;
-  tipo: TipoDocumentoFiscal;
-  tamano: number;
-  fechaCarga: string;
-  archivo: File;
-}
-
-export interface DatosFacturacion {
-  id: string;
-  alias: string;
-  razonSocial: string;
-  rfc: string;
-  regimenFiscal: string;
-  codigoPostal: string;
-  usoCfdi: string;
-  correo: string;
-  direccionFiscal: string;
-  predeterminado: boolean;
-  documentos: DocumentoFiscal[];
-}
-
-export type DatosFacturacionEntrada = Omit<DatosFacturacion, 'id' | 'documentos'>;
+import { AuthService, DatosFacturacion, DatosFacturacionEntrada, DocumentoFiscal, PerfilUsuario, TipoDocumentoFiscal } from 'ui';
 
 export interface ResultadoCargaDocumentos {
   agregados: number;

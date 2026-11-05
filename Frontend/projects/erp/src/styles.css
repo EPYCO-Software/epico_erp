@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import '@angular/cdk/overlay-prebuilt.css';
+@import 'leaflet/dist/leaflet.css';
 @import '../../ui/styles/base.css';
 @import '../../ui/styles/glass.css';
 @import '../../ui/styles/forms.css';

@@ -1,11 +1,9 @@
 import { Component, computed, inject, input, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Lock, PencilLine, Phone } from 'lucide';
-import { ContactoObra, FechaZonaPipe, Icon, Mapa } from 'ui';
+import { ContactoObra, EstadoCobroEtiqueta, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, Mapa } from 'ui';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
 import { PedidosService, enCurso } from '../../core/services/pedidos.service';
-import { EstadoCobroEtiqueta } from '../pedidos/estado-cobro';
-import { EstadoPedidoEtiqueta } from '../pedidos/estado-pedido';
 import { Avatar } from './avatar';
 import { ObraForm } from './obra-form';
 import { telefonoEnlace, telefonoVisible } from './telefono';
@@ -104,8 +102,8 @@ import { telefonoEnlace, telefonoVisible } from './telefono';
                       <a [routerLink]="['/pedidos', p.folio]" class="font-semibold text-epico underline-offset-4 hover:underline">{{ p.folio }}</a>
                       <span class="text-texto-suave">{{ p.fechaHoraEntrega | fechaZona: p.zonaHoraria }}</span>
                       <span class="ml-auto flex flex-wrap gap-1.5">
-                        <app-estado-pedido [estado]="p.estado" />
-                        <app-estado-cobro [cobro]="p.cobro" />
+                        <ui-estado-pedido [estado]="p.estado" />
+                        <ui-estado-cobro [cobro]="p.cobro" />
                       </span>
                     </li>
                   }

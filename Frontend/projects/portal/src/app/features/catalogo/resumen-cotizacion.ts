@@ -2,12 +2,9 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ArrowLeft, CalendarClock, Check, CircleCheck, Download, GitBranch, Info, LoaderCircle, MapPin, Save, Trash2 } from 'lucide';
-import { AuthService, Icon, Mapa, PartidaCotizacion } from 'ui';
+import { AuthService, Icon, MAQUINARIA, Mapa, PartidaCotizacion, SERVICIOS, agruparPorObra, descargarCotizacionPdf, etiquetas, fechaHoraCorta, lineasPartida, pesos, plantaPara, totales } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { CotizadorState } from './cotizador.state';
-import { MAQUINARIA, SERVICIOS } from './datos';
-import { agruparPorObra, fechaHoraCorta, lineasPartida, pesos, plantaPara, totales } from './presupuesto';
-import { etiquetas } from './reglas';
 
 type Accion = 'descargar-guardar' | 'guardar' | 'descargar';
 
@@ -236,7 +233,6 @@ export class ResumenCotizacion {
     this.ocupado.set(true);
     try {
       if (accion !== 'guardar') {
-        const { descargarCotizacionPdf } = await import('./pdf-cotizacion');
         const usuario = this.auth.sesion()?.usuario ?? { nombre: 'Cliente', correo: '' };
         const referencia = this.cotizacion.referenciaEdicion() ?? undefined;
         await descargarCotizacionPdf({ folio, fecha, cliente: usuario, partidas: this.s.partidas(), obras: this.s.obras(), referencia });

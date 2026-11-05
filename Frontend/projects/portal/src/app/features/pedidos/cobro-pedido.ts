@@ -1,7 +1,5 @@
 import { Component, computed, input } from '@angular/core';
-import { PedidoVista } from 'ui';
-import { IVA, pesos } from '../catalogo/presupuesto';
-import { EstadoCobroEtiqueta } from './estado-cobro';
+import { EstadoCobroEtiqueta, IVA, PedidoVista, pesos } from 'ui';
 
 /** Bloque económico de un pedido: importe con IVA desglosado, situación de cobro y factura. */
 @Component({
@@ -16,7 +14,7 @@ import { EstadoCobroEtiqueta } from './estado-cobro';
       <dt class="border-t border-acero/60 pt-1.5 font-bold">Total</dt>
       <dd class="border-t border-acero/60 pt-1.5 text-right font-bold">\${{ pesos(p().importe) }}</dd>
       <dt class="pt-2 text-texto-suave">Situación</dt>
-      <dd class="pt-2 text-right"><app-estado-cobro [cobro]="p().cobro" /></dd>
+      <dd class="pt-2 text-right"><ui-estado-cobro [cobro]="p().cobro" /></dd>
       <dt class="text-texto-suave">Factura</dt>
       <dd class="text-right">{{ p().facturaFolio ?? (p().cobro === 'en_facturacion' ? 'En emisión' : 'Aún sin factura') }}</dd>
     </dl>

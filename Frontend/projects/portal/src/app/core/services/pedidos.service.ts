@@ -1,7 +1,5 @@
 import { Service, computed, inject, signal } from '@angular/core';
-import { CotizacionGuardada, EstadoCobro, EstadoPedido, Pedido, PedidoVista } from 'ui';
-import { aIsoConOffset } from '../../features/catalogo/entrega';
-import { lineasPartida, plantaPara, totales } from '../../features/catalogo/presupuesto';
+import { CotizacionGuardada, Pedido, PedidoVista, aIsoConOffset, pedidoDePartida, plantaPara } from 'ui';
 import { ObrasService } from './obras.service';
 
 // shortcut: pedidos en memoria. Al conectar el backend, los crea el ERP al aceptar la cotización y el portal solo
@@ -34,22 +32,6 @@ const PEDIDOS_DEMO: Pedido[] = [
     importe: 68730, cobro: 'pagado', facturaFolio: 'FAC-26-0870',
   },
 ];
-
-export const ESTADO_PEDIDO: Record<EstadoPedido, string> = {
-  programado: 'Programado',
-  en_planta: 'En planta',
-  en_ruta: 'En ruta',
-  en_obra: 'En obra',
-  entregado: 'Entregado',
-  cancelado: 'Cancelado',
-};
-
-export const ESTADO_COBRO: Record<EstadoCobro, string> = {
-  por_facturar: 'Por facturar',
-  en_facturacion: 'En proceso de facturación',
-  facturado: 'Facturado',
-  pagado: 'Pagado',
-};
 
 /** Un pedido "en curso" aún no termina su entrega: mientras exista, su obra no se puede editar. */
 export const enCurso = (p: Pick<Pedido, 'estado'>) => p.estado !== 'entregado' && p.estado !== 'cancelado';
@@ -106,13 +88,9 @@ export class PedidosService {
       folio: `PED-${c.fecha.slice(2, 4)}-${String(++this.consecutivo).padStart(4, '0')}`,
       clienteId: 'c1',
       plantaId: plantaPara(this.obras.buscar(p.obraId)).clave,
-      obraId: p.obraId,
       cotizacionId: c.id,
-      producto: p.nombre,
-      volumenM3: p.volumenM3,
-      fechaHoraEntrega: p.entrega,
+      ...pedidoDePartida(p, c.descuento),
       estado: 'programado',
-      importe: totales(lineasPartida(p)).neto,
       cobro: 'por_facturar',
     }));
     this._pedidos.update((p) => [...p, ...nuevos]);

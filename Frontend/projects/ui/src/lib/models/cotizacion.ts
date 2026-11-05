@@ -57,6 +57,20 @@ export interface PartidaCotizacion extends ConfiguracionConcreto {
   id: string;
   /** Nombre visible, p. ej. "Pavimento" o el nombre del diseño guardado. */
   nombre: string;
+  /** Precio especial del concreto por m³ que da la concretera (ERP). Sin él, el del tarifario. */
+  precioM3?: number;
+  /** Cargo por distancia que fija la concretera (ERP): sin él, la entrega está dentro del radio de la planta. */
+  traslado?: Traslado;
+}
+
+/**
+ * De la planta a la obra: los km que pasen de `incluidosKm` se cobran a `precioKm` por cada m³ (línea "Traslado
+ * adicional" de lineasPartida).
+ */
+export interface Traslado {
+  distanciaKm: number;
+  incluidosKm: number;
+  precioKm: number;
 }
 
 export interface DisenoGuardado {
@@ -84,7 +98,37 @@ export interface CotizacionGuardada {
   revision: number;
   /** Cotización de la que se partió (revisión o nueva cotización tomada de base). */
   baseId?: string;
+  /** Descuento sobre el subtotal, en %, que da la concretera (ERP). Se aplica antes del IVA. */
+  descuento?: number;
 }
 
 /** Cómo se guardará la cotización que se está editando a partir de una guardada. */
 export type ModoEdicion = 'revision' | 'base';
+
+/** "pedido": el cliente la aceptó y ya generó su pedido. */
+export type EstadoCotizacion = 'borrador' | 'enviada' | 'pedido' | 'cancelada';
+
+/**
+ * Cotización en el ERP: la misma que guarda el portal (partidas, serie y revisión) más los datos de la concretera.
+ * El folio es el oficial (EPI-PRES-ESC-26085) y la fecha lleva el offset de la planta.
+ */
+export interface Cotizacion extends CotizacionGuardada {
+  clienteId: string;
+  plantaId: string;
+  vendedorId: string;
+  estado: EstadoCotizacion;
+  /** Último envío al cliente: a su cuenta del portal si está conectado; si no, a un correo. */
+  envio?: { correo: string; portal: boolean; /** ISO 8601 */ fecha: string };
+}
+
+export interface CotizacionVista extends Cotizacion {
+  clienteNombre: string;
+  /** Obras de entrega de sus partidas, separadas por coma. */
+  obrasNombre: string;
+  plantaNombre: string;
+  /** Zona IANA de la planta, para mostrar la fecha con fechaZona. */
+  zonaHoraria: string;
+  vendedorNombre: string;
+  /** Neto con IVA de sus partidas (totales de cotizacion/formato.ts), MXN. */
+  total: number;
+}

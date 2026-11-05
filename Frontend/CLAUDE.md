@@ -19,7 +19,8 @@ Workspace Angular 22 multi-app para concreteras. Identidad EPICO: tema claro de 
 - **Solo dependencias con licencia libre** (MIT, ISC, Apache, OFL…). Nada de pago ni que pida clave.
   PrimeNG/PrimeIcons/`@primeuix` se retiraron porque desde la v22 exigen licencia comercial (PrimeUI).
   Antes de instalar algo, revisar su campo `license`.
-- Pruebas: Vitest (`ng test`)
+- Pruebas: Vitest (`ng test`). Las que crean algo que use AuthService (como HistorialService) proveen
+  `AUTH_STORAGE_KEY` en TestBed.
 
 ## Estructura
 
@@ -32,8 +33,163 @@ projects/
       styles.css           importa tailwind, overlay del CDK, ../../ui/styles/{base,glass,forms}.css y entrada-login.css
       public/img/          planta-login.webp (sin uso desde el login nuevo)
       app/
-        core/              interceptors, servicios globales (placeholders)
-        layout/            shell, sidebar colapsable + drawer móvil, topbar, nav-items.ts
+        core/              interceptors, modulos.ts (catálogo de módulos = la navegación; búsqueda sin acentos
+                           (`normalizar`), favoritos, `menu` del encabezado de cada módulo (menús desplegables con enlaces y secciones con título, como Odoo; `enlacesDelMenu`), `activo` (por ahora solo CRM, Ventas y pedidos), `filtros`
+                           de la pantalla de inicio (se suman: activados por defecto + favoritos; "todos" va solo) y moduloActivoGuard: canActivateChild del shell, cada ruta indica `data.modulo`), plantas.ts
+                           (razones sociales con sus plantas y la selección: una principal + otras opcionales, nunca
+                           vacía), mensajeria.ts (notificaciones, chats, canales y ventanas de chat abiertas; demo en
+                           memoria), empresas.ts (concreteras del login) e historial.ts (HistorialService: el historial
+                           de cada registro, como el chatter de Odoo sin mensajes: lo que hacen las pantallas con sus
+                           campos antes → después, notas internas y actividades programadas; clave "tipo:id";
+                           `ultimaEdicion`: lo último que no sea nota ni actividad)
+        layout/            shell.ts (encabezado + contenido centrado hasta 1446 px). En escritorio nunca hay scroll de
+                           página: el shell ocupa la ventana, el encabezado queda fijo y se desplaza el <main> (páginas
+                           normales) o, en las páginas con barra en el encabezado, cada columna por su lado: la página
+                           es la única celda de una rejilla `minmax(0,1fr)` (llena el alto y nunca es más ancha que la
+                           pantalla) y sus cajas van en columnas de ese alto (COLUMNA, panel-lateral.ts) que se
+                           desplazan con todo y caja, como en las apps de celular: sin barra, al bajar se van las
+                           esquinas de arriba de la caja y al final aparecen las de abajo; donde queda cortada se
+                           desvanece en la página (columna-caja). En celular, el scroll normal de la página. Toda pantalla nueva de lista con vista
+                           previa usa CAJAS_LISTA (panel-lateral.ts) y toda vista completa CAJAS_VISTA
+                           (vista-completa.ts): así todas las secciones se ven y se desplazan igual.
+                           encabezado.ts: barra invisible de lado a lado (sin fondo, borde ni sombra; solo
+                           desenfoca lo que pasa debajo): logo a la izquierda (vuelve a /inicio), buscador de módulos al
+                           centro (⌘K / Ctrl+K) y, pegados a la derecha, globo de mensajes, plantas y avatar (sin
+                           flechas). No hay menú lateral: se navega desde la pantalla de módulos.
+                           Dentro de un módulo (data.modulo de la ruta; las secciones la heredan de una ruta padre sin
+                           componente) el encabezado cambia como Odoo: botón para volver a los módulos, icono y nombre
+                           del módulo y sus menús desplegables (CDK Menu como menubar: con uno abierto, al pasar el mouse por otro se abre ese; se
+                           subraya el que contiene la página abierta); en celular van en una segunda fila con scroll de lado. Ahí
+                           Ctrl+K vuelve a /inicio y enfoca el buscador.
+                           - barra-encabezado.ts: la página declara `<ng-template appEnEncabezado>` con su barra (el
+                             panel de control de Odoo: "Nuevo", título, buscador) y el encabezado la pinta debajo del
+                             menú, fija arriba (la plantilla sigue evaluándose en la página). Mientras haya barra, el
+                             <main> del shell va de lado a lado (sin el tope de 1446 px) y pegado a ella.
+                           - panel-lateral.ts: lo que comparten las listas con vista previa (cotizaciones, órdenes,
+                             clientes): `aside[appPanelLateral]` (columna con su caja; Esc lo cierra; con `liquido`,
+                             Liquid Glass), FILA_LISTA (la
+                             abierta con tinte y barra roja), seleccionMultiple() (las casillas: una, varias o todas; se
+                             desmarcan cuando cambian las filas que se ven) y vistaPrevia() (foco al título del panel al abrir y a la
+                             fila al cerrar). En esas listas la tabla también va en su columna: se desplaza de lado
+                             dentro de su caja y, hacia abajo, con todo y caja (títulos y total se van con ella).
+                           - vista-completa.ts: piezas de las vistas completas, como el formulario de Odoo: ruta de dos
+                             renglones (la lista a la que se regresa, chica, y el registro en negritas), barra de estados
+                             con flechas (en celular solo el actual) y botón a un registro relacionado ("Compra 2").
+                           - historial.ts: `<aside appHistorial [registro]="'tipo:id'">` a la derecha de cada vista
+                             completa (debajo en celular), una columna con su caja, como la hoja de al lado. Botones
+                             "Registrar una nota" y "Actividad" (no hay "Enviar mensaje"), actividades planificadas
+                             con su vencimiento y los movimientos por día. programar-actividad.ts: el diálogo de Odoo
+                             (tipo, resumen, fecha límite, asignada a, nota; Guardar / Marcar como hecho / Descartar).
+                             Toda vista completa nueva lo lleva, y sus acciones registran en él.
+                           - menu-mensajeria.ts: globo como el de Odoo, un solo icono (no hay campana) con pestañas
+                             Notificaciones (todo junto) / Chats / Canales y "Mensaje nuevo" (buscar una persona).
+                           - chats.ts + ventana-chat.ts: chats abiertos abajo a la derecha; caben 3 a la vista y con
+                             más la zona se desplaza de lado (row-reverse: el más reciente a la derecha). Minimizar =
+                             burbuja redonda con el nombre al pasar el mouse (Esc lo oculta); Esc en una ventana la
+                             minimiza. avatar-chat.ts: inicial o "#" sobre colores de la paleta oscurecidos (AA).
+                           - selector-plantas.ts: como el de empresas de Odoo, plantas agrupadas por razón social; clic
+                             en el nombre = solo esa, casillas = combinar.
+                           - Los dos paneles son `popover` nativo (Esc, clic fuera y foco de vuelta los da el
+                             navegador), colocados con `colocarBajo` (popover.ts) para no salirse de la ventana.
+                           - ayuda.ts y preferencias.ts: diálogos del menú del avatar. Preferencias como Odoo
+                             (Preferencias / Calendario / Seguridad), anclado arriba para que cambiar de pestaña no lo
+                             mueva; edita una copia y solo "Actualizar preferencias" la guarda. Se abren por signal
+                             para que, al cerrar, el foco vuelva al avatar. pestanas.ts: teclado de pestañas ARIA.
+        features/inicio/   pantalla de módulos (destino tras el login), estilo app launcher: cuadrícula compacta y
+                           centrada (cuadros de 76 px, 6 columnas de 150 px; con scroll si no cabe). Por defecto solo
+                           los activados; el botón de filtros al final del buscador (filtro-modulos.ts: `popover` nativo
+                           con casillas y conteos, como el selector de plantas; también en el buscador de celular) suma
+                           filtros: Activados y Favoritos se combinan; Todos (favoritos arriba y luego los 17) quita los
+                           demás. La búsqueda busca dentro de los filtros; si no encuentra, ofrece "Buscar en todos los
+                           módulos".
+                           acceso-modulo: enlace si el módulo está activo; si no, botón que abre un <dialog> de aviso.
+                           icono-modulo: 17 iconos SVG propios, planos, en la paleta EPICO: rojo #C8151B, carbón
+                           #2A2A2A, gris cálido #D0CAC3, gris medio #919191, arena #C59661 y terracota #AE5442
+        features/modulos/  proximamente.ts (/modulos/:id): aviso de módulo no activado (también al escribir la
+                           dirección de su página) o "en construcción" si está activo y aún no tiene página; con
+                           `data.seccion`, una sección de un módulo aún sin página (`enConstruccion()` en app.routes.ts; las opciones del menú sin
+                           página salen solas del `menu` con `menuEnConstruccion()`)
+        features/ventas/   módulo Ventas (/ventas → /ventas/cotizaciones; el de clientes es CRM). cotizaciones.ts: vista de
+                           lista como Odoo. En la barra del encabezado: "Nuevo", título y buscador con los filtros
+                           aplicados como etiquetas (por defecto "Mis cotizaciones"; filtros-cotizaciones.ts: popover
+                           con casillas, los estados se suman). Tabla de lado a lado con casillas para marcar varias o
+                           todas (se desmarcan al cambiar búsqueda, filtros o plantas) y el total sin canceladas.
+                           Solo las de las plantas elegidas en el encabezado. datos.ts: 12 cotizaciones demo (shortcut) y filtrarCotizaciones (con pruebas).
+                           Clic o Enter en una fila: vista previa a la derecha (debajo en celular); × o Esc la cierran y
+                           el foco vuelve a la fila. Mientras está abierta se ocultan las columnas Vendedor y Planta.
+                           Doble clic o el ícono de vista completa del panel: cotizacion.ts
+                           (/ventas/cotizaciones/:id), como el formulario de Odoo (ruta Cotizaciones / folio en la barra,
+                           estados Borrador › Enviada › Pedido).
+                           detalle-cotizacion.ts: lo mismo en el panel y en la vista completa, con el formato del portal
+                           (ui-resumen-cotizacion). En borrador o enviada: Enviar (enviar-cotizacion.ts: si el cliente
+                           está conectado al portal va a esa cuenta; si no, por correo, editable), Confirmar pedido
+                           (como "Confirmar" en Odoo: se resalta cuando ya se envió) y Editar
+                           (editor-cotizacion.ts: precio especial del concreto por producto, servicios, agregar o quitar
+                           productos y descuento %, con totales en vivo). Editar una ya enviada la vuelve la revisión
+                           R1, R2… en borrador (como en el portal). Con cambios sin guardar, la lista pregunta antes de
+                           cambiar de fila o cerrar.
+                           De cotización a pedido: confirmar genera un pedido por partida (cada entrega es una orden de
+                           venta; `pedidoDePartida`, la misma regla del portal) y la cotización pasa a "Pedido"; desde
+                           ella, "Pedido PED-… · estado" lleva a su orden.
+                           Órdenes de venta (ordenes.ts, /ventas/ordenes): la misma lista que Cotizaciones (plantas del
+                           encabezado, buscador, clic = vista previa, doble clic = vista completa). detalle-pedido.ts en
+                           los dos lugares: estados de entrega y cobro (ui-estado-pedido, ui-estado-cobro), botón a la
+                           cotización de la que salió (trazabilidad) y su partida con el mismo formato; su importe es el
+                           neto de esa partida. pedido.ts (/ventas/ordenes/:folio): la ruta regresa a Órdenes de venta y
+                           el botón "Cotización" va en la barra, como el de Odoo.
+                           Clientes (clientes.ts, /ventas/clientes; detalle-cliente.ts y cliente.ts para /:id): lo mismo
+                           que el cliente captura en el portal (contacto y empresa de Mi perfil, receptores de
+                           Facturación y sus obras) y, por separado, sus cotizaciones y sus pedidos con enlace, del
+                           editado más recientemente al más antiguo (la fecha de edición sale del historial). Lista con
+                           casillas, vista previa y vista completa; Editar (editor-cliente.ts) con las reglas del portal
+                           (RFC con `rfcValido` de ui, código postal, correos) y obligatorio solo lo que el ERP necesita;
+                           guardar limpia los datos, cambia su nombre en sus cotizaciones y pedidos y queda en su
+                           historial. Con cambios sin guardar, la lista pregunta antes de cambiar de fila o cerrar. El
+                           cliente de cotizaciones y órdenes enlaza a su ficha.
+                           datos.ts: CLIENTES (el modelo Cliente de ui; Constructora Delta, la del login de prueba del
+                           portal, con sus mismos datos fiscales y sus obras Torre Norte y Bodega Escárcega), obras demo,
+                           partidas como las del portal (total con `totalesCotizacion`), búsquedas sin acentos
+                           (`coincide`, filtrar*) y VentasService (en memoria: cotizaciones y pedidos; guardar, enviar y
+                           confirmar; clientes editables con guardarCliente, limpiarCliente y cambiosCliente; con
+                           pruebas). Las demo que ya son pedido traen los suyos (PED-26-0151…).
+                           Historial: cotizaciones, órdenes y clientes llevan el suyo en la vista completa (claves en
+                           `registro`). Guardar cambios registra precio del concreto, descuento y total antes → después y
+                           los productos y servicios agregados o quitados (`cambiosEntre`); enviar y confirmar registran
+                           el estado y a dónde o qué pedidos; cada pedido nuevo, de qué cotización salió. Los registros
+                           de ejemplo traen el suyo (historialDemo).
+                           Menús iguales a Ventas de Odoo: Órdenes, Por facturar, Productos, Reportes y Configuración (con
+                           secciones), salvo Equipos de ventas, desactivado hasta que tenga su lógica. Fuera de Cotizaciones, Órdenes y Clientes, sus opciones aún
+                           en construcción.
+                           nueva-cotizacion.ts (/ventas/cotizaciones/nueva, "Nuevo"): el cotizador del portal en una
+                           sola hoja, para quien cotiza a diario: cliente y planta; por producto solución (aplica la
+                           especificación y los servicios sugeridos del portal), obra, entrega, volumen,
+                           especificación, aditivos, servicios y precio especial (vacío = tarifa); las recomendaciones
+                           técnicas del portal se aplican con un clic y no bloquean; entrega de 18:00 a 06:59 = colado
+                           nocturno. A la derecha, como en el portal, el resumen (productos, descuento, totales) con un
+                           botón dividido: Guardar por omisión y, en su flecha (CDK Menu), Guardar y descargar o Solo
+                           descargar (PDF con el folio que tendría, "Borrador sin guardar"); elegir cambia el botón, no
+                           lo ejecuta. Guardar la crea en borrador con VentasService.crear (siguiente
+                           folio de su planta, fecha en la hora de la planta) y abre su vista completa; con cambios
+                           sin guardar, salir pregunta (canDeactivate). Si el cliente no está: "Cliente nuevo" (alta
+                           rápida: nombre, contacto y teléfono; los datos fiscales se completan en su ficha) o "Sin
+                           cliente" (PUBLICO_GENERAL, el cliente de mostrador). Sin cliente o sin obras se pide el lugar
+                           de entrega (dirección, municipio, quién recibe y su teléfono): se guarda como obra
+                           (VentasService.crearObra) y su municipio elige la planta (plantaDeMunicipio). "Elegir en el
+                           mapa" (elegir-ubicacion.ts) guarda el punto GPS: ui-mapa-selector (Leaflet + OpenStreetMap,
+                           libre y sin API key; Google Maps interactivo es de paga) con búsqueda y dirección del punto
+                           por Nominatim (libre; llena dirección y municipio vacíos) y enlace "Ver en Google Maps".
+                           Traslado: en el resumen, km incluidos (20) y $ por km adicional por m³; cada producto lleva
+                           su distancia desde la planta: por carretera (OSRM libre, distancia.ts; sin servicio, la
+                           recta × 1.3 marcada "aproximada") si planta y obra tienen punto en el mapa, o escrita por
+                           quien cotiza (se respeta; borrarla la vuelve a calcular). Se guarda en la partida
+                           (`traslado`) y lineasPartida (ui) agrega "Traslado adicional": totales, PDF y pedidos.
+                           Órdenes → Nuevo (/ventas/ordenes/nueva, data.modo 'orden'): la misma hoja para crear la
+                           orden de venta directo; el botón ofrece "Crear orden" (por omisión: una orden por producto,
+                           sin cotización; cada una guarda su `partida` y `descuento` para sus líneas y su PDF) o
+                           "Crear orden y cotización" (la cotización queda de respaldo, confirmada).
+                           VentasService.crearOrdenes.
+                           Prueba solo en Cotizaciones: la vista previa en Liquid Glass (`liquido`). Si gusta, pasa a
+                           todas.
         features/auth/     login del ERP (/login) y capas-glass.ts: baraja de 3 cartas de vidrio (la principal con cara
                            oscura SVG y dos detrás, pegadas, que se reparten al entrar; los vidrios son HTML con
                            backdrop-filter recortado con clipPath objectBoundingBox), tarjetas de módulos inclinadas y
@@ -51,17 +207,15 @@ projects/
                            hoy en memoria; reemplazar por HTTP/canal real sin tocar la UI
         layout/chat-flotante.ts  burbuja de atención al cliente: fija abajo a la derecha, z-70, en todas las páginas
         features/catalogo/ cotizador "Configuremos tu pedido" (destino tras el login):
-                           datos.ts (soluciones, opciones, servicios), reglas.ts (etiquetas, recomendaciones técnicas,
-                           bombeo ↔ servicios; con pruebas), cotizador.state.ts (estado de la página, provisto en el
-                           componente), paso-solucion / paso-especificaciones / paso-servicios / resumen,
-                           entrega.ts (fecha estimada: mín. 24 h, máx. 6 meses; 18:00–07:00 agrega y bloquea
-                           "colado-nocturno"), presupuesto.ts (shortcut: tarifario de referencia, líneas, IVA 16 %,
-                           planta por municipio), pdf-cotizacion.ts (formato de la cotización impresa
-                           EPI-PRES-…, sin logos; jsPDF + jspdf-autotable, MIT, cargados con import() al descargar)
+                           cotizador.state.ts (estado de la página, provisto en el componente), paso-solucion /
+                           paso-especificaciones / paso-servicios / resumen. Las soluciones, las reglas técnicas, la
+                           fecha de entrega, la planta por municipio, el tarifario y el PDF están en ui/cotizacion
+                           (los usa también "Nueva cotización" del ERP)
                            y resumen-cotizacion (precios + "Descargar y guardar" por defecto / "Solo guardar" /
                            "Solo descargar"; folio provisional EPI-WEB-{planta}-{AA}{nnn})
         features/cotizaciones/ Mis cotizaciones: una tarjeta por serie (versión vigente + anteriores anidadas);
-                           cotizacion-fila: resumen desplegable en la página (sin modal), Ver PDF (pestaña nueva),
+                           cotizacion-fila: resumen desplegable en la página (sin modal; es ui-resumen-cotizacion,
+                           el mismo de la vista previa del ERP), Ver PDF (pestaña nueva),
                            Descargar, Modificar (CotizacionService.editar 'revision' → folio …-R1, -R2; la original
                            no cambia) y Usar como base ('base' → serie nueva con baseId). Hay dos cotizaciones demo.
                            cotizacion.ts (/cotizaciones/:folio): detalle con flujo y "Aceptar y generar pedido".
@@ -92,10 +246,34 @@ projects/
     src/lib/
       auth/                AuthService, authGuard, guestGuard, destinoSeguro, AUTH_STORAGE_KEY
       components/          ui-icon, ui-drawer, ui-user-menu, ui-field-error, ui-mapa, ui-glass-card, ui-kpi-card, ui-pipeline,
-                           ui-page-header
+                           ui-page-header, ui-resumen-cotizacion, ui-estado-pedido y ui-estado-cobro (estado de entrega y
+                           de cobro de un pedido: tinte + icono + texto, iguales en portal y ERP)
+      cotizacion/          formato.ts: el formato de una cotización, uno solo para portal y ERP: tarifario
+                           (shortcut) y sus `RESISTENCIAS`, líneas (con el precio especial `precioM3` si lo hay),
+                           totales con descuento e IVA (`totalesCotizacion`), `pesos`, etiquetas de la especificación,
+                           servicios y maquinaria, agrupación por obra y fechaHoraCorta. ui-resumen-cotizacion lo pinta
+                           (partidas por obra, líneas y totales). Cambiar el formato aquí lo cambia en las dos apps
+                           (también el PDF y los pedidos del portal). `pedidoDePartida`: lo que lleva el pedido de cada
+                           partida al aceptar (portal) o confirmar (ERP) una cotización.
+                           plantas.ts: `plantaPara` (planta por municipio de la obra, con su contacto) y `fechaLarga`.
+                           catalogo.ts (soluciones con su especificación y servicios sugeridos, OPCIONES de
+                           resistencia, edad, revenimiento, TMA y cemento), reglas.ts (recomendaciones técnicas y
+                           bombeo ↔ servicios) y entrega.ts (fecha de entrega: mín. 24 h y máx. 6 meses en el portal;
+                           18:00–07:00 es nocturna). Los mismos en el cotizador del portal y en "Nueva cotización" del
+                           ERP; con pruebas.
+                           pdf.ts: `descargarCotizacionPdf` / `abrirCotizacionPdf`, el formato de la cotización impresa
+                           EPI-PRES-…, sin logos (jsPDF + jspdf-autotable, MIT, cargados con import() al generar). El
+                           mismo para el cliente en el portal y en el ERP (cotizaciones y órdenes de venta: botón PDF):
+                           `tipo: 'orden'` titula "ORDEN DE VENTA" (una partida, entrega programada) y `emitida` (ERP)
+                           quita la nota de "precios de referencia generados en el portal".
       time/                pipe fechaZona + token DEFAULT_TIMEZONE
-      models/              Cliente, Planta, Obra, Pedido, Remision, MuestraLaboratorio, cotización
-                           (EspecificacionConcreto, ConfiguracionConcreto, PartidaCotizacion, DisenoGuardado)
+      models/              Cliente (el del ERP y lo que el cliente captura en el portal: PerfilUsuario,
+                           DatosEmpresaRepresentada, DatosFacturacion y sus documentos), Planta, Obra, Pedido (con
+                           `cotizacionId` y `partidaId`; ESTADO_PEDIDO y ESTADO_COBRO
+                           con los nombres en español), Remision, MuestraLaboratorio, cotización
+                           (EspecificacionConcreto, ConfiguracionConcreto, PartidaCotizacion, DisenoGuardado; Cotizacion
+                           del ERP = CotizacionGuardada del portal + cliente, planta, vendedor, EstadoCotizacion y
+                           `envio`; el descuento y el `precioM3` de cada partida los pone el ERP y el portal los muestra)
                            (+ tipos *Vista)
 ```
 
@@ -178,7 +356,7 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 
 - Todas las rutas de cada app viven bajo un shell con `canActivate: [authGuard]`; `/login` usa `guestGuard`.
   Sin sesión, una ruta privada manda a `/login?returnUrl=…`; al entrar se vuelve ahí con `destinoSeguro()`
-  (solo rutas internas). Destino por defecto: `/dashboard` (ERP) y `/obras` (portal).
+  (solo rutas internas). Destino por defecto: `/inicio` (ERP, pantalla de módulos) y `/obras` (portal).
 - `AuthService` (en `ui`) guarda la sesión en localStorage si el usuario marca "Mantener sesión/Recordarme",
   si no en sessionStorage. Cada app provee su `AUTH_STORAGE_KEY` (`epico.erp.sesion`, `epico.portal.sesion`)
   para que ERP y portal nunca compartan sesión.
@@ -198,14 +376,28 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 - Accesibilidad: botones de solo icono con `aria-label`, iconos decorativos con `aria-hidden="true"`,
   `ariaCurrentWhenActive="page"` en los enlaces de navegación.
 - Para agregar una página: `features/<nombre>/<nombre>.ts` con `export default class`, la ruta hija en
-  `app.routes.ts` y el enlace en la navegación (`layout/nav-items.ts` en el ERP, `NAV` en el shell del portal).
+  `app.routes.ts` y el enlace en la navegación (en el ERP, la `ruta` del módulo en `core/modulos.ts`; `NAV` en el
+  shell del portal).
 
 ## Estilos compartidos
 
-- `projects/ui/styles/base.css`: tokens de color, `color-scheme: light` y fondo de concreto con halos rojos.
+- `projects/ui/styles/base.css`: tokens de color, `color-scheme: light`, fondo de concreto con halos rojos y barra de
+  scroll con pulgar gris y riel transparente (`scrollbar-color`).
   Si una app necesita otro fondo (p. ej. la marca de una concretera), no lo importa y define el suyo.
 - `projects/ui/styles/glass.css`: `glass`, `glass-strong` y utilidades de contenedores con scroll:
   - `sin-barra`: oculta la barra de scroll (sigue funcionando rueda, touch y teclado).
+  - `scroll-caja`: caja con su propio scroll (menús, diálogos, chats): barra fina tipo píldora, 6 px visibles, sin riel
+    y separada de las esquinas redondeadas; se oscurece al pasar el mouse. El scroll no pasa a la página al llegar al
+    final. En el ERP, todo lo que se desplaza la usa, salvo las columnas de las páginas con barra (`columna-caja`).
+  - `columna-caja`: columna de escritorio que se desplaza con todo y caja (en el ERP, COLUMNA): sin barra; donde la caja
+    queda cortada, arriba o abajo, la desvanece una niebla con el mismo fondo fijo del body (no una máscara: le quitaría
+    al vidrio el backdrop-filter), que aparece con el scroll (animación ligada al scroll; sin soporte, sin niebla). Sin
+    relleno arriba ni abajo, porque sticky lo respeta: el aire lo pone la caja, su único hijo.
+  - `vidrio-liquido` (+ `-borde`, `-cuerpo`, `-brillo`): Liquid Glass, en prueba. No es `glass`: el filo es vidrio claro
+    que dobla lo de atrás como una lente (filtro SVG #vidrio-liquido; solo Chrome y Edge, los demás se quedan con el
+    desenfoque), con brillos en la orilla y una luz que sigue al puntero; el centro es esmerilado y opaco para que el
+    texto pase AA aunque atrás esté el halo rojo (medido: 4.74:1 en el peor caso). Las capas son hermanas dentro de un
+    contenedor sin backdrop-filter. Se vuelve sólido con "reducir transparencia" o "más contraste" del sistema.
   - `desvanecer-abajo`: degradado inferior; no se usa a mano, lo pone la directiva `uiDesvanecer` (en `ui`)
     mientras quede contenido abajo y lo quita al llegar al final. Uso: `<div uiDesvanecer class="sin-barra overflow-y-auto">`.
 - Páginas con columnas de scroll independiente (catálogo del portal): alto `h-(--alto-contenido)`, definido en el
@@ -227,15 +419,20 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 
 - `ui-drawer`: panel lateral sobre `<dialog>` nativo (`showModal`): trampa de foco, Esc, fondo inerte y
   devolución del foco los da el navegador. Uso: `<ui-drawer [(abierto)]="x" titulo="Menú">…</ui-drawer>`.
-- `ui-user-menu`: menú del avatar con Angular CDK Menu (flechas, Esc, roles ARIA). Los popups del CDK se pintan
-  al final de `<body>`: envolver el contenido en una región con nombre para que axe no marque "region".
+- `ui-user-menu`: menú del avatar con Angular CDK Menu (flechas, Esc, roles ARIA). Se abre con clic, teclado o al pasar
+  el mouse (abierto así se cierra al salir o con Esc; un clic lo deja fijo; en touch solo el toque). `opciones` +
+  `(elegir)` agregan opciones de la app antes de "Cerrar sesión"; en el ERP: `[letras]="2" claro` con Ayuda y Mis
+  preferencias. Los popups del CDK se pintan al final de `<body>`: envolver el contenido en una región con nombre para
+  que axe no marque "region".
 - `ui-icon`: importar cada icono por nombre desde `lucide` y exponerlo en el componente
   (`protected readonly iconos = { correo: Mail }`). Siempre decorativo (`aria-hidden`).
 
 ### Utilidades glass
 
-- `glass`: tarjetas y contenedores normales (bg-white/65, blur-md, borde white/80, rounded-2xl, sombra ligera).
-- `glass-strong`: capas encima de otras (drawer, diálogos, popovers propios).
+- `glass`: tarjetas y contenedores normales: bg-white/60 + brillo diagonal (background-image), backdrop blur-xl y
+  saturate-150 (los halos del fondo se cuelan con color), filo de luz arriba (inset-shadow) y sombra amplia y suave.
+  Para otro tono basta `bg-white/NN`; el brillo y el filo se mantienen.
+- `glass-strong`: capas encima de otras (drawer, diálogos, menús): bg-white/78, blur-2xl y sombra más marcada.
 - Usar `backdrop-filter` (glass) solo en contenedores: sidebar, topbar, cards, diálogos. Nunca en filas de
   tabla ni en elementos repetidos. Las tablas son `<table>` nativas dentro de una `ui-glass-card`, con filas
   transparentes.

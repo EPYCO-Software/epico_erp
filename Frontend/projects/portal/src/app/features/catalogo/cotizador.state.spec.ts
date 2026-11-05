@@ -1,6 +1,6 @@
+import { aInputLocal } from 'ui';
 import { TestBed } from '@angular/core/testing';
 import { CotizadorState } from './cotizador.state';
-import { aInputLocal } from './entrega';
 
 /** Fecha válida (en 3 días) a la hora indicada. */
 const enTresDias = (hora: number) => {

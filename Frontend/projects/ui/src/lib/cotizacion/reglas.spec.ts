@@ -1,5 +1,6 @@
-import { EspecificacionConcreto } from 'ui';
-import { avisos, colocacionParaServicios, etiquetas, serviciosParaColocacion, textoResistencia } from './reglas';
+import { EspecificacionConcreto } from '../models/cotizacion';
+import { etiquetas, textoResistencia } from './formato';
+import { avisos, colocacionParaServicios, serviciosParaColocacion } from './reglas';
 
 const e: EspecificacionConcreto = {
   tipoResistencia: 'fc',

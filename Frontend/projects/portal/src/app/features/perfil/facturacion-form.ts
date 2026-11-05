@@ -1,8 +1,7 @@
 import { Component, input, linkedSignal, output } from '@angular/core';
 import { FormField, email, form, required, submit, validate } from '@angular/forms/signals';
 import { Check } from 'lucide';
-import { FieldError, Icon } from 'ui';
-import { DatosFacturacion, DatosFacturacionEntrada } from '../../core/services/perfil.service';
+import { DatosFacturacion, DatosFacturacionEntrada, FieldError, Icon, rfcValido } from 'ui';
 
 let siguienteId = 0;
 
@@ -211,7 +210,7 @@ export class FacturacionForm {
     required(p.razonSocial, { message: 'Escribe el nombre o razón social.' });
     required(p.rfc, { message: 'Escribe el RFC.' });
     validate(p.rfc, ({ value }) =>
-      /^[A-Za-zÑñ&]{3,4}\d{6}[A-Za-z\d]{3}$/.test(value().replace(/\s/g, ''))
+      rfcValido(value())
         ? undefined
         : { kind: 'rfc', message: 'Escribe un RFC válido de 12 o 13 caracteres.' },
     );

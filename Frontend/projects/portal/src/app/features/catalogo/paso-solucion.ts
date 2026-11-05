@@ -1,10 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Check, Folder, Package, Star } from 'lucide';
-import { DisenoGuardado, Icon } from 'ui';
+import { DisenoGuardado, Icon, PERSONALIZADO, SOLUCIONES, buscarSolucion, textoResistencia } from 'ui';
 import { CotizadorState } from './cotizador.state';
-import { PERSONALIZADO, SOLUCIONES, buscarSolucion } from './datos';
-import { textoResistencia } from './reglas';
 
 @Component({
   selector: 'app-paso-solucion',

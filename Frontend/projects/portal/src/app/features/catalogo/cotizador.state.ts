@@ -1,11 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { form, min, required, submit } from '@angular/forms/signals';
-import { DisenoGuardado, EspecificacionConcreto, Maquinaria, Obra, RentaMaquinaria, ServicioObra } from 'ui';
+import { DisenoGuardado, EspecificacionConcreto, Maquinaria, Obra, PERSONALIZADO, RentaMaquinaria, ServicioObra, aIsoConOffset, avisos, buscarSolucion, colocacionParaServicios, deInputLocal, esNocturna, etiquetas, serviciosParaColocacion, validarEntrega } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
-import { PERSONALIZADO, buscarSolucion } from './datos';
-import { aIsoConOffset, deInputLocal, esNocturna, validarEntrega } from './entrega';
-import { avisos, colocacionParaServicios, etiquetas, serviciosParaColocacion } from './reglas';
 
 export type Paso = 1 | 2 | 3 | 'enviar';
 export const PASOS = ['Solución', 'Especificaciones', 'Servicios'] as const;

@@ -20,6 +20,9 @@
 @layer base {
   html {
     color-scheme: light;
+    /* Barra de scroll: se ve el pulgar, el riel es transparente (deja ver el fondo). Los contenedores con
+       .sin-barra la ocultan del todo. */
+    scrollbar-color: rgb(26 26 28 / 0.32) transparent;
   }
 
   body {

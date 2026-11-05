@@ -1,12 +1,7 @@
 import { Component, inject, input, signal } from '@angular/core';
 import { Download, FileText, Trash2, Upload } from 'lucide';
-import { Icon } from 'ui';
-import {
-  DatosFacturacion,
-  DocumentoFiscal,
-  PerfilService,
-  TipoDocumentoFiscal,
-} from '../../core/services/perfil.service';
+import { DatosFacturacion, DocumentoFiscal, Icon, TipoDocumentoFiscal } from 'ui';
+import { PerfilService } from '../../core/services/perfil.service';
 
 const TIPOS: TipoDocumentoFiscal[] = [
   'Constancia de situación fiscal',

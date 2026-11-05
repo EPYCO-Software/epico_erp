@@ -1,22 +1,6 @@
-import { Colocacion, EspecificacionConcreto, ServicioObra } from 'ui';
-import { ADITIVOS, EXPOSICIONES } from './datos';
+import { Colocacion, EspecificacionConcreto, ServicioObra } from '../models/cotizacion';
 
 const BOMBAS: ServicioObra[] = ['bomba-estacionaria', 'bomba-pluma'];
-
-export function textoResistencia(e: Pick<EspecificacionConcreto, 'tipoResistencia' | 'resistenciaKgCm2'>): string {
-  return `${e.tipoResistencia === 'fc' ? "f'c" : 'MR'} ${e.resistenciaKgCm2} kg/cm²`;
-}
-
-/** Etiquetas cortas para el resumen ("f'c 300 kg/cm²", "Rev. 10 cm", "Bombeo incluido"…). */
-export function etiquetas(e: EspecificacionConcreto): string[] {
-  const r = [textoResistencia(e)];
-  if (e.edadDias !== 28) r.push(`Resistencia a ${e.edadDias} días`);
-  r.push(`Rev. ${e.revenimientoCm} cm`, `TMA ${e.tmaMm} mm`);
-  if (e.cemento !== 'CPC 30R') r.push(e.cemento);
-  if (e.exposicion !== 'normal') r.push(EXPOSICIONES.find((x) => x.id === e.exposicion)!.label);
-  for (const a of e.aditivos) r.push(ADITIVOS.find((x) => x.id === a)!.label);
-  return r;
-}
 
 export interface Aviso {
   texto: string;

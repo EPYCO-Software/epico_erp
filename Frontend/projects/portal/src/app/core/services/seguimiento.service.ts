@@ -1,6 +1,5 @@
 import { DestroyRef, Service, inject, signal } from '@angular/core';
-import { ViajeCamion } from 'ui';
-import { plantaPara } from '../../features/catalogo/presupuesto';
+import { ViajeCamion, plantaPara } from 'ui';
 import { ProgramaViaje, simularViaje } from '../../features/pedidos/seguimiento';
 
 // shortcut: viajes simulados del pedido demo PED-26-0140 (Torre Norte, planta Cozumel), relativos a la hora de

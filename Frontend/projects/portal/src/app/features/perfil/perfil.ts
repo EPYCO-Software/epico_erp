@@ -10,13 +10,16 @@ import {
   validate,
 } from '@angular/forms/signals';
 import { Building2, Check, PencilLine, Plus, ReceiptText, Star, UserRound } from 'lucide';
-import { FieldError, Icon, PageHeader } from 'ui';
 import {
-  DatosFacturacionEntrada,
   DatosEmpresaRepresentada,
-  PerfilService,
+  DatosFacturacionEntrada,
+  FieldError,
+  Icon,
+  PageHeader,
   PerfilUsuario,
-} from '../../core/services/perfil.service';
+  rfcValido,
+} from 'ui';
+import { PerfilService } from '../../core/services/perfil.service';
 import { DocumentosFiscales } from './documentos-fiscales';
 import { FacturacionForm } from './facturacion-form';
 
@@ -26,7 +29,7 @@ const empresaSchema = schema<DatosEmpresaRepresentada>((p) => {
   required(p.razonSocial, { message: 'Escribe la razón social de la empresa.' });
   required(p.rfc, { message: 'Escribe el RFC de la empresa.' });
   validate(p.rfc, ({ value }) =>
-    /^[A-Za-zÑñ&]{3,4}\d{6}[A-Za-z\d]{3}$/.test(value().replace(/\s/g, ''))
+    rfcValido(value())
       ? undefined
       : { kind: 'rfc', message: 'Escribe un RFC válido de 12 o 13 caracteres.' },
   );
