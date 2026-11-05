@@ -95,9 +95,9 @@ describe('menú de Ventas', () => {
   const menu = buscarModulo('ventas')!.menu!;
 
   it('tiene los menús de Odoo y cada opción su propia ruta dentro de /ventas', () => {
-    expect(menu.map((m) => m.nombre)).toEqual(['Órdenes', 'Por facturar', 'Productos', 'Reportes', 'Configuración']);
+    expect(menu.map((m) => m.nombre)).toEqual(['Órdenes', 'Por cobrar', 'Productos', 'Reportes', 'Configuración']);
     const rutas = menu.flatMap(enlacesDelMenu).map((e) => e.ruta);
-    expect(rutas).toHaveLength(25);
+    expect(rutas).toHaveLength(26);
     // Equipos de ventas está desactivado hasta que tenga su lógica
     expect(menu.flatMap(enlacesDelMenu).some((e) => e.nombre === 'Equipos de ventas')).toBe(false);
     expect(new Set(rutas).size).toBe(rutas.length);

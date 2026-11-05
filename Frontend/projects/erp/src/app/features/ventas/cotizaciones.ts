@@ -1,7 +1,7 @@
-import { Component, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, inject, input, linkedSignal, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
-import { ListFilter, Search, X } from 'lucide';
+import { EyeOff, ListFilter, Search, X } from 'lucide';
 import { AuthService, CotizacionVista, EstadoCotizacion, FechaZonaPipe, Icon } from 'ui';
 import { PlantasService } from '../../core/plantas';
 import { AvatarChat } from '../../layout/avatar-chat';
@@ -41,7 +41,7 @@ const O = new Intl.ListFormat('es', { type: 'disjunction' });
         <div class="flex items-center gap-3">
           <a routerLink="nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
           <!-- En celular el título ya se ve marcado en el menú del módulo -->
-          <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Cotizaciones</h1>
+          <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">{{ recibidas() ? 'Cotizaciones recibidas' : 'Cotizaciones' }}</h1>
         </div>
 
         <form role="search" class="min-w-0 flex-1" (submit)="$event.preventDefault()">
@@ -140,7 +140,15 @@ const O = new Intl.ListFormat('es', { type: 'disjunction' });
                         (change)="casillas.alternar(c.id)"
                       />
                     </td>
-                    <td class="px-3 py-2.5 font-semibold">{{ c.folio }}</td>
+                    <td class="px-3 py-2.5 font-semibold">
+                      <span class="flex items-center gap-1.5">
+                        {{ c.folio }}
+                        @if (c.ocultaAlCliente) {
+                          <ui-icon [icono]="iconos.oculta" [tamano]="15" class="text-texto-suave" title="Oculta al cliente" />
+                          <span class="sr-only">(oculta al cliente)</span>
+                        }
+                      </span>
+                    </td>
                     <td class="px-3 py-2.5 tabular-nums">{{ c.fecha | fechaZona: c.zonaHoraria }}</td>
                     <td class="px-3 py-2.5">{{ c.clienteNombre }}</td>
                     <td class="px-3 py-2.5">{{ c.obrasNombre }}</td>
@@ -195,12 +203,14 @@ export default class Cotizaciones {
   private readonly correo = inject(AuthService).sesion()?.usuario.correo ?? null;
 
   protected readonly estados = ESTADOS_COTIZACION;
-  protected readonly iconos = { buscar: Search, filtro: ListFilter, quitar: X };
+  protected readonly iconos = { buscar: Search, filtro: ListFilter, quitar: X, oculta: EyeOff };
 
   protected readonly texto = signal('');
-  /** Como Odoo: la lista abre con "Mis cotizaciones". */
-  protected readonly soloMias = signal(true);
-  protected readonly elegidos = signal<EstadoCotizacion[]>([]);
+  /** De la ruta (data.recibidas): Ventas → Cotizaciones recibidas, las que pidieron los clientes en el portal. */
+  readonly recibidas = input(false);
+  /** Como Odoo: la lista abre con "Mis cotizaciones"; las recibidas, con todas las recibidas (aún sin responder). */
+  protected readonly soloMias = linkedSignal(() => !this.recibidas());
+  protected readonly elegidos = linkedSignal<EstadoCotizacion[]>(() => (this.recibidas() ? ['recibida'] : []));
 
   private readonly ventas = inject(VentasService);
   private readonly router = inject(Router);

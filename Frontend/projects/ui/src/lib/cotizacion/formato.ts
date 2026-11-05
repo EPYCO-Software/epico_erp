@@ -33,6 +33,14 @@ const AJUSTE_ADITIVO: Record<Aditivo, number> = {
   'fibra-sintetica': 150,
   'fibra-metalica': 600,
 };
+/** Servicios por obra (mismos conceptos, unidades, precios y mínimos en la cotización y en Productos del ERP). */
+const PRECIO_SERVICIO: Record<Exclude<ServicioObra, 'renta-maquinaria'>, { concepto: string; unidad: string; precio: number; minimo?: number }> = {
+  'bomba-estacionaria': { concepto: 'Servicio de Bombeo (10 m³ Mínimo)', unidad: 'M³', precio: 500, minimo: 10 },
+  'bomba-pluma': { concepto: 'Servicio de Bomba Pluma (20 m³ Mínimo)', unidad: 'M³', precio: 650, minimo: 20 },
+  'colado-nocturno': { concepto: 'Cargo por colado nocturno (18:00 a 07:00)', unidad: 'M³', precio: 250 },
+  'muestreo-laboratorio': { concepto: 'Muestreo y ensaye de cilindros (7 y 28 días)', unidad: 'Servicio', precio: 1800 },
+  'asesoria-tecnica': { concepto: 'Asesoría técnica en obra', unidad: 'Visita', precio: 2500 },
+};
 const MAQUINARIA_DIA: Record<Maquinaria, { nombre: string; precio: number }> = {
   aplanadora: { nombre: 'Renta de aplanadora', precio: 3500 },
   vibrador: { nombre: 'Renta de vibrador de concreto', precio: 600 },
@@ -109,12 +117,11 @@ export function lineasPartida(p: PartidaCotizacion): Linea[] {
       ),
     );
   }
-  const tiene = (s: ServicioObra) => p.servicios.includes(s);
-  if (tiene('bomba-estacionaria')) r.push(linea('Servicio de Bombeo (10 m³ Mínimo)', 'M³', 500, Math.max(v, 10)));
-  if (tiene('bomba-pluma')) r.push(linea('Servicio de Bomba Pluma (20 m³ Mínimo)', 'M³', 650, Math.max(v, 20)));
-  if (tiene('colado-nocturno')) r.push(linea('Cargo por colado nocturno (18:00 a 07:00)', 'M³', 250, v));
-  if (tiene('muestreo-laboratorio')) r.push(linea('Muestreo y ensaye de cilindros (7 y 28 días)', 'Servicio', 1800, 1));
-  if (tiene('asesoria-tecnica')) r.push(linea('Asesoría técnica en obra', 'Visita', 2500, 1));
+  // En este orden; los de m³ con su mínimo, los demás uno por partida.
+  for (const [id, sv] of Object.entries(PRECIO_SERVICIO) as [keyof typeof PRECIO_SERVICIO, (typeof PRECIO_SERVICIO)[keyof typeof PRECIO_SERVICIO]][]) {
+    if (!p.servicios.includes(id)) continue;
+    r.push(linea(sv.concepto, sv.unidad, sv.precio, sv.unidad === 'M³' ? Math.max(v, sv.minimo ?? 0) : 1));
+  }
   for (const m of p.maquinaria) {
     const t = MAQUINARIA_DIA[m.tipo];
     r.push(linea(t.nombre, 'Día', t.precio, m.dias));
@@ -240,4 +247,162 @@ export function textoServicios(p: PartidaCotizacion): string {
   const sv = SERVICIOS.filter((s) => p.servicios.includes(s.id) && s.id !== 'renta-maquinaria').map((s) => s.nombre);
   const mq = p.maquinaria.map((m) => `${MAQUINARIA.find((x) => x.id === m.tipo)!.nombre} (${m.dias} ${m.dias === 1 ? 'día' : 'días'})`);
   return [...sv, ...mq].join(', ');
+}
+
+/**
+ * Lo que vende la concretera: concreto (lo principal), servicios (bombeo, renta de maquinaria…) y productos generales
+ * (sacos de cemento, aditivos sueltos… cualquier extra).
+ */
+export type TipoProducto = 'concreto' | 'servicio' | 'general';
+
+export const TIPOS_PRODUCTO: Record<TipoProducto, string> = {
+  concreto: 'Concreto',
+  servicio: 'Servicio',
+  general: 'Producto general',
+};
+
+/** Las del tarifario (f´c, MR, ajustes, servicios, maquinaria) y las de los productos que se dan de alta. */
+export type CategoriaProducto = 'concreto-fc' | 'concreto-mr' | 'ajuste' | 'concreto' | 'servicio' | 'maquinaria' | 'general';
+
+export const CATEGORIAS_PRODUCTO: Record<CategoriaProducto, string> = {
+  'concreto-fc': 'Concreto f´c',
+  'concreto-mr': 'Concreto MR',
+  ajuste: 'Ajuste al concreto',
+  concreto: 'Concreto',
+  servicio: 'Servicio',
+  maquinaria: 'Renta de maquinaria',
+  general: 'Producto general',
+};
+
+/** De qué tipo es cada categoría. */
+export const TIPO_DE_CATEGORIA: Record<CategoriaProducto, TipoProducto> = {
+  'concreto-fc': 'concreto',
+  'concreto-mr': 'concreto',
+  ajuste: 'concreto',
+  concreto: 'concreto',
+  servicio: 'servicio',
+  maquinaria: 'servicio',
+  general: 'general',
+};
+
+/** Unidades para dar de alta un producto, según su tipo (la primera, por omisión). */
+export const UNIDADES_PRODUCTO: Record<TipoProducto, string[]> = {
+  concreto: ['M³'],
+  servicio: ['Servicio', 'M³', 'Día', 'Hora', 'Visita', 'Viaje'],
+  general: ['Pieza', 'Saco', 'Kg', 'Tonelada', 'Litro', 'Metro', 'M³'],
+};
+
+/** Un producto del tarifario: lo que se cotiza y su precio de lista (el mismo que usan lineasPartida y precioConcreto). */
+export interface ProductoTarifa {
+  id: string;
+  codigo: string;
+  nombre: string;
+  categoria: CategoriaProducto;
+  unidad: string;
+  precio: number;
+  /** Mínimo que se cobra (m³), si lo hay. */
+  minimo?: number;
+  descripcion: string;
+  /** Productos generales: cuántos hay (control de existencias) y desde cuántos avisar que hay pocos. */
+  existencias?: number;
+  minimoExistencias?: number;
+}
+
+const kgCm2 = (n: string) => `${n} kg/cm²`;
+
+/**
+ * El catálogo de productos del tarifario, para Ventas → Productos del ERP. Sale de las mismas tablas de precios que la
+ * cotización: si cambia un precio aquí, cambia en los dos lados.
+ */
+export const PRODUCTOS: ProductoTarifa[] = [
+  ...Object.entries(PRECIO_FC).map(([kg, precio]) => ({
+    id: `fc-${kg}`,
+    codigo: `CON-FC-${kg}`,
+    nombre: `Concreto f´c ${kgCm2(kg)}`,
+    categoria: 'concreto-fc' as const,
+    unidad: 'M³',
+    precio,
+    descripcion: 'Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.',
+  })),
+  ...Object.entries(PRECIO_MR).map(([kg, precio]) => ({
+    id: `mr-${kg}`,
+    codigo: `CON-MR-${kg}`,
+    nombre: `Concreto MR ${kgCm2(kg)}`,
+    categoria: 'concreto-mr' as const,
+    unidad: 'M³',
+    precio,
+    descripcion: 'Concreto para pavimentos por módulo de ruptura (resistencia a flexión).',
+  })),
+  ...Object.entries(AJUSTE_EDAD)
+    .filter(([, precio]) => precio > 0)
+    .map(([dias, precio]) => ({
+      id: `edad-${dias}`,
+      codigo: `AJ-EDAD-${dias}`,
+      nombre: `Resistencia a ${dias} días`,
+      categoria: 'ajuste' as const,
+      unidad: 'M³',
+      precio,
+      descripcion: `Se suma al precio del concreto por m³ cuando la resistencia se pide a ${dias} días en lugar de 28.`,
+    })),
+  {
+    id: 'cemento-rs',
+    codigo: 'AJ-CEM-RS',
+    nombre: 'Cemento CPC 30R RS',
+    categoria: 'ajuste',
+    unidad: 'M³',
+    precio: AJUSTE_CEMENTO_RS,
+    descripcion: 'Cemento resistente a sulfatos (ambiente marino); se suma al precio del concreto por m³.',
+  },
+  ...(Object.entries(AJUSTE_ADITIVO) as [Aditivo, number][]).map(([a, precio]) => ({
+    id: `aditivo-${a}`,
+    codigo: `AJ-ADT-${a.toUpperCase()}`,
+    nombre: `Aditivo: ${ADITIVO_TEXTO[a]}`,
+    categoria: 'ajuste' as const,
+    unidad: 'M³',
+    precio,
+    descripcion: 'Se suma al precio del concreto por m³.',
+  })),
+  ...(Object.entries(PRECIO_SERVICIO) as [string, { concepto: string; unidad: string; precio: number; minimo?: number }][]).map(([id, sv]) => ({
+    id: `servicio-${id}`,
+    codigo: `SRV-${id.toUpperCase()}`,
+    nombre: SERVICIOS.find((x) => x.id === id)!.nombre,
+    categoria: 'servicio' as const,
+    unidad: sv.unidad,
+    precio: sv.precio,
+    ...(sv.minimo ? { minimo: sv.minimo } : {}),
+    descripcion: SERVICIOS.find((x) => x.id === id)!.descripcion,
+  })),
+  ...(Object.entries(MAQUINARIA_DIA) as [Maquinaria, { nombre: string; precio: number }][]).map(([id, mq]) => ({
+    id: `maquinaria-${id}`,
+    codigo: `REN-${id.toUpperCase()}`,
+    nombre: mq.nombre,
+    categoria: 'maquinaria' as const,
+    unidad: 'Día',
+    precio: mq.precio,
+    descripcion: MAQUINARIA.find((x) => x.id === id)!.descripcion,
+  })),
+];
+
+/** ¿La partida lleva ese producto? (para ver en qué cotizaciones y órdenes se usa). */
+export function partidaUsa(p: PartidaCotizacion, productoId: string): boolean {
+  const e = p.especificacion;
+  const [tipo, ...resto] = productoId.split('-');
+  const valor = resto.join('-');
+  switch (tipo) {
+    case 'fc':
+    case 'mr':
+      return e.tipoResistencia === tipo && e.resistenciaKgCm2 === Number(valor);
+    case 'edad':
+      return e.edadDias === Number(valor);
+    case 'cemento':
+      return e.cemento === 'CPC 30R RS';
+    case 'aditivo':
+      return e.aditivos.includes(valor as Aditivo);
+    case 'servicio':
+      return p.servicios.includes(valor as ServicioObra);
+    case 'maquinaria':
+      return p.maquinaria.some((m) => m.tipo === valor);
+    default:
+      return false;
+  }
 }

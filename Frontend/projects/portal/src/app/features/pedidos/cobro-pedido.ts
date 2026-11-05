@@ -16,7 +16,7 @@ import { EstadoCobroEtiqueta, IVA, PedidoVista, pesos } from 'ui';
       <dt class="pt-2 text-texto-suave">Situación</dt>
       <dd class="pt-2 text-right"><ui-estado-cobro [cobro]="p().cobro" /></dd>
       <dt class="text-texto-suave">Factura</dt>
-      <dd class="text-right">{{ p().facturaFolio ?? (p().cobro === 'en_facturacion' ? 'En emisión' : 'Aún sin factura') }}</dd>
+      <dd class="text-right">{{ p().facturaFolio ?? (p().cobro === 'por_facturar' ? 'En emisión' : 'Aún sin factura') }}</dd>
     </dl>
   `,
 })

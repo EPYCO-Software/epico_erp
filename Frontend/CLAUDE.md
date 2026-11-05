@@ -188,6 +188,47 @@ projects/
                            sin cotización; cada una guarda su `partida` y `descuento` para sus líneas y su PDF) o
                            "Crear orden y cotización" (la cotización queda de respaldo, confirmada).
                            VentasService.crearOrdenes.
+                           Recibidas: estado "recibida" (origen 'portal': la pidió el cliente; folio EPI-WEB), en
+                           Ventas → Órdenes → Cotizaciones recibidas (/ventas/cotizaciones/recibidas, la misma lista
+                           con el filtro "Recibida"); se editan, envían o confirman como las demás y sus pasos empiezan
+                           en Recibida. El editor (editor-cotizacion.ts) tiene el traslado como al crearla (distancia
+                           por producto, km incluidos y $ por km). El lápiz es un botón dividido: Editar (si ya no se
+                           puede, Nueva basada en esta) y, en su flecha, Nueva basada en esta (/ventas/cotizaciones/
+                           nueva?base=ID: misma hoja con sus datos; queda con `baseId`) y Ocultar/Mostrar al cliente
+                           (`ocultaAlCliente`; enviarla la vuelve visible). "Cotizaciones relacionadas" muestra la base y
+                           las que salieron de ella, con la diferencia de neto (verde si bajó el precio).
+                           Órdenes: cobro (EstadoCobro de ui: Por cobrar, Por facturar, Facturado, Crédito, Pagado,
+                           Finalizado; toda orden nace "por cobrar"), método de pago (Sin método / Transferencia; al
+                           crear una orden es obligatorio, al confirmar una cotización queda "sin método") y estatus
+                           planta (No enviado, Enviado, Confirmado, Actualización, Rechazada). cambiar-cobro.ts: menú de
+                           cobros con segunda confirmación (confirm), solo en la orden abierta (vista previa o vista
+                           completa): nunca desde una lista, para que se vea la orden completa. planta-pedido.ts:
+                           "Enviar requerimiento a planta" y la respuesta de planta (confirmar, pedir actualización con
+                           nueva fecha y nota, rechazar con motivo); aceptar la actualización cambia la entrega y la
+                           confirma. VentasService: cambiarCobro, cambiarMetodoPago, estatusPlanta (con historial).
+                           por-cobrar.ts (Ventas → Por cobrar → Órdenes por cobrar, /ventas/por-cobrar): solo las
+                           órdenes por cobrar, como las demás listas: casillas (una, varias o todas), vista previa con
+                           clic, vista completa con doble clic; la orden que cambia de cobro sale de la lista. En Por
+                           cobrar y Órdenes la columna Planta siempre a la vista (PlantaFila): sin enviar, "Enviar a
+                           planta" sin abrir la orden (en Por cobrar, también las marcadas); enviada, su estatus y
+                           "sin respuesta" si planta no contesta.
+                           Editar orden (editor-pedido.ts, en Órdenes y Por cobrar mientras esté programada): entrega,
+                           volumen, precio especial y método de pago; VentasService.editarPedido guarda su propia
+                           partida (la cotización no cambia), recalcula el importe y, si ya estaba con planta y cambia
+                           la entrega o el volumen, la reenvía a planta. Las listas preguntan antes de dejar una orden
+                           con cambios sin guardar.
+                           Productos (Ventas → Productos → Productos, /ventas/productos y /ventas/productos/:id): el
+                           tarifario de ui (PRODUCTOS: concretos f´c y MR, ajustes de edad, cemento RS y aditivos,
+                           servicios y renta de maquinaria, con código, unidad, precio de lista y mínimo), como las
+                           demás listas: casillas, vista previa (detalle-producto.ts) y vista completa con historial.
+                           Su uso: VentasService.usoDe (cotizaciones y órdenes que lo llevan, m³; partidaUsa de ui).
+                           Los precios son los mismos con que se cotiza: PRECIO_SERVICIO y las tablas de formato.ts.
+                           Tipos de producto (TipoProducto de ui): Concreto (lo principal), Servicio y Producto general
+                           (extras: sacos de cemento…); filtro por tipo en la lista. Nuevo (/ventas/productos/nuevo,
+                           nuevo-producto.ts): tipo, nombre, código sugerido (codigoSugerido, sin repetir), unidad
+                           según el tipo (UNIDADES_PRODUCTO), precio y descripción; los generales llevan existencias y un
+                           mínimo: aviso "Pocas existencias" y entradas/salidas en su detalle (moverExistencias, con
+                           historial). shortcut: los productos dados de alta aún no se agregan a cotizaciones u órdenes.
                            Prueba solo en Cotizaciones: la vista previa en Liquid Glass (`liquido`). Si gusta, pasa a
                            todas.
         features/auth/     login del ERP (/login) y capas-glass.ts: baraja de 3 cartas de vidrio (la principal con cara

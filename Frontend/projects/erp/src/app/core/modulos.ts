@@ -58,14 +58,15 @@ const MENU_VENTAS: MenuModulo[] = [
     nombre: 'Órdenes',
     enlaces: [
       { nombre: 'Cotizaciones', ruta: '/ventas/cotizaciones' },
+      { nombre: 'Cotizaciones recibidas', ruta: '/ventas/cotizaciones/recibidas' },
       { nombre: 'Órdenes', ruta: '/ventas/ordenes' },
       { nombre: 'Clientes', ruta: '/ventas/clientes' },
     ],
   },
   {
-    nombre: 'Por facturar',
+    nombre: 'Por cobrar',
     enlaces: [
-      { nombre: 'Órdenes a facturar', ruta: '/ventas/por-facturar' },
+      { nombre: 'Órdenes por cobrar', ruta: '/ventas/por-cobrar' },
       { nombre: 'Órdenes para crear ventas adicionales', ruta: '/ventas/ventas-adicionales' },
     ],
   },

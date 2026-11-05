@@ -100,6 +100,13 @@ export const routes: Routes = [
             loadComponent: () => import('./features/ventas/cotizaciones'),
           },
           {
+            // La misma lista, abierta en las que llegaron del portal (data.recibidas llega como input).
+            path: 'cotizaciones/recibidas',
+            title: 'Cotizaciones recibidas · EPICO ERP',
+            data: { recibidas: true },
+            loadComponent: () => import('./features/ventas/cotizaciones'),
+          },
+          {
             path: 'cotizaciones/nueva',
             title: 'Nueva cotización · EPICO ERP',
             loadComponent: () => import('./features/ventas/nueva-cotizacion'),
@@ -130,6 +137,33 @@ export const routes: Routes = [
             loadComponent: () => import('./features/ventas/pedido'),
           },
           {
+            path: 'productos',
+            title: 'Productos · EPICO ERP',
+            loadComponent: () => import('./features/ventas/productos'),
+          },
+          {
+            path: 'productos/nuevo',
+            title: 'Nuevo producto · EPICO ERP',
+            loadComponent: () => import('./features/ventas/nuevo-producto'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
+            path: 'productos/:id',
+            // El nombre vigente (también los dados de alta), sin cargar Ventas con la app: se importa al abrirla.
+            title: (ruta) => {
+              const injector = inject(Injector);
+              return import('./features/ventas/datos').then(
+                (m) => `${injector.get(m.VentasService).productos().find((p) => p.id === ruta.paramMap.get('id'))?.nombre ?? 'Producto'} · EPICO ERP`,
+              );
+            },
+            loadComponent: () => import('./features/ventas/producto'),
+          },
+          {
+            path: 'por-cobrar',
+            title: 'Por cobrar · EPICO ERP',
+            loadComponent: () => import('./features/ventas/por-cobrar'),
+          },
+          {
             path: 'clientes',
             title: 'Clientes · EPICO ERP',
             loadComponent: () => import('./features/ventas/clientes'),
@@ -145,7 +179,7 @@ export const routes: Routes = [
             },
             loadComponent: () => import('./features/ventas/cliente'),
           },
-          ...menuEnConstruccion('ventas', ['/ventas/cotizaciones', '/ventas/ordenes', '/ventas/clientes']),
+          ...menuEnConstruccion('ventas', ['/ventas/cotizaciones', '/ventas/cotizaciones/recibidas', '/ventas/ordenes', '/ventas/por-cobrar', '/ventas/productos', '/ventas/clientes']),
         ],
       },
       {

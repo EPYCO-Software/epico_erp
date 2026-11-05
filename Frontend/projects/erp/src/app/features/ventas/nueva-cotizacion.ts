@@ -1,4 +1,4 @@
-import { Component, Injector, afterNextRender, computed, effect, inject, input, linkedSignal, signal, untracked } from '@angular/core';
+import { Component, Injector, OnInit, afterNextRender, computed, effect, inject, input, linkedSignal, signal, untracked } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { CdkMenu, CdkMenuItemRadio, CdkMenuTrigger } from '@angular/cdk/menu';
 import { Router } from '@angular/router';
@@ -25,6 +25,8 @@ import {
   descargarCotizacionPdf,
   esNocturna,
   kmExtra,
+  METODO_PAGO,
+  MetodoPago,
   lineasPartida,
   pesos,
   precioConcreto,
@@ -37,7 +39,7 @@ import { COLUMNA } from '../../layout/panel-lateral';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
 import { FuenteDistancia, distanciaDeManejo } from './distancia';
 import { ElegirUbicacion, UbicacionElegida } from './elegir-ubicacion';
-import { PLANTAS_ERP, PUBLICO_GENERAL, VentasService, isoEnZona, offsetEn, plantaDeMunicipio, siguienteFolio } from './datos';
+import { PLANTAS_ERP, PUBLICO_GENERAL, TRASLADO_POR_OMISION, VentasService, isoEnZona, offsetEn, plantaDeMunicipio, siguienteFolio } from './datos';
 
 type Accion = 'guardar' | 'guardar-descargar' | 'descargar' | 'orden' | 'orden-cotizacion';
 
@@ -69,10 +71,10 @@ interface Borrador {
   descuento: number | null;
   /** Para todos los productos: km incluidos en el precio y cuánto cuesta cada km adicional por m³. */
   traslado: { incluidosKm: number | null; precioKm: number | null };
+  /** Solo al crear una orden: obligatorio (Sin método o Transferencia). */
+  metodoPago: MetodoPago | '';
 }
 
-// shortcut: tarifa de ejemplo (20 km, como dice el PDF); con backend, la de la configuración de la concretera.
-const TRASLADO = { incluidosKm: 20, precioKm: 12 };
 
 const diezDigitos = ({ value }: { value: () => string }) =>
   !value() || /^\d{10}$/.test(value().replace(/\D/g, '')) ? undefined : { kind: 'telefono', message: 'El teléfono lleva 10 dígitos.' };
@@ -102,6 +104,25 @@ function partidaDe(p: Producto, offset: string, t: Borrador['traslado']): Partid
     ...(p.distancia != null ? { traslado: { distanciaKm: p.distancia, incluidosKm: t.incluidosKm ?? 0, precioKm: t.precioKm ?? 0 } } : {}),
   };
   return p.precio && p.precio !== precioConcreto(partida) ? { ...partida, precioM3: p.precio } : partida;
+}
+
+/** Un producto de otra cotización ("Nueva basada en esta"): todo igual, con su precio especial y su distancia. */
+function productoDePartida(p: PartidaCotizacion): Producto {
+  return {
+    id: crypto.randomUUID(),
+    solucionId: p.solucionId,
+    nombre: p.nombre,
+    obraId: p.obraId,
+    entrega: p.entrega.slice(0, 16),
+    volumen: p.volumenM3,
+    especificacion: structuredClone(p.especificacion),
+    // El colado nocturno lo vuelve a poner la hora de entrega si sigue siendo nocturna.
+    servicios: p.servicios.filter((s) => s !== 'colado-nocturno'),
+    precio: p.precioM3 ?? null,
+    distancia: p.traslado?.distanciaKm ?? null,
+    fuenteDistancia: p.traslado ? 'manual' : null,
+    claveDistancia: '',
+  };
 }
 
 function productoDe(solucionId: string, obraId: string, entrega: string): Producto {
@@ -164,6 +185,10 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
           <p class="mt-1 text-sm text-texto-suave">
             Precios del tarifario; escribe un precio especial solo donde aplique.
             {{ orden() ? 'Se crea una orden por producto, sin pasar por cotización.' : 'Se guarda en borrador.' }}
+            @if (cotizacionBase(); as b) {
+              Trae todo de {{ b.folio }} (neto \${{ pesos(b.total) }}): cambia lo que quieras; las dos quedan ligadas para
+              comparar precios. Revisa las fechas de entrega.
+            }
           </p>
 
           <div class="mt-5 grid gap-4 @2xl:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -652,6 +677,21 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
             <dd class="border-t border-acero/60 pt-1.5 text-right text-base font-bold tabular-nums">\${{ pesos(total().neto) }}</dd>
           </dl>
 
+          @if (orden()) {
+            <fieldset class="mt-4 border-t border-acero/60 pt-3" aria-describedby="metodo-error">
+              <legend [class]="etiqueta">Método de pago</legend>
+              <div class="mt-1 flex flex-wrap gap-x-5">
+                @for (m of metodos; track m.id) {
+                  <label class="flex min-h-9 cursor-pointer items-center gap-2">
+                    <input type="radio" class="casilla rounded-full" [id]="'metodo-' + m.id" [value]="m.id" [formField]="f.metodoPago" />
+                    {{ m.nombre }}
+                  </label>
+                }
+              </div>
+              <ui-field-error [campo]="f.metodoPago" errorId="metodo-error" />
+            </fieldset>
+          }
+
           <!-- Botón dividido: la acción elegida (Guardar por omisión) y, en la flecha, las demás -->
           <div class="mt-4 flex">
             <button
@@ -703,7 +743,7 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
     </div>
   `,
 })
-export default class NuevaCotizacionPagina {
+export default class NuevaCotizacionPagina implements OnInit {
   private readonly ventas = inject(VentasService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
@@ -725,8 +765,18 @@ export default class NuevaCotizacionPagina {
   /** De la ruta (data.modo): "orden" es Nueva orden de venta, la misma hoja sin pasar por cotización. */
   readonly modo = input<'cotizacion' | 'orden'>('cotizacion');
   protected readonly orden = computed(() => this.modo() === 'orden');
-  protected readonly titulo = computed(() => (this.orden() ? 'Nueva orden de venta' : 'Nueva cotización'));
+  /** De la URL (?base=ID): "Nueva basada en esta" desde una cotización. Parte de sus datos y queda ligada a ella. */
+  readonly base = input<string>();
+  protected readonly cotizacionBase = computed(() =>
+    this.orden() ? undefined : this.ventas.cotizaciones().find((c) => c.id === this.base()),
+  );
+  protected readonly titulo = computed(() => {
+    if (this.orden()) return 'Nueva orden de venta';
+    const b = this.cotizacionBase();
+    return b ? `Nueva cotización basada en ${b.folio}` : 'Nueva cotización';
+  });
   protected readonly lista = computed(() => (this.orden() ? '/ventas/ordenes' : '/ventas/cotizaciones'));
+  protected readonly metodos = (Object.keys(METODO_PAGO) as MetodoPago[]).map((id) => ({ id, nombre: METODO_PAGO[id] }));
   protected readonly queHacer = computed(() => (this.orden() ? 'Cómo crear la orden' : 'Qué hacer con la cotización'));
   /** Cotización: como en el portal, pero por omisión solo se guarda. Orden: por omisión, sin cotización. */
   protected readonly acciones = computed<{ id: Accion; texto: string; boton: string; detalle: string }[]>(() =>
@@ -780,7 +830,8 @@ export default class NuevaCotizacionPagina {
     plantaId: inject(PlantasService).actualId(),
     productos: [productoDe('losa', '', '')],
     descuento: null,
-    traslado: { ...TRASLADO },
+    traslado: { ...TRASLADO_POR_OMISION },
+    metodoPago: '',
   });
   protected readonly f = form(this.modelo, (m) => {
     required(m.clienteId, { message: 'Elige el cliente.' });
@@ -798,6 +849,9 @@ export default class NuevaCotizacionPagina {
     min(m.descuento, 0, { message: 'El descuento no puede ser negativo.' });
     max(m.descuento, 100, { message: 'El descuento no puede pasar de 100 %.' });
     min(m.traslado.incluidosKm, 0, { message: 'No puede ser negativo.' });
+    validate(m.metodoPago, ({ value }) =>
+      this.orden() && !value() ? { kind: 'required', message: 'Indica el método de pago de la orden.' } : undefined,
+    );
     min(m.traslado.precioKm, 0, { message: 'No puede ser negativo.' });
   });
 
@@ -926,7 +980,23 @@ export default class NuevaCotizacionPagina {
   protected readonly esResistencia = (p: Producto, tipo: 'fc' | 'mr', v: number) =>
     p.especificacion.tipoResistencia === tipo && p.especificacion.resistenciaKgCm2 === v;
 
-  private readonly inicial = JSON.stringify(this.modelo());
+  private inicial = JSON.stringify(this.modelo());
+
+  /** Con ?base=ID, la hoja parte de esa cotización (sin cambios todavía: salir no pregunta). */
+  ngOnInit(): void {
+    const b = this.cotizacionBase();
+    if (!b) return;
+    const conTraslado = b.partidas.find((x) => x.traslado)?.traslado;
+    this.modelo.set({
+      clienteId: b.clienteId,
+      plantaId: b.plantaId,
+      productos: b.partidas.map(productoDePartida),
+      descuento: b.descuento ?? null,
+      traslado: conTraslado ? { incluidosKm: conTraslado.incluidosKm, precioKm: conTraslado.precioKm } : { ...TRASLADO_POR_OMISION },
+      metodoPago: '',
+    });
+    this.inicial = JSON.stringify(this.modelo());
+  }
   private guardada = false;
 
   /** Al cambiar de cliente, las obras que ya no son suyas se borran; si tiene una sola, se elige. */
@@ -1089,9 +1159,15 @@ export default class NuevaCotizacionPagina {
       this.ocupado.set(true);
       try {
         const m = this.modelo();
-        const datos = { clienteId: m.clienteId, plantaId: m.plantaId, partidas: this.partidas(), descuento: m.descuento || undefined };
+        const datos = {
+          clienteId: m.clienteId,
+          plantaId: m.plantaId,
+          partidas: this.partidas(),
+          descuento: m.descuento || undefined,
+          baseId: this.cotizacionBase()?.id,
+        };
         if (accion === 'orden' || accion === 'orden-cotizacion') {
-          const ordenes = this.ventas.crearOrdenes(datos, this.usuario?.correo ?? '', accion === 'orden-cotizacion');
+          const ordenes = this.ventas.crearOrdenes(datos, this.usuario?.correo ?? '', accion === 'orden-cotizacion', m.metodoPago || 'sin_metodo');
           this.guardada = true;
           await this.router.navigate(['/ventas/ordenes', ordenes[0].folio]);
           return undefined;
@@ -1134,6 +1210,7 @@ export default class NuevaCotizacionPagina {
 
   private primerError(): string | null {
     if (this.f.clienteId().invalid()) return 'nueva-cliente';
+    if (this.f.metodoPago().invalid()) return 'metodo-sin_metodo';
     if (this.pideLugar() && !this.obras().length) return 'lugar-direccion';
     for (let i = 0; i < this.modelo().productos.length; i++) {
       const p = this.f.productos[i];

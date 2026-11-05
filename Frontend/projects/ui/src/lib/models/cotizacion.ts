@@ -105,8 +105,8 @@ export interface CotizacionGuardada {
 /** Cómo se guardará la cotización que se está editando a partir de una guardada. */
 export type ModoEdicion = 'revision' | 'base';
 
-/** "pedido": el cliente la aceptó y ya generó su pedido. */
-export type EstadoCotizacion = 'borrador' | 'enviada' | 'pedido' | 'cancelada';
+/** "recibida": la pidió el cliente en el portal y la concretera aún no responde. "pedido": el cliente la aceptó. */
+export type EstadoCotizacion = 'recibida' | 'borrador' | 'enviada' | 'pedido' | 'cancelada';
 
 /**
  * Cotización en el ERP: la misma que guarda el portal (partidas, serie y revisión) más los datos de la concretera.
@@ -119,6 +119,10 @@ export interface Cotizacion extends CotizacionGuardada {
   estado: EstadoCotizacion;
   /** Último envío al cliente: a su cuenta del portal si está conectado; si no, a un correo. */
   envio?: { correo: string; portal: boolean; /** ISO 8601 */ fecha: string };
+  /** La pidió el cliente desde el portal (llega como "recibida"). */
+  origen?: 'portal';
+  /** El cliente no la ve en el portal (p. ej. una versión que se reemplazó por otra con mejor precio). */
+  ocultaAlCliente?: boolean;
 }
 
 export interface CotizacionVista extends Cotizacion {

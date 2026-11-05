@@ -1,7 +1,7 @@
-import { Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Download, FileText, Maximize2, X } from 'lucide';
+import { Download, FileText, Maximize2, PencilLine, X } from 'lucide';
 import {
   ESTADO_PEDIDO,
   EstadoCobroEtiqueta,
@@ -10,12 +10,17 @@ import {
   FechaZonaPipe,
   Icon,
   PedidoVista,
+  METODO_PAGO,
+  MetodoPago,
   ResumenCotizacion,
   descargarCotizacionPdf,
   pesos,
 } from 'ui';
 import { BarraEstados, BotonRelacion } from '../../layout/vista-completa';
-import { VentasService } from './datos';
+import { CambiarCobro } from './cambiar-cobro';
+import { CambiosPedido, VentasService, pedidoEditable } from './datos';
+import { EditorPedido } from './editor-pedido';
+import { PlantaPedido } from './planta-pedido';
 
 const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 'entregado'];
 
@@ -26,6 +31,8 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
  */
 @Component({
   selector: 'app-detalle-pedido',
+  // Bloque: un host en línea con bloques adentro hace que el navegador lo ponga encima de sus botones al apuntar.
+  host: { class: 'block' },
   imports: [
     DecimalPipe,
     RouterLink,
@@ -36,6 +43,9 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
     FechaZonaPipe,
     Icon,
     ResumenCotizacion,
+    CambiarCobro,
+    PlantaPedido,
+    EditorPedido,
   ],
   template: `
     <div class="flex items-start justify-between gap-3">
@@ -78,12 +88,17 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
           [icono]="iconos.cotizacion"
         />
       }
+      @if (puedeEditar() && !editando()) {
+        <button #botonEditar type="button" [class]="botonSecundario" (click)="editar()">
+          <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
+        </button>
+      }
       <!-- La orden de venta con el mismo formato que la cotización impresa (necesita su partida) -->
       @if (partida()) {
         <button
           type="button"
           aria-label="Descargar PDF"
-          class="inline-flex h-9 items-center gap-2 rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico disabled:opacity-60"
+          [class]="botonSecundario + ' disabled:opacity-60'"
           [disabled]="generandoPdf()"
           (click)="descargarPdf()"
         >
@@ -110,11 +125,24 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
           <dd>{{ c.vendedorNombre }}</dd>
         }
         <dt class="self-center text-texto-suave">Cobro</dt>
-        <dd>
+        <dd class="flex flex-wrap items-center gap-2">
           <ui-estado-cobro [cobro]="p().cobro" />
           @if (p().facturaFolio; as factura) {
-            <span class="ml-1.5 text-texto-suave">{{ factura }}</span>
+            <span class="text-texto-suave">{{ factura }}</span>
           }
+          <app-cambiar-cobro [p]="p()" (cambiado)="aviso.set($event)" />
+        </dd>
+        <dt class="self-center text-texto-suave"><label for="metodo-pago">Método de pago</label></dt>
+        <dd>
+          <select
+            id="metodo-pago"
+            class="campo h-9 w-auto px-2 text-sm"
+            (change)="cambiarMetodo($any($event.target).value)"
+          >
+            @for (m of metodos; track m.id) {
+              <option [value]="m.id" [selected]="m.id === p().metodoPago">{{ m.nombre }}</option>
+            }
+          </select>
         </dd>
       </dl>
       <p class="shrink-0 text-right">
@@ -123,7 +151,12 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
       </p>
     </div>
 
-    @if (partida(); as partida) {
+    <p class="mt-2 text-sm font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ aviso() }}</p>
+    <app-planta-pedido class="mt-4" [p]="p()" [nivel]="completa() ? 2 : 3" />
+
+    @if (editando()) {
+      <app-editor-pedido class="mt-4 border-t border-acero/60 pt-4" [p]="p()" (listo)="guardar($event)" (descartar)="terminar('')" />
+    } @else if (partida(); as partida) {
       <ui-resumen-cotizacion
         class="mt-4 border-t border-acero/60 pt-4"
         [partidas]="[partida]"
@@ -141,7 +174,14 @@ export class DetallePedido {
   readonly vista = input<'panel' | 'completa'>('panel');
   readonly cerrar = output();
 
-  protected readonly iconos = { cerrar: X, completa: Maximize2, cotizacion: FileText, pdf: Download };
+  protected readonly iconos = { cerrar: X, completa: Maximize2, cotizacion: FileText, pdf: Download, editar: PencilLine };
+  protected readonly metodos = (Object.keys(METODO_PAGO) as MetodoPago[]).map((id) => ({ id, nombre: METODO_PAGO[id] }));
+  protected readonly aviso = linkedSignal({ source: computed(() => this.p().id), computation: () => '' });
+
+  protected cambiarMetodo(metodo: MetodoPago): void {
+    this.ventas.cambiarMetodoPago(this.p().id, metodo);
+    this.aviso.set(`Método de pago: ${METODO_PAGO[metodo]}.`);
+  }
   protected readonly botonIcono =
     'flex size-9 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-carbon/5 hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico';
   protected readonly enlace =
@@ -151,10 +191,39 @@ export class DetallePedido {
   protected readonly completa = computed(() => this.vista() === 'completa');
   protected readonly cotizacion = computed(() => this.ventas.cotizaciones().find((c) => c.id === this.p().cotizacionId));
   /** La partida de su cotización o, si es una orden directa, la suya. */
-  protected readonly partida = computed(
-    () => this.cotizacion()?.partidas.find((x) => x.id === this.p().partidaId) ?? this.p().partida,
-  );
-  protected readonly descuento = computed(() => this.cotizacion()?.descuento ?? this.p().descuento);
+  /** La suya (directa o ya editada) o la de su cotización. */
+  protected readonly partida = computed(() => this.ventas.partidaDe(this.p()).partida);
+  protected readonly descuento = computed(() => this.ventas.partidaDe(this.p()).descuento);
+
+  // Editar: mientras no se entregue ni se cancele. Al pasar a otra orden se sale de la edición.
+  private readonly injector = inject(Injector);
+  protected readonly puedeEditar = computed(() => pedidoEditable(this.p()));
+  protected readonly editando = linkedSignal({ source: computed(() => this.p().id), computation: () => false });
+  private readonly editor = viewChild(EditorPedido);
+  private readonly botonEditar = viewChild<ElementRef<HTMLButtonElement>>('botonEditar');
+  /** Cambios sin guardar en el editor: la lista pregunta antes de cambiar de fila o cerrar. */
+  readonly sinGuardar = computed(() => this.editor()?.sinGuardar() ?? false);
+  protected readonly botonSecundario =
+    'inline-flex h-9 items-center gap-2 rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
+
+  protected editar(): void {
+    this.aviso.set('');
+    this.editando.set(true);
+  }
+
+  protected guardar(cambios: CambiosPedido): void {
+    const antes = this.p().estatusPlanta;
+    this.ventas.editarPedido(this.p().id, cambios);
+    const reenviada = antes !== this.ventas.pedidos().find((x) => x.id === this.p().id)?.estatusPlanta;
+    this.terminar(reenviada ? `Orden actualizada; se reenvió a ${this.p().plantaNombre} para confirmar.` : 'Orden actualizada.');
+  }
+
+  /** Al salir de la edición el foco vuelve a "Editar" (el botón con el que se entró). */
+  protected terminar(aviso: string): void {
+    this.editando.set(false);
+    this.aviso.set(aviso);
+    afterNextRender(() => this.botonEditar()?.nativeElement.focus(), { injector: this.injector });
+  }
   protected readonly generandoPdf = signal(false);
   protected readonly errorPdf = linkedSignal({ source: computed(() => this.p().id), computation: () => '' });
 

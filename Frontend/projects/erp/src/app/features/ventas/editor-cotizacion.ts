@@ -12,22 +12,27 @@ import {
   SERVICIOS,
   ServicioObra,
   etiquetas,
+  kmExtra,
   pesos,
   precioConcreto,
   textoResistencia,
   textoServicios,
   totalesCotizacion,
 } from 'ui';
-import { VentasService, especificacionBase } from './datos';
+import { TRASLADO_POR_OMISION, VentasService, especificacionBase } from './datos';
 
 interface PartidaEditable extends PartidaCotizacion {
   /** Precio del concreto por m³ en edición: el especial o, si no hay, el del tarifario. */
   precio: number | null;
+  /** Km de la planta a la obra; vacía, sin cargo por traslado. */
+  distancia: number | null;
 }
 
 interface Edicion {
   partidas: PartidaEditable[];
   descuento: number | null;
+  /** Para todos los productos, como al crearla: km incluidos y $ por km adicional por m³. */
+  traslado: { incluidosKm: number | null; precioKm: number | null };
 }
 
 export type CambiosCotizacion = Pick<Cotizacion, 'partidas' | 'descuento'>;
@@ -35,9 +40,16 @@ export type CambiosCotizacion = Pick<Cotizacion, 'partidas' | 'descuento'>;
 /** El precio especial se guarda solo si difiere del tarifario; el descuento, solo si hay. */
 export function cambiosDe(e: Edicion): CambiosCotizacion {
   return {
-    partidas: e.partidas.map(({ precio, ...p }) => {
+    partidas: e.partidas.map(({ precio, distancia, traslado: _, ...p }) => {
       const tarifa = precioConcreto(p);
-      return { ...p, precioM3: (precio ?? tarifa) === tarifa ? undefined : (precio ?? tarifa) };
+      return {
+        ...p,
+        precioM3: (precio ?? tarifa) === tarifa ? undefined : (precio ?? tarifa),
+        traslado:
+          distancia == null
+            ? undefined
+            : { distanciaKm: distancia, incluidosKm: e.traslado.incluidosKm ?? 0, precioKm: e.traslado.precioKm ?? 0 },
+      };
     }),
     descuento: e.descuento || undefined,
   };
@@ -48,7 +60,8 @@ const offset = (iso: string) => /[+-]\d{2}:\d{2}$/.exec(iso)?.[0] ?? 'Z';
 
 /**
  * Editar una cotización (en la vista previa o en la vista completa): precio especial del concreto de cada producto,
- * servicios, agregar o quitar productos y un descuento sobre el subtotal; los totales se ven al momento.
+ * su distancia desde la planta, servicios, agregar o quitar productos, el traslado (km incluidos y $ por km, como al
+ * crearla) y un descuento sobre el subtotal; los totales se ven al momento.
  * Los cambios quedan aquí hasta "Guardar cambios" (VentasService.guardar).
  */
 @Component({
@@ -101,6 +114,23 @@ const offset = (iso: string) => /[+-]\d{2}:\d{2}$/.exec(iso)?.[0] ?? 'Z';
               <span [id]="'editar-precio-tarifa-' + i" class="text-texto-suave">Tarifa \${{ pesos(tarifa(p)) }}</span>
             </div>
             <ui-field-error [campo]="f.partidas[i].precio" [errorId]="'editar-precio-error-' + i" />
+
+            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <label [for]="'editar-distancia-' + i" class="font-medium">Distancia desde la planta</label>
+              <span class="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  step="0.1"
+                  class="campo h-9 w-24 px-3 text-right tabular-nums"
+                  [id]="'editar-distancia-' + i"
+                  [attr.aria-describedby]="'editar-distancia-error-' + i + ' editar-distancia-nota-' + i"
+                  [formField]="f.partidas[i].distancia"
+                />
+                km
+              </span>
+              <span [id]="'editar-distancia-nota-' + i" class="text-texto-suave">{{ notaTraslado(i) }}</span>
+            </div>
+            <ui-field-error [campo]="f.partidas[i].distancia" [errorId]="'editar-distancia-error-' + i" />
 
             <fieldset class="mt-3">
               <legend class="font-medium">Servicios</legend>
@@ -188,6 +218,37 @@ const offset = (iso: string) => /[+-]\d{2}:\d{2}$/.exec(iso)?.[0] ?? 'Z';
         </button>
       }
 
+      <fieldset class="mt-4 border-t border-acero/60 pt-4 text-sm">
+        <legend class="font-semibold">Traslado</legend>
+        <p id="editar-traslado-nota" class="text-texto-suave">Cada km después de los incluidos se cobra por m³, según la distancia de cada producto.</p>
+        <div class="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+          <span class="flex items-center gap-1.5">
+            <label for="editar-incluidos">Km incluidos</label>
+            <input
+              id="editar-incluidos"
+              type="number"
+              step="1"
+              class="campo h-9 w-20 px-3 text-right tabular-nums"
+              aria-describedby="editar-incluidos-error editar-traslado-nota"
+              [formField]="f.traslado.incluidosKm"
+            />
+          </span>
+          <span class="flex items-center gap-1.5">
+            <label for="editar-precio-km">$ por km extra</label>
+            <input
+              id="editar-precio-km"
+              type="number"
+              step="0.5"
+              class="campo h-9 w-24 px-3 text-right tabular-nums"
+              aria-describedby="editar-precio-km-error editar-traslado-nota"
+              [formField]="f.traslado.precioKm"
+            />
+          </span>
+        </div>
+        <ui-field-error [campo]="f.traslado.incluidosKm" errorId="editar-incluidos-error" />
+        <ui-field-error [campo]="f.traslado.precioKm" errorId="editar-precio-km-error" />
+      </fieldset>
+
       <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-acero/60 pt-4 text-sm">
         <label for="editar-descuento" class="font-semibold">Descuento sobre el subtotal</label>
         <span class="flex items-center gap-1.5">
@@ -246,12 +307,15 @@ export class EditorCotizacion implements OnInit {
   protected readonly obra = (id: string) => this.ventas.obras().find((o) => o.id === id)?.nombre ?? '';
   protected readonly obrasCliente = computed(() => this.ventas.obras().filter((o) => o.clienteId === this.c().clienteId));
 
-  protected readonly modelo = signal<Edicion>({ partidas: [], descuento: 0 });
+  protected readonly modelo = signal<Edicion>({ partidas: [], descuento: 0, traslado: { ...TRASLADO_POR_OMISION } });
   protected readonly f = form(this.modelo, (m) => {
     applyEach(m.partidas, (p) => {
       required(p.precio, { message: 'Escribe el precio por m³.' });
       min(p.precio, 1, { message: 'El precio debe ser mayor a cero.' });
+      min(p.distancia, 0, { message: 'La distancia no puede ser negativa.' });
     });
+    min(m.traslado.incluidosKm, 0, { message: 'Los km incluidos no pueden ser negativos.' });
+    min(m.traslado.precioKm, 0, { message: 'El costo por km no puede ser negativo.' });
     min(m.descuento, 0, { message: 'El descuento no puede ser negativo.' });
     max(m.descuento, 100, { message: 'El descuento no puede pasar de 100 %.' });
   });
@@ -278,11 +342,25 @@ export class EditorCotizacion implements OnInit {
   ngOnInit(): void {
     const c = this.c();
     this.modelo.set({
-      partidas: c.partidas.map((p) => ({ ...p, precio: p.precioM3 ?? precioConcreto(p) })),
+      partidas: c.partidas.map((p) => ({ ...p, precio: p.precioM3 ?? precioConcreto(p), distancia: p.traslado?.distanciaKm ?? null })),
       descuento: c.descuento ?? 0,
+      // La tarifa con que se cotizó (la de su primer producto con distancia) o la de siempre.
+      traslado: (({ incluidosKm, precioKm }) => ({ incluidosKm, precioKm }))(
+        c.partidas.find((p) => p.traslado)?.traslado ?? TRASLADO_POR_OMISION,
+      ),
     });
     this.inicial = JSON.stringify(this.modelo());
     this.enfocar('editar-precio-0');
+  }
+
+  /** Cuánto cobra de traslado ese producto con su distancia y la tarifa de la cotización. */
+  protected notaTraslado(i: number): string {
+    const t = cambiosDe(this.modelo()).partidas[i]?.traslado;
+    if (!t) return 'Sin distancia: sin cargo por traslado.';
+    const extra = kmExtra(t);
+    if (!extra) return `Dentro de los ${t.incluidosKm} km incluidos.`;
+    if (!t.precioKm) return `${extra} km después de los incluidos, sin costo por km.`;
+    return `Traslado: ${extra} km × $${pesos(t.precioKm)} = $${pesos(extra * t.precioKm)} por m³.`;
   }
 
   protected alternarServicio(i: number, s: ServicioObra): void {
@@ -324,7 +402,7 @@ export class EditorCotizacion implements OnInit {
         obraId: n.obraId,
         entrega: `${n.entrega}:00${offset(this.c().fecha)}`,
       };
-      this.modelo.update((e) => ({ ...e, partidas: [...e.partidas, { ...p, precio: precioConcreto(p) }] }));
+      this.modelo.update((e) => ({ ...e, partidas: [...e.partidas, { ...p, precio: precioConcreto(p), distancia: null }] }));
       this.agregando.set(false);
       this.enfocar('editar-precio-' + (this.modelo().partidas.length - 1));
       return undefined;
@@ -340,8 +418,11 @@ export class EditorCotizacion implements OnInit {
     });
     if (valido) return;
     // Al enviar inválido, el foco va al primer campo con error.
-    const i = this.modelo().partidas.findIndex((_, j) => this.f.partidas[j].precio().invalid());
-    this.enfocar(i >= 0 ? 'editar-precio-' + i : 'editar-descuento');
+    const i = this.modelo().partidas.findIndex((_, j) => this.f.partidas[j].precio().invalid() || this.f.partidas[j].distancia().invalid());
+    if (i >= 0) this.enfocar((this.f.partidas[i].precio().invalid() ? 'editar-precio-' : 'editar-distancia-') + i);
+    else if (this.f.traslado.incluidosKm().invalid()) this.enfocar('editar-incluidos');
+    else if (this.f.traslado.precioKm().invalid()) this.enfocar('editar-precio-km');
+    else this.enfocar('editar-descuento');
   }
 
   private enfocar(id: string): void {

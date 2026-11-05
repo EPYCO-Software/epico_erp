@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Search } from 'lucide';
@@ -8,6 +8,7 @@ import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
 import { VentasService, filtrarPedidos } from './datos';
 import { DetallePedido } from './detalle-pedido';
+import { PlantaFila } from './planta-pedido';
 
 /**
  * Ventas → Órdenes: las órdenes de venta (un pedido por entrega) que salen de confirmar cotizaciones, como la lista de
@@ -21,6 +22,7 @@ import { DetallePedido } from './detalle-pedido';
     RouterLink,
     EstadoCobroEtiqueta,
     EstadoPedidoEtiqueta,
+    PlantaFila,
     FechaZonaPipe,
     Icon,
     EnEncabezado,
@@ -61,6 +63,7 @@ import { DetallePedido } from './detalle-pedido';
     <div [class]="cajas.contenedor">
       <div [class]="cajas.columna">
         <div [class]="cajas.tabla">
+          <p class="px-1 pt-3 pb-1 text-sm font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ aviso() }}</p>
           <div
             tabindex="0"
             role="region"
@@ -94,6 +97,7 @@ import { DetallePedido } from './detalle-pedido';
                   <th scope="col" class="px-3 py-2.5 text-right font-semibold">m³</th>
                   <th scope="col" class="px-3 py-2.5 text-right font-semibold">Importe</th>
                   <th scope="col" class="px-3 py-2.5 font-semibold">Estado</th>
+                  <th scope="col" class="px-3 py-2.5 font-semibold">Planta</th>
                   <th scope="col" class="px-3 py-2.5 font-semibold" [class.hidden]="previa()">Cobro</th>
                 </tr>
               </thead>
@@ -105,9 +109,9 @@ import { DetallePedido } from './detalle-pedido';
                     [class]="fila + ' has-checked:bg-epico/6'"
                     [class.text-texto-suave]="p.estado === 'cancelado'"
                     [attr.aria-current]="p.id === vista.abiertaId() ? 'true' : null"
-                    (click)="vista.abrir(p.id)"
+                    (click)="abrir(p)"
                     (dblclick)="verCompleta(p)"
-                    (keydown.enter)="$event.target === $event.currentTarget && vista.abrir(p.id)"
+                    (keydown.enter)="$event.target === $event.currentTarget && abrir(p)"
                   >
                     <!-- La casilla solo marca: no abre la vista previa ni la completa -->
                     <td class="py-2.5 pr-1 pl-3" (click)="$event.stopPropagation()" (dblclick)="$event.stopPropagation()">
@@ -127,11 +131,15 @@ import { DetallePedido } from './detalle-pedido';
                     <td class="px-3 py-2.5 text-right tabular-nums">{{ p.volumenM3 | number: '1.0-1' }}</td>
                     <td class="px-3 py-2.5 text-right tabular-nums">$ {{ p.importe | number: '1.2-2' }}</td>
                     <td class="px-3 py-2"><ui-estado-pedido [estado]="p.estado" /></td>
+                    <!-- "Enviar a planta" no abre la fila -->
+                    <td class="px-3 py-1.5" (click)="$event.stopPropagation()" (dblclick)="$event.stopPropagation()">
+                      <app-planta-fila [p]="p" (enviado)="aviso.set($event)" />
+                    </td>
                     <td class="px-3 py-2" [class.hidden]="previa()"><ui-estado-cobro [cobro]="p.cobro" [corto]="true" /></td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="10" class="px-3 py-12 text-center text-texto-suave">
+                    <td colspan="11" class="px-3 py-12 text-center text-texto-suave">
                       Ninguna orden coincide con la búsqueda en las plantas elegidas.
                     </td>
                   </tr>
@@ -144,7 +152,7 @@ import { DetallePedido } from './detalle-pedido';
                       Total sin canceladas
                     </th>
                     <td class="px-3 pt-3 pb-1 text-right font-bold tabular-nums">$ {{ total() | number: '1.2-2' }}</td>
-                    <td [attr.colspan]="previa() ? 1 : 2"></td>
+                    <td [attr.colspan]="previa() ? 2 : 3"></td>
                   </tr>
                 </tfoot>
               }
@@ -154,8 +162,8 @@ import { DetallePedido } from './detalle-pedido';
       </div>
 
       @if (previa(); as p) {
-        <aside appPanelLateral (cerrar)="vista.cerrar()">
-          <app-detalle-pedido [p]="p" (cerrar)="vista.cerrar()" />
+        <aside appPanelLateral (cerrar)="cerrar()">
+          <app-detalle-pedido [p]="p" (cerrar)="cerrar()" />
         </aside>
       }
     </div>
@@ -170,6 +178,7 @@ export default class Ordenes {
   protected readonly fila = FILA_LISTA;
   protected readonly cajas = CAJAS_LISTA;
   protected readonly texto = signal('');
+  protected readonly aviso = signal('');
   protected readonly filas = computed(() => filtrarPedidos(this.ventas.pedidos(), this.plantas.seleccion(), this.texto()));
   protected readonly total = computed(() =>
     this.filas().reduce((t, p) => (p.estado === 'cancelado' ? t : t + p.importe), 0),
@@ -187,7 +196,23 @@ export default class Ordenes {
   /** Contra la lista filtrada: si un filtro la oculta, la vista previa se cierra. */
   protected readonly previa = computed(() => this.filas().find((p) => p.id === this.vista.abiertaId()) ?? null);
 
+  private readonly detalle = viewChild(DetallePedido);
+
+  /** Con cambios sin guardar en el editor de la vista previa, se pregunta antes de dejarla. */
+  private puedeDejarla(): boolean {
+    return !this.detalle()?.sinGuardar() || confirm('Hay cambios sin guardar en esta orden. ¿Descartarlos?');
+  }
+
+  protected abrir(p: PedidoVista): void {
+    if (p.id === this.vista.abiertaId() || this.puedeDejarla()) this.vista.abrir(p.id);
+  }
+
+  protected cerrar(): void {
+    if (this.puedeDejarla()) this.vista.cerrar();
+  }
+
   protected verCompleta(p: PedidoVista): void {
+    if (!this.puedeDejarla()) return;
     void this.router.navigate(['/ventas/ordenes', p.folio]);
   }
 }
