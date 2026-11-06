@@ -288,9 +288,23 @@ export const TIPO_DE_CATEGORIA: Record<CategoriaProducto, TipoProducto> = {
 /** Unidades para dar de alta un producto, según su tipo (la primera, por omisión). */
 export const UNIDADES_PRODUCTO: Record<TipoProducto, string[]> = {
   concreto: ['M³'],
-  servicio: ['Servicio', 'M³', 'Día', 'Hora', 'Visita', 'Viaje'],
-  general: ['Pieza', 'Saco', 'Kg', 'Tonelada', 'Litro', 'Metro', 'M³'],
+  servicio: ['Servicio', 'M³', 'Día', 'Hora', 'Visita', 'Viaje', 'Km', 'Litro', 'Pieza'],
+  general: ['Pieza', 'Saco', 'Kg', 'Tonelada', 'Litro', 'Metro', 'M³', 'Km'],
 };
+
+/** Configuración de un concreto dado de alta (f´c o MR, edad en días, revenimiento en cm y suministro: TD, BP…). */
+export interface ConfigConcreto {
+  fc: string;
+  edad: string;
+  rev: string;
+  suministro: string;
+}
+
+/** Servicio que es renta de un equipo: de qué tipo y qué unidades lo atienden (vacío = sin conectar por ahora). */
+export interface EquipoServicio {
+  tipo: string;
+  unidades: string[];
+}
 
 /** Un producto del tarifario: lo que se cotiza y su precio de lista (el mismo que usan lineasPartida y precioConcreto). */
 export interface ProductoTarifa {
@@ -306,6 +320,10 @@ export interface ProductoTarifa {
   /** Productos generales: cuántos hay (control de existencias) y desde cuántos avisar que hay pocos. */
   existencias?: number;
   minimoExistencias?: number;
+  /** Concretos dados de alta: con ella se arman su código y su nombre. */
+  configuracion?: ConfigConcreto;
+  /** Servicios de renta de equipo, conectados (o aún no) a sus unidades: para logística. */
+  equipo?: EquipoServicio;
 }
 
 const kgCm2 = (n: string) => `${n} kg/cm²`;

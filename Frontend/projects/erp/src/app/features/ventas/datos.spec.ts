@@ -9,7 +9,11 @@ import {
   filtrarCotizaciones,
   filtrarPedidos,
   filtrarProductos,
+  codigoConcreto,
   codigoSugerido,
+  codigoVariante,
+  textoEquipo,
+  nombreConcreto,
   existenciasBajas,
   isoEnZona,
   modificable,
@@ -247,6 +251,56 @@ describe('productos', () => {
     expect(h.de(registro.producto(saco.id))[0]).toMatchObject({ texto: 'Salida de 32 saco', cambios: [{ campo: 'Existencias', antes: '40', despues: '8' }] });
     const flete = s.crearProducto({ tipo: 'servicio', codigo: 'SRV-FLETE', nombre: 'Flete', unidad: 'Viaje', precio: 900, descripcion: '' });
     expect(flete.existencias).toBeUndefined();
+  });
+
+  it('servicio de renta de equipo: conectado a sus unidades, editable aun del tarifario; su código no cambia', () => {
+    const s = TestBed.inject(VentasService);
+    const h = TestBed.inject(HistorialService);
+    const renta = s.crearProducto({
+      tipo: 'servicio',
+      codigo: 'SRV-RENTA-OLLA',
+      nombre: 'Renta de olla',
+      unidad: 'Día',
+      precio: 6500,
+      descripcion: 'Con operador.',
+      equipo: { tipo: 'revolvedor', unidades: ['eco-09', 'eco-11'] },
+    });
+    expect(textoEquipo(renta.equipo!)).toBe('Camión revolvedor · ECO-09, ECO-11');
+    s.editarProducto(renta.id, { ...renta, equipo: { tipo: 'revolvedor', unidades: [] } });
+    expect(h.de(registro.producto(renta.id))[0].cambios).toEqual([
+      { campo: 'Renta de equipo', antes: 'Camión revolvedor · ECO-09, ECO-11', despues: 'Camión revolvedor · sin conectar' },
+    ]);
+    s.editarProducto(renta.id, { ...renta, equipo: undefined });
+    expect(s.productos().find((p) => p.id === renta.id)!.equipo).toBeUndefined();
+    // Del tarifario: el equipo sí, el código no
+    const aplanadora = s.productos().find((p) => p.id === 'maquinaria-aplanadora')!;
+    s.editarProducto(aplanadora.id, { ...aplanadora, codigo: 'OTRO', equipo: { tipo: 'aplanadora', unidades: ['ap-01'] } });
+    expect(s.productos().find((p) => p.id === aplanadora.id)).toMatchObject({ codigo: 'REN-APLANADORA', equipo: { tipo: 'aplanadora', unidades: ['ap-01'] } });
+  });
+
+  it('concreto: código interno como en la lista de planta, variante y nombre', () => {
+    const c = { fc: '200', edad: '28', rev: '14', suministro: 'BP' };
+    expect(codigoConcreto(c)).toBe('200 - N28 - 14 - BP');
+    expect(codigoConcreto({ fc: 'mr45', edad: '7', rev: '16', suministro: 'TD' })).toBe('MR45 - RR7 - 16 - TD');
+    expect(codigoConcreto({ ...c, rev: '' })).toBe('');
+    expect(codigoVariante('200 - N28 - 14 - BP', ['200 - N28 - 14 - BP', '200 - N28 - 14 - BP - 2'])).toBe('200 - N28 - 14 - BP - 3');
+    expect(nombreConcreto(c)).toBe('Concreto f´c 200 kg/cm² · 28 días · rev. 14 cm · Bomba');
+    expect(nombreConcreto({ fc: 'MR48', edad: '14', rev: '18', suministro: 'BA' })).toBe('Concreto MR 48 kg/cm² · RR 14 días · rev. 18 cm · BA');
+  });
+
+  it('editar un producto: lo del tarifario conserva precio y unidad; queda en el historial', () => {
+    const s = TestBed.inject(VentasService);
+    const h = TestBed.inject(HistorialService);
+    const fc = s.productos().find((p) => p.id === 'fc-300')!;
+    s.editarProducto(fc.id, { ...fc, nombre: 'Concreto f´c 300 especial', precio: 1 });
+    expect(s.productos().find((p) => p.id === fc.id)).toMatchObject({ nombre: 'Concreto f´c 300 especial', precio: fc.precio, unidad: fc.unidad });
+    expect(h.de(registro.producto(fc.id))[0].cambios).toEqual([{ campo: 'Nombre', antes: fc.nombre, despues: 'Concreto f´c 300 especial' }]);
+    const saco = s.crearProducto({ tipo: 'general', codigo: 'GEN-SACO', nombre: 'Saco', unidad: 'Saco', precio: 245, descripcion: '', existencias: 40, minimoExistencias: 10 });
+    s.editarProducto(saco.id, { codigo: 'gen-saco-50', nombre: 'Saco', unidad: 'Saco', precio: 260, descripcion: '', minimoExistencias: 5 });
+    expect(s.productos().find((p) => p.id === saco.id)).toMatchObject({ codigo: 'GEN-SACO-50', precio: 260, existencias: 40, minimoExistencias: 5 });
+    const antes = h.de(registro.producto(saco.id)).length;
+    s.editarProducto(saco.id, { codigo: 'GEN-SACO-50', nombre: 'Saco', unidad: 'Saco', precio: 260, descripcion: '', minimoExistencias: 5 });
+    expect(h.de(registro.producto(saco.id))).toHaveLength(antes);
   });
 });
 

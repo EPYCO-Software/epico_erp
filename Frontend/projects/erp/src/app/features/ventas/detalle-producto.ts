@@ -1,10 +1,11 @@
-import { Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
 import { FormField, form, min, required, submit, validate } from '@angular/forms/signals';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Maximize2, X } from 'lucide';
+import { Maximize2, PencilLine, X } from 'lucide';
 import { CATEGORIAS_PRODUCTO, EstadoPedidoEtiqueta, FechaZonaPipe, FieldError, Icon, ProductoTarifa, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, pesos } from 'ui';
-import { ESTADOS_COTIZACION, VentasService, existenciasBajas } from './datos';
+import { ESTADOS_COTIZACION, NuevoProducto, VentasService, delTarifario, existenciasBajas, textoEquipo } from './datos';
+import { FormProducto } from './form-producto';
 
 /**
  * Un producto, igual en la vista previa de Productos y en su vista completa: tipo, código, categoría, unidad, precio de
@@ -13,7 +14,7 @@ import { ESTADOS_COTIZACION, VentasService, existenciasBajas } from './datos';
  */
 @Component({
   selector: 'app-detalle-producto',
-  imports: [DecimalPipe, EstadoPedidoEtiqueta, FechaZonaPipe, FieldError, FormField, Icon, RouterLink],
+  imports: [DecimalPipe, FormProducto, EstadoPedidoEtiqueta, FechaZonaPipe, FieldError, FormField, Icon, RouterLink],
   // Bloque: un host en línea con bloques adentro hace que el navegador lo ponga encima de sus botones al apuntar.
   host: { class: 'block' },
   template: `
@@ -39,6 +40,16 @@ import { ESTADOS_COTIZACION, VentasService, existenciasBajas } from './datos';
       }
     </div>
 
+    @if (!editando()) {
+      <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
+        <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
+      </button>
+    }
+    <p class="mt-2 text-sm font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ avisoEdicion() }}</p>
+
+    @if (editando()) {
+      <app-form-producto class="mt-4 border-t border-acero/60 pt-4" [producto]="p()" (listo)="guardar($event)" (descartar)="terminar('')" />
+    } @else {
     <div class="mt-4 flex flex-wrap items-end justify-between gap-4">
       <dl class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt class="text-texto-suave">Tipo</dt>
@@ -49,6 +60,10 @@ import { ESTADOS_COTIZACION, VentasService, existenciasBajas } from './datos';
         <dd>{{ categoria() }}</dd>
         <dt class="text-texto-suave">Unidad</dt>
         <dd>{{ p().unidad }}</dd>
+        @if (p().equipo; as e) {
+          <dt class="text-texto-suave">Renta de</dt>
+          <dd>{{ textoEquipo(e) }}</dd>
+        }
         @if (p().minimo; as minimo) {
           <dt class="text-texto-suave">Mínimo</dt>
           <dd>{{ minimo }} m³ (se cobra al menos eso)</dd>
@@ -61,9 +76,11 @@ import { ESTADOS_COTIZACION, VentasService, existenciasBajas } from './datos';
       </p>
     </div>
     <p class="mt-3 text-sm">{{ p().descripcion }}</p>
-    <p class="mt-2 text-xs text-texto-suave">
-      Es el precio del tarifario, el mismo con que se cotiza; los precios especiales se dan en cada cotización.
-    </p>
+    @if (tarifario()) {
+      <p class="mt-2 text-xs text-texto-suave">
+        Es el precio del tarifario, el mismo con que se cotiza; los precios especiales se dan en cada cotización.
+      </p>
+    }
 
     @if (p().existencias != null) {
       <section aria-labelledby="existencias-titulo" class="mt-5 border-t border-acero/60 pt-4 text-sm">
@@ -108,6 +125,7 @@ import { ESTADOS_COTIZACION, VentasService, existenciasBajas } from './datos';
         <ui-field-error [campo]="movimiento.cantidad" errorId="movimiento-cantidad-error" />
         <p class="mt-2 font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ aviso() }}</p>
       </section>
+    }
     }
 
     <section aria-labelledby="uso-titulo" class="mt-5 border-t border-acero/60 pt-4 text-sm">
@@ -157,21 +175,51 @@ export class DetalleProducto {
   readonly vista = input<'panel' | 'completa'>('panel');
   readonly cerrar = output();
 
-  protected readonly iconos = { cerrar: X, completa: Maximize2 };
+  protected readonly iconos = { cerrar: X, completa: Maximize2, editar: PencilLine };
   protected readonly botonIcono =
     'flex size-9 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-carbon/5 hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico';
+  protected readonly botonSecundario =
+    'inline-flex h-9 items-center gap-2 rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
   protected readonly enlace =
     'rounded font-semibold text-epico-oscuro underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-epico';
   protected readonly pesos = pesos;
+  protected readonly textoEquipo = textoEquipo;
   protected readonly estados = ESTADOS_COTIZACION;
   protected readonly completa = computed(() => this.vista() === 'completa');
   protected readonly categoria = computed(() => CATEGORIAS_PRODUCTO[this.p().categoria]);
   protected readonly tipo = computed(() => TIPOS_PRODUCTO[TIPO_DE_CATEGORIA[this.p().categoria]]);
   protected readonly bajas = computed(() => existenciasBajas(this.p()));
+  protected readonly tarifario = computed(() => delTarifario(this.p()));
 
   // Movimiento de existencias (productos generales). Al pasar a otro producto se limpia.
   private readonly id = computed(() => this.p().id);
   protected readonly aviso = linkedSignal({ source: this.id, computation: () => '' });
+
+  // Edición: al pasar a otro producto se sale de ella; guardar no la reinicia.
+  private readonly injector = inject(Injector);
+  protected readonly editando = linkedSignal({ source: this.id, computation: () => false });
+  protected readonly avisoEdicion = linkedSignal({ source: this.id, computation: () => '' });
+  private readonly editor = viewChild(FormProducto);
+  private readonly botonEditar = viewChild<ElementRef<HTMLButtonElement>>('botonEditar');
+  /** Cambios sin guardar en el editor: la lista pregunta antes de cambiar de fila o cerrar. */
+  readonly sinGuardar = computed(() => this.editor()?.sinGuardar() ?? false);
+
+  protected editar(): void {
+    this.avisoEdicion.set('');
+    this.editando.set(true);
+  }
+
+  protected guardar(cambios: NuevoProducto): void {
+    this.ventas.editarProducto(this.p().id, cambios);
+    this.terminar('Cambios guardados.');
+  }
+
+  /** Al salir de la edición el foco vuelve a "Editar". */
+  protected terminar(aviso: string): void {
+    this.editando.set(false);
+    this.avisoEdicion.set(aviso);
+    afterNextRender(() => this.botonEditar()?.nativeElement.focus(), { injector: this.injector });
+  }
   private readonly modeloMovimiento = signal<{ tipo: 'entrada' | 'salida'; cantidad: number | null; nota: string }>({
     tipo: 'entrada',
     cantidad: null,

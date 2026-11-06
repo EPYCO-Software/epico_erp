@@ -224,11 +224,52 @@ projects/
                            Su uso: VentasService.usoDe (cotizaciones y órdenes que lo llevan, m³; partidaUsa de ui).
                            Los precios son los mismos con que se cotiza: PRECIO_SERVICIO y las tablas de formato.ts.
                            Tipos de producto (TipoProducto de ui): Concreto (lo principal), Servicio y Producto general
-                           (extras: sacos de cemento…); filtro por tipo en la lista. Nuevo (/ventas/productos/nuevo,
-                           nuevo-producto.ts): tipo, nombre, código sugerido (codigoSugerido, sin repetir), unidad
-                           según el tipo (UNIDADES_PRODUCTO), precio y descripción; los generales llevan existencias y un
-                           mínimo: aviso "Pocas existencias" y entradas/salidas en su detalle (moverExistencias, con
-                           historial). shortcut: los productos dados de alta aún no se agregan a cotizaciones u órdenes.
+                           (extras: sacos de cemento…); filtro por tipo en la lista. Alta (/ventas/productos/nuevo,
+                           nuevo-producto.ts) y edición (vista previa y completa) usan el mismo form-producto.ts: el
+                           código no se escribe, se arma solo (servicio/general: codigoSugerido con el nombre; concreto:
+                           f´c, edad, rev. y suministro con las opciones fijas de la lista de planta PRODUCTOS-ESC-XPJ
+                           (OPCIONES_CONCRETO) o Personalizado → codigoConcreto "200 - N28 - 14 - BP" y nombreConcreto;
+                           misma configuración que otro producto = aviso y solo como variante, codigoVariante "… - 2").
+                           Descripción y unidad obligatorias (UNIDADES_PRODUCTO). Servicios: renta de equipo
+                           (EquipoServicio): tipo (TIPOS_EQUIPO) y unidades conectadas de EQUIPOS, o "no conectar por
+                           ahora"; shortcut: EQUIPOS es fijo de demo hasta que Flota lo administre. Generales:
+                           existencias y mínimo, aviso "Pocas existencias", entradas/salidas en su detalle
+                           (moverExistencias). Del tarifario (delTarifario) solo se editan nombre, descripción y equipo:
+                           código, unidad y precio los usa el cotizador. El tipo no se edita. Resumen "Así quedará".
+                           shortcut: los productos dados de alta aún no se agregan a cotizaciones u órdenes.
+                           Listas de precios (/ventas/listas-de-precios, listas-precios.ts; precios.ts con
+                           ListasPreciosService): como en Odoo, varias listas con nombre, moneda (MXN/USD) y plantas
+                           (ninguna = todas; lo común, una por planta). Nueva (nueva-lista.ts) y Editar usan
+                           editor-lista.ts; detalle-lista.ts (vista previa y completa, lista-precios.ts) con sus líneas:
+                           "Agregar una línea" o clic abre regla-precio.ts (diálogo: aplicar a producto/todos o
+                           categoría; descuento, fórmula o precio fijo; cantidad mínima; vigencia; Guardar y crear
+                           nuevo). Historial en registro.lista. shortcut: aún no se aplican al cotizar.
+                           Descuentos y programas de lealtad (/ventas/descuentos-y-lealtad, programas.ts; lealtad.ts con
+                           ProgramasService y evaluar()): las 7 plantillas de Odoo (PLANTILLAS: promoción automática,
+                           código, compra X recibe Y, cupón de la próxima orden, tarjeta de lealtad con puntos, cupones
+                           únicos y tarjeta de sellos), en tarjetas en Nuevo (nuevo-programa.ts, ?plantilla=) y si no hay
+                           programas. form-programa.ts (alta y edición, solo los campos de su tipo); detalle-programa.ts
+                           con cupones (generar, marcar usados) y probar-programa.ts: orden de ejemplo → evaluar() dice
+                           descuento, por qué y lo que gana (puntos, sellos, cupón). shortcut: aún no se aplican al
+                           cotizar ni se guardan puntos/sellos por cliente.
+                           Reportes (/ventas/reportes/…): piezas comunes en reporte-fuente.ts (ReporteFuente: historial
+                           de demostración + órdenes del ERP, sin IVA, con nombres y precios de lista),
+                           filtros-reporte.ts (periodo, plantas, producto, vendedor, cliente, comparar con el periodo
+                           anterior o el año pasado; cada reporte oculta el de lo que analiza), indicadores-reporte.ts,
+                           tabla-reporte.ts (ordenable, renglón elegible, pie con totales, csvDeTabla) y grafica.ts (SVG
+                           propio: barras/líneas/participación, teclado y detalle). reporte-datos.ts: periodos, filtrar,
+                           medir, agrupar (tabla dinámica), resumir (un renglón por entidad), variación, csv.
+                           - Ventas (reporte-ventas.ts): Gráfica / Tabla dinámica / Lista, reportes rápidos.
+                           - Vendedores: ranking (participación, variación, ticket, clientes, vs. lista), evolución,
+                             por planta o participación, y el detalle del vendedor.
+                           - Productos: concreto/servicios/todo; m³ por producto y planta (en orden de resistencia),
+                             mezcla o tendencia; % de órdenes con bombeo; precio obtenido vs. lista; detalle con enlace.
+                           - Clientes: cartera con estado (nuevo, recuperado, creciendo, estable, bajando, inactivo),
+                             Pareto (% acumulado), días sin comprar, clientes en riesgo, concentración en los 5 mayores;
+                             detalle con últimas órdenes y enlace a la ficha.
+                           Colores: paleta validada del skill dataviz, fija por entidad (ORDEN_SERIE). shortcut:
+                           historialDemo inventa ~3 años de ventas y CLIENTES_HISTORIAL (clientes sin ficha) hasta tener
+                           backend.
                            Prueba solo en Cotizaciones: la vista previa en Liquid Glass (`liquido`). Si gusta, pasa a
                            todas.
         features/auth/     login del ERP (/login) y capas-glass.ts: baraja de 3 cartas de vidrio (la principal con cara

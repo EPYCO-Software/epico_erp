@@ -26,6 +26,8 @@ import {
   plantaPara,
   precioConcreto,
   partidaUsa,
+  ConfigConcreto,
+  EquipoServicio,
   ProductoTarifa,
   CATEGORIAS_PRODUCTO,
   PRODUCTOS,
@@ -56,7 +58,7 @@ const ANA = 'ana.pech@epicoconcretos.mx';
 const LUIS = 'luis.canche@epicoconcretos.mx';
 const MARIA = 'maria.dzul@epicoconcretos.mx';
 const JORGE = 'jorge.may@epicoconcretos.mx';
-const VENDEDORES: Record<string, string> = { [YO]: 'Operaciones', [ANA]: 'Ana Pech', [LUIS]: 'Luis Canché', [MARIA]: 'María Dzul', [JORGE]: 'Jorge May' };
+export const VENDEDORES: Record<string, string> = { [YO]: 'Operaciones', [ANA]: 'Ana Pech', [LUIS]: 'Luis Canché', [MARIA]: 'María Dzul', [JORGE]: 'Jorge May' };
 
 const MORAL = '601 · General de Ley Personas Morales';
 
@@ -649,11 +651,15 @@ export const registro = {
   pedido: (folio: string) => 'pedido:' + folio,
   cliente: (id: string) => 'cliente:' + id,
   producto: (id: string) => 'producto:' + id,
+  lista: (id: string) => 'lista-precios:' + id,
+  programa: (id: string) => 'programa:' + id,
 };
 
 /** Lo que se captura al dar de alta un producto. */
 export interface NuevoProducto {
   tipo: TipoProducto;
+  configuracion?: ConfigConcreto;
+  equipo?: EquipoServicio;
   codigo: string;
   nombre: string;
   unidad: string;
@@ -671,6 +677,101 @@ export function codigoSugerido(tipo: TipoProducto, nombre: string, usados: strin
   for (let n = 2; usados.includes(codigo); n++) codigo = `${base}-${n}`;
   return codigo;
 }
+
+/**
+ * Opciones fijas de un concreto, de la lista PRODUCTOS-ESC-XPJ de planta: f´c (o MR), edad (N28 normal; RR, resistencia
+ * rápida a 3, 7 o 14 días), revenimiento en cm y tipo de suministro. Cada una admite "Personalizado".
+ */
+export const OPCIONES_CONCRETO = {
+  fc: ['50', '100', '150', '200', '250', '300', '350', 'MR42', 'MR45', 'MR48'],
+  edad: [
+    { id: '28', nombre: '28 días', nota: 'Normal' },
+    { id: '3', nombre: '3 días', nota: 'Rápida' },
+    { id: '7', nombre: '7 días', nota: 'Rápida' },
+    { id: '14', nombre: '14 días', nota: 'Rápida' },
+  ],
+  rev: ['10', '14', '16', '18'],
+  suministro: [
+    { id: 'TD', nombre: 'Tiro directo' },
+    { id: 'BP', nombre: 'Bomba' },
+  ],
+} as const;
+
+/** Tipos de equipo que se rentan como servicio. */
+export const TIPOS_EQUIPO = {
+  revolvedor: 'Camión revolvedor',
+  'bomba-pluma': 'Bomba pluma',
+  'bomba-estacionaria': 'Bomba estacionaria',
+  aplanadora: 'Aplanadora',
+  vibrador: 'Vibrador',
+  allanadora: 'Allanadora',
+} as const;
+export type TipoEquipo = keyof typeof TIPOS_EQUIPO;
+
+/** Una unidad de la empresa (número económico) que puede atender un servicio de renta. */
+export interface Equipo {
+  id: string;
+  tipo: TipoEquipo;
+  numero: string;
+  descripcion: string;
+}
+
+// shortcut: equipos fijos de demostración; cuando Flota los administre, leerlos de ahí.
+export const EQUIPOS: Equipo[] = [
+  ...['ECO-09', 'ECO-11', 'ECO-14', 'ECO-17', 'ECO-21', 'ECO-23'].map((numero) => ({
+    id: numero.toLowerCase(),
+    tipo: 'revolvedor' as const,
+    numero,
+    descripcion: 'Olla de 7 m³',
+  })),
+  { id: 'bp-01', tipo: 'bomba-pluma', numero: 'BP-01', descripcion: 'Pluma de 36 m' },
+  { id: 'bp-02', tipo: 'bomba-pluma', numero: 'BP-02', descripcion: 'Pluma de 42 m' },
+  { id: 'be-01', tipo: 'bomba-estacionaria', numero: 'BE-01', descripcion: 'Estacionaria con 60 m de tubería' },
+  { id: 'ap-01', tipo: 'aplanadora', numero: 'AP-01', descripcion: 'Rodillo vibratorio' },
+  { id: 'vb-01', tipo: 'vibrador', numero: 'VB-01', descripcion: 'Vibrador de inmersión' },
+  { id: 'vb-02', tipo: 'vibrador', numero: 'VB-02', descripcion: 'Vibrador de inmersión' },
+  { id: 'al-01', tipo: 'allanadora', numero: 'AL-01', descripcion: 'Allanadora de 36 pulgadas' },
+];
+
+/** "Camión revolvedor · ECO-09, ECO-11" o "… · sin conectar". */
+export function textoEquipo(e: EquipoServicio): string {
+  const tipo = TIPOS_EQUIPO[e.tipo as TipoEquipo] ?? 'Otro equipo';
+  const unidades = e.unidades.map((id) => EQUIPOS.find((x) => x.id === id)?.numero ?? id);
+  return `${tipo} · ${unidades.length ? unidades.join(', ') : 'sin conectar'}`;
+}
+
+const edadCodigo = (dias: string) => (dias === '28' ? 'N28' : `RR${dias}`);
+
+/** Código interno como en la lista de planta: "200 - N28 - 14 - BP"; vacío si falta algo. */
+export function codigoConcreto(c: ConfigConcreto): string {
+  const partes = [c.fc, c.edad && edadCodigo(c.edad), c.rev, c.suministro].map((x) => x.trim().toUpperCase());
+  return partes.every(Boolean) ? partes.join(' - ') : '';
+}
+
+/** Mismo código con su número de variante: "200 - N28 - 14 - BP - 2", el primero libre. */
+export function codigoVariante(base: string, usados: string[]): string {
+  let n = 2;
+  while (usados.includes(`${base} - ${n}`)) n++;
+  return `${base} - ${n}`;
+}
+
+/** "Concreto f´c 200 kg/cm² · 28 días · rev. 14 cm · Bomba" */
+export function nombreConcreto(c: ConfigConcreto): string {
+  const fc = c.fc.trim().toUpperCase();
+  const resistencia = fc.startsWith('MR') ? `Concreto MR ${fc.slice(2)}` : `Concreto f´c ${fc}`;
+  const edad = c.edad === '28' ? '28 días' : `RR ${c.edad} días`;
+  const suministro = OPCIONES_CONCRETO.suministro.find((s) => s.id === c.suministro)?.nombre ?? c.suministro.toUpperCase();
+  return `${resistencia} kg/cm² · ${edad} · rev. ${c.rev} cm · ${suministro}`;
+}
+
+/** Lo que se edita de un producto (el tipo y las existencias no: las existencias van con entradas y salidas). */
+export type CambiosProducto = Pick<
+  ProductoTarifa,
+  'codigo' | 'nombre' | 'unidad' | 'precio' | 'descripcion' | 'minimoExistencias' | 'configuracion' | 'equipo'
+>;
+
+/** Los del tarifario: su precio y su unidad los usa el cotizador, así que aquí no se cambian. */
+export const delTarifario = (p: ProductoTarifa) => PRODUCTOS.some((x) => x.id === p.id);
 
 /** Productos generales con existencias en su mínimo o por debajo. */
 export const existenciasBajas = (p: ProductoTarifa) =>
@@ -1014,6 +1115,8 @@ export class VentasService {
       precio: n.precio,
       descripcion: n.descripcion.trim(),
       ...(general ? { existencias: n.existencias ?? 0, minimoExistencias: n.minimoExistencias ?? 0 } : {}),
+      ...(n.configuracion ? { configuracion: n.configuracion } : {}),
+      ...(n.equipo ? { equipo: n.equipo } : {}),
     };
     this.productos.update((lista) => [...lista, producto]);
     this.historial.registrar(registro.producto(producto.id), {
@@ -1021,9 +1124,44 @@ export class VentasService {
       detalles: [
         `${TIPOS_PRODUCTO[n.tipo]} · $${pesos(producto.precio)} por ${producto.unidad.toLowerCase()}`,
         ...(general ? [`Existencias iniciales: ${producto.existencias} · aviso con ${producto.minimoExistencias} o menos`] : []),
+        ...(producto.equipo ? [`Renta de equipo: ${textoEquipo(producto.equipo)}`] : []),
       ],
     });
     return producto;
+  }
+
+  /**
+   * Editar un producto: nombre, descripción, el equipo de los servicios de renta y, si no es del tarifario, código
+   * (lo arma el formulario), configuración, unidad y precio; de los generales, el mínimo de existencias. Queda en su
+   * historial con lo que cambió (si nada cambió, no se anota).
+   */
+  editarProducto(id: string, c: CambiosProducto): void {
+    const antes = this.productos().find((p) => p.id === id);
+    if (!antes) return;
+    const fijo = delTarifario(antes);
+    const { equipo: _equipo, ...resto } = antes;
+    const despues: ProductoTarifa = {
+      ...resto,
+      nombre: c.nombre.trim(),
+      descripcion: c.descripcion.trim(),
+      ...(fijo ? {} : { codigo: c.codigo.trim().toUpperCase(), unidad: c.unidad, precio: c.precio }),
+      ...(!fijo && c.configuracion ? { configuracion: c.configuracion } : {}),
+      ...(c.equipo ? { equipo: c.equipo } : {}),
+      ...(antes.existencias != null && c.minimoExistencias != null ? { minimoExistencias: c.minimoExistencias } : {}),
+    };
+    const cambios: Cambio[] = [];
+    const campo = (nombre: string, a: string, d: string) => a !== d && cambios.push({ campo: nombre, antes: a, despues: d });
+    campo('Código', antes.codigo, despues.codigo);
+    campo('Nombre', antes.nombre, despues.nombre);
+    campo('Unidad', antes.unidad, despues.unidad);
+    campo('Precio de lista', '$' + pesos(antes.precio), '$' + pesos(despues.precio));
+    campo('Descripción', antes.descripcion || '—', despues.descripcion || '—');
+    campo('Aviso de existencias', String(antes.minimoExistencias ?? '—'), String(despues.minimoExistencias ?? '—'));
+    const equipo = (p: ProductoTarifa) => (p.equipo ? textoEquipo(p.equipo) : 'No es renta de equipo');
+    campo('Renta de equipo', equipo(antes), equipo(despues));
+    if (!cambios.length) return;
+    this.productos.update((lista) => lista.map((p) => (p.id === id ? despues : p)));
+    this.historial.registrar(registro.producto(id), { texto: 'Producto editado', cambios });
   }
 
   /** Entrada (compra, devolución) o salida (venta, merma) de un producto general; la nota dice por qué. */

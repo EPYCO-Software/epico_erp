@@ -51,7 +51,8 @@ const ACTIVOS: IdModulo[] = ['crm', 'ventas', 'pedidos'];
 
 /**
  * Los mismos menús que Ventas en Odoo. Las opciones sin página abren "en construcción" (app.routes.ts).
- * Equipos de ventas (en Órdenes y en Configuración) está desactivado hasta que tenga su lógica.
+ * Equipos de ventas (en Órdenes y en Configuración) está desactivado hasta que tenga su lógica; Tarjetas de regalo y
+ * monedero electrónico (en Productos), desactivado.
  */
 const MENU_VENTAS: MenuModulo[] = [
   {
@@ -76,7 +77,6 @@ const MENU_VENTAS: MenuModulo[] = [
       { nombre: 'Productos', ruta: '/ventas/productos' },
       { nombre: 'Listas de precios', ruta: '/ventas/listas-de-precios' },
       { nombre: 'Descuentos y programas de lealtad', ruta: '/ventas/descuentos-y-lealtad' },
-      { nombre: 'Tarjetas de regalo y monedero electrónico', ruta: '/ventas/tarjetas-de-regalo' },
     ],
   },
   {

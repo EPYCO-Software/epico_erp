@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Search } from 'lucide';
 import { CATEGORIAS_PRODUCTO, Icon, ProductoTarifa, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, TipoProducto, pesos } from 'ui';
@@ -98,9 +98,9 @@ import { DetalleProducto } from './detalle-producto';
                     tabindex="0"
                     [class]="fila + ' has-checked:bg-epico/6'"
                     [attr.aria-current]="p.id === vista.abiertaId() ? 'true' : null"
-                    (click)="vista.abrir(p.id)"
+                    (click)="abrir(p)"
                     (dblclick)="verCompleto(p)"
-                    (keydown.enter)="$event.target === $event.currentTarget && vista.abrir(p.id)"
+                    (keydown.enter)="$event.target === $event.currentTarget && abrir(p)"
                   >
                     <!-- La casilla solo marca: no abre la vista previa ni la completa -->
                     <td class="py-2.5 pr-1 pl-3" (click)="$event.stopPropagation()" (dblclick)="$event.stopPropagation()">
@@ -136,8 +136,8 @@ import { DetalleProducto } from './detalle-producto';
       </div>
 
       @if (previa(); as p) {
-        <aside appPanelLateral (cerrar)="vista.cerrar()">
-          <app-detalle-producto [p]="p" (cerrar)="vista.cerrar()" />
+        <aside appPanelLateral (cerrar)="cerrar()">
+          <app-detalle-producto [p]="p" (cerrar)="cerrar()" />
         </aside>
       }
     </div>
@@ -180,7 +180,21 @@ export default class Productos {
   /** Contra la lista filtrada: si la búsqueda lo oculta, la vista previa se cierra. */
   protected readonly previa = computed(() => this.filas().find((p) => p.id === this.vista.abiertaId()) ?? null);
 
+  private readonly detalle = viewChild(DetalleProducto);
+
+  private puedeDejarla(): boolean {
+    return !this.detalle()?.sinGuardar() || confirm('Hay cambios sin guardar en este producto. ¿Descartarlos?');
+  }
+
+  protected abrir(p: ProductoTarifa): void {
+    if (p.id === this.vista.abiertaId() || this.puedeDejarla()) this.vista.abrir(p.id);
+  }
+
+  protected cerrar(): void {
+    if (this.puedeDejarla()) this.vista.cerrar();
+  }
+
   protected verCompleto(p: ProductoTarifa): void {
-    void this.router.navigate(['/ventas/productos', p.id]);
+    if (this.puedeDejarla()) void this.router.navigate(['/ventas/productos', p.id]);
   }
 }
