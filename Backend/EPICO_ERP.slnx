@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EPICO.Api/EPICO.Api.csproj" />
+    <Project Path="src/EPICO.Application/EPICO.Application.csproj" />
+    <Project Path="src/EPICO.Contracts/EPICO.Contracts.csproj" />
+    <Project Path="src/EPICO.Domain/EPICO.Domain.csproj" />
+    <Project Path="src/EPICO.Infrastructure/EPICO.Infrastructure.csproj" />
+  </Folder>
+</Solution>
