@@ -19,3 +19,18 @@ services:
     image: epico-portal
     ports:
       - '8081:8080'
+
+  database:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: epico_erp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+  
