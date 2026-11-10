@@ -1,7 +1,7 @@
 name: epico-backend-prod
 
 x-backend-image: &backend-image
-  image: "${BACKEND_IMAGE:-ghcr.io/yumil22/epico-erp-backend}:${BACKEND_TAG:-latest}"
+  image: "${BACKEND_IMAGE:-ghcr.io/epyco-software/epico-erp-backend}:${BACKEND_TAG:-latest}"
 
 x-backend-environment: &backend-environment
   ASPNETCORE_ENVIRONMENT: Production

@@ -136,7 +136,7 @@ El workflow `.github/workflows/backend.yml` realiza lo siguiente:
 
 1. Compila el backend en cada pull request que modifica `Backend/`.
 2. Construye y publica la imagen en
-   `ghcr.io/yumil22/epico-erp-backend` al hacer push a `main`.
+   `ghcr.io/epyco-software/epico-erp-backend` al hacer push a `main`.
 3. Genera las etiquetas `latest`, `sha-<commit>` y etiquetas de versión para
    tags Git como `v1.2.0`.
 4. Opcionalmente despliega en el VPS después de publicar `latest`.
@@ -210,7 +210,7 @@ Si el paquete de GHCR es privado, iniciar sesión una sola vez en el VPS con un
 token que tenga permiso `read:packages`:
 
 ```bash
-echo "TU_GITHUB_TOKEN" | docker login ghcr.io -u Yumil22 --password-stdin
+echo "TU_GITHUB_TOKEN" | docker login ghcr.io -u TU_USUARIO_GITHUB --password-stdin
 ```
 
 Despliegue manual o actualización:
@@ -228,14 +228,18 @@ correctamente antes de actualizar la API.
 
 ## Despliegue automático al VPS
 
-Para activar el trabajo `deploy` del workflow, configurar en GitHub:
+Push a `develop` despliega en el Environment `development` (imagen `:develop`);
+push a `main` despliega en `production` (imagen `:latest`). Ambos van al mismo
+VPS: el job entra por SSH, hace `cd $VPS_PATH`, `docker compose pull $VPS_SERVICE`,
+corre las migraciones (`run --rm $VPS_SERVICE --migrate`) y reinicia solo ese servicio.
 
-- Variable de repositorio `ENABLE_VPS_DEPLOY` con valor `true`.
-- Secret `VPS_HOST`: dominio o IP del servidor.
-- Secret `VPS_USER`: usuario SSH con acceso a Docker y a `/opt/epico`.
-- Secret `VPS_SSH_KEY`: clave privada SSH de despliegue.
-- Secret `VPS_KNOWN_HOSTS`: huella SSH verificada del servidor.
+Configurar en GitHub:
 
-Además, el VPS debe tener previamente `/opt/epico/.env` y acceso de lectura a
-la imagen de GHCR. En cada push a `main`, GitHub Actions copia el Compose,
-descarga la nueva imagen, ejecuta las migraciones y reemplaza el backend.
+- Variable de repositorio `ENABLE_VPS_DEPLOY` = `true`.
+- Secrets de repositorio: `VPS_HOST`, `VPS_USER` (con acceso a Docker),
+  `VPS_SSH_KEY` (clave privada de deploy) y opcional `VPS_PORT` si SSH no usa el 22.
+- Variables de repositorio: `VPS_SERVICE_DEV` y `VPS_SERVICE_PROD` (nombre de
+  cada servicio en el compose) y `VPS_PATH` (ruta absoluta de la carpeta
+  con `compose.yml` y `.env`; puede ser la misma para ambos).
+
+La huella del servidor no se verifica (`StrictHostKeyChecking accept-new`).
