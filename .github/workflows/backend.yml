@@ -110,6 +110,7 @@ jobs:
           printf 'Host *\n  StrictHostKeyChecking accept-new\n' > ~/.ssh/config
 
       # Las migraciones corren con la misma imagen del servicio (ENTRYPOINT + --migrate).
+      # El compose del VPS toma PROD_*/DEV_* de .env.production (no de .env).
       - name: Pull y despliegue del servicio
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -118,9 +119,11 @@ jobs:
           VPS_PATH: ${{ vars.VPS_PATH }}
           VPS_SERVICE: ${{ github.ref == 'refs/heads/main' && vars.VPS_SERVICE_PROD || vars.VPS_SERVICE_DEV }}
         run: |
+          : "${VPS_HOST:?Falta el secret VPS_HOST}" "${VPS_USER:?Falta el secret VPS_USER}"
+          : "${VPS_PATH:?Falta la variable VPS_PATH}" "${VPS_SERVICE:?Falta la variable VPS_SERVICE_DEV o VPS_SERVICE_PROD}"
           ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -e
             cd '$VPS_PATH'
-            docker compose pull '$VPS_SERVICE'
-            docker compose run --rm '$VPS_SERVICE' --migrate
-            docker compose up -d '$VPS_SERVICE'
+            docker compose --env-file .env.production pull '$VPS_SERVICE'
+            docker compose --env-file .env.production run --rm '$VPS_SERVICE' --migrate
+            docker compose --env-file .env.production up -d '$VPS_SERVICE'
             docker image prune -f"
