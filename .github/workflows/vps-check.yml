@@ -33,10 +33,12 @@ jobs:
           VPS_PATH: ${{ vars.VPS_PATH }}
           VPS_SERVICE: ${{ matrix.environment == 'production' && vars.VPS_SERVICE_PROD || vars.VPS_SERVICE_DEV }}
         run: |
+          : "${VPS_HOST:?Falta el secret VPS_HOST}" "${VPS_USER:?Falta el secret VPS_USER}"
+          : "${VPS_PATH:?Falta la variable VPS_PATH}" "${VPS_SERVICE:?Falta la variable VPS_SERVICE_DEV o VPS_SERVICE_PROD}"
           ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -e
             echo \"Conectado a \$(hostname) como \$(whoami)\"
             cd '$VPS_PATH' || { echo 'No existe la carpeta $VPS_PATH'; exit 1; }
-            docker compose config --services | grep -qx '$VPS_SERVICE' \
+            docker compose --env-file .env.production config --services | grep -qx '$VPS_SERVICE' \
               || { echo 'El servicio $VPS_SERVICE no está en el compose de $VPS_PATH'; exit 1; }
             echo 'OK: servicio $VPS_SERVICE encontrado en $VPS_PATH'
-            docker compose ps '$VPS_SERVICE'"
+            docker compose --env-file .env.production ps '$VPS_SERVICE'"
