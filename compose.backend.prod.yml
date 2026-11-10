@@ -1,0 +1,77 @@
+name: epico-backend-prod
+
+x-backend-image: &backend-image
+  image: "${BACKEND_IMAGE:-ghcr.io/epyco-software/epico-erp-backend}:${BACKEND_TAG:-latest}"
+
+x-backend-environment: &backend-environment
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_HTTP_PORTS: 8080
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+  ConnectionStrings__Default: "Host=database;Port=5432;Database=${POSTGRES_DB:-epico_erp};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}"
+  Cors__AllowedOrigins__0: "${FRONTEND_ORIGIN:?Define FRONTEND_ORIGIN in .env}"
+
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-epico_erp}"
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-epico_erp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - backend
+
+  migrate:
+    <<: *backend-image
+    entrypoint: ["dotnet", "EPICO.Api.dll", "--migrate"]
+    environment: *backend-environment
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    profiles:
+      - tools
+
+  backend:
+    <<: *backend-image
+    environment: *backend-environment
+    ports:
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-5157}:8080"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_prod_data:
+
+networks:
+  backend:
+    driver: bridge
+
