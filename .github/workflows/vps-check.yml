@@ -1,0 +1,42 @@
+name: Probar conexión al VPS
+
+# Solo manual (Actions → "Probar conexión al VPS" → Run workflow). No despliega nada:
+# entra por SSH y comprueba que VPS_PATH existe y que VPS_SERVICE_DEV y VPS_SERVICE_PROD están en su compose.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Revisar ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [development, production]
+    environment: ${{ matrix.environment }}
+    steps:
+      # Misma configuración SSH que el deploy de backend.yml.
+      - name: Configurar acceso SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf 'Host *\n  StrictHostKeyChecking accept-new\n' > ~/.ssh/config
+
+      - name: Comprobar carpeta y servicio
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+          VPS_PATH: ${{ vars.VPS_PATH }}
+          VPS_SERVICE: ${{ matrix.environment == 'production' && vars.VPS_SERVICE_PROD || vars.VPS_SERVICE_DEV }}
+        run: |
+          ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -e
+            echo \"Conectado a \$(hostname) como \$(whoami)\"
+            cd '$VPS_PATH' || { echo 'No existe la carpeta $VPS_PATH'; exit 1; }
+            docker compose config --services | grep -qx '$VPS_SERVICE' \
+              || { echo 'El servicio $VPS_SERVICE no está en el compose de $VPS_PATH'; exit 1; }
+            echo 'OK: servicio $VPS_SERVICE encontrado en $VPS_PATH'
+            docker compose ps '$VPS_SERVICE'"
