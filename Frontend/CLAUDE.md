@@ -538,8 +538,9 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 - `Dockerfile` único con `--build-arg APP=erp|portal`: compila con Node 24 y sirve `dist/<app>/browser` con
   nginx sin root en el puerto 8080 (`docker/nginx.conf`: fallback SPA a `index.html`, `index.html` sin caché y JS/CSS
   con hash cacheados un año).
-- `.github/workflows/docker.yml`: en cada push a `main` (o a mano) construye las dos imágenes y las sube a GHCR
-  (`ghcr.io/<usuario>/epico_erp-erp` y `-portal`, etiquetas `latest` y `sha-…`). El job `deploy` está vacío.
+- `.github/workflows/frontend-erp.yml` / `frontend-portal.yml`: con push a `develop`/`main` que toque esa app (o
+  `ui`, dependencias, Dockerfile) construyen SOLO esa imagen (`ghcr.io/<usuario>/epico_erp-erp|-portal`, etiquetas
+  `develop`/`latest` y `sha-…`) y la despliegan por SSH en el VPS (lógica en `frontend-app.yml`).
 - Probar siempre lo que dependa de librerías CommonJS cargadas con `import()` (p. ej. Leaflet) en el build de
   producción: ahí el módulo puede llegar bajo `default`.
 
