@@ -6,6 +6,11 @@ import {
   DatosEmpresaRepresentada,
   ESTADO_COBRO,
   ESTADO_PEDIDO,
+  ESTATUS_PLANTA,
+  EstadoCobro,
+  EstatusPlanta,
+  METODO_PAGO,
+  MetodoPago,
   EspecificacionConcreto,
   EstadoCotizacion,
   Obra,
@@ -14,10 +19,21 @@ import {
   PedidoVista,
   SERVICIOS,
   ServicioObra,
+  fechaHoraCorta,
+  lineasPartida,
   pedidoDePartida,
   pesos,
   plantaPara,
   precioConcreto,
+  partidaUsa,
+  ConfigConcreto,
+  EquipoServicio,
+  ProductoTarifa,
+  CATEGORIAS_PRODUCTO,
+  PRODUCTOS,
+  TIPOS_PRODUCTO,
+  TipoProducto,
+  totales,
   totalesCotizacion,
   UbicacionGps,
 } from 'ui';
@@ -27,6 +43,7 @@ import { RAZONES_SOCIALES } from '../../core/plantas';
 
 /** En el orden del panel de filtros. Tinte + texto oscurecido (AA en texto pequeño), como los estados del dashboard. */
 export const ESTADOS_COTIZACION: Record<EstadoCotizacion, { nombre: string; clase: string }> = {
+  recibida: { nombre: 'Recibida', clase: 'bg-[#FFF1D6] text-[#7A4B00]' },
   borrador: { nombre: 'Borrador', clase: 'bg-[#ECEDEE] text-[#3F4347]' },
   enviada: { nombre: 'Enviada', clase: 'bg-[#E2EEF3] text-[#285E74]' },
   pedido: { nombre: 'Pedido', clase: 'bg-[#E3EFE9] text-[#2E5E4A]' },
@@ -41,7 +58,7 @@ const ANA = 'ana.pech@epicoconcretos.mx';
 const LUIS = 'luis.canche@epicoconcretos.mx';
 const MARIA = 'maria.dzul@epicoconcretos.mx';
 const JORGE = 'jorge.may@epicoconcretos.mx';
-const VENDEDORES: Record<string, string> = { [YO]: 'Operaciones', [ANA]: 'Ana Pech', [LUIS]: 'Luis Canché', [MARIA]: 'María Dzul', [JORGE]: 'Jorge May' };
+export const VENDEDORES: Record<string, string> = { [YO]: 'Operaciones', [ANA]: 'Ana Pech', [LUIS]: 'Luis Canché', [MARIA]: 'María Dzul', [JORGE]: 'Jorge May' };
 
 const MORAL = '601 · General de Ley Personas Morales';
 
@@ -406,6 +423,19 @@ const cotizacion = (
 
 /** De la más reciente a la más antigua. Cada fecha lleva el offset de su planta. */
 export const COTIZACIONES: CotizacionVista[] = [
+  // Recibidas: las pidieron los clientes en el portal (folio EPI-WEB) y esperan respuesta.
+  {
+    ...cotizacion('EPI-WEB-CZM-26003', '2026-11-05T08:40:00-05:00', 'CZM', 'c-delta', JORGE, 'recibida', [
+      partida('13a', 'Losa de azotea', 'losa', esp(250, { exposicion: 'marina', cemento: 'CPC 30R RS', colocacion: 'bombeo' }), 32, 'o-torre-norte-czm', '2026-11-19T07:30:00-05:00', ['bomba-estacionaria']),
+    ]),
+    origen: 'portal',
+  },
+  {
+    ...cotizacion('EPI-WEB-ESC-26004', '2026-11-04T19:15:00-06:00', 'ESC', 'c-habita', YO, 'recibida', [
+      partida('14a', 'Firmes y banquetas', 'firmes', esp(150), 15, 'o-las-lomas', '2026-11-13T08:00:00-06:00'),
+    ]),
+    origen: 'portal',
+  },
   cotizacion('EPI-PRES-ESC-26092', '2026-11-04T09:12:00-06:00', 'ESC', 'c-maya', YO, 'borrador', [
     partida('1a', 'Losas de entrepiso', 'losa', esp(250, { colocacion: 'bombeo' }), 120, 'o-torre-norte', '2026-11-18T08:00:00-06:00', ['bomba-estacionaria']),
     partida('1b', 'Columnas y trabes', 'losa', esp(300), 35, 'o-torre-norte', '2026-11-20T07:30:00-06:00'),
@@ -490,12 +520,29 @@ export const filtrarClientes = (clientes: Cliente[], texto: string) =>
     coincide(texto, `${c.nombre} ${c.empresa.razonSocial} ${c.empresa.rfc} ${c.contacto.nombre} ${c.contacto.apellidos} ${c.contacto.correo}`),
   );
 
+/** Productos por código, nombre o categoría ("servicio", "concreto mr"…). */
+export const filtrarProductos = (productos: ProductoTarifa[], texto: string) =>
+  productos.filter((p) => coincide(texto, `${p.codigo} ${p.nombre} ${CATEGORIAS_PRODUCTO[p.categoria]}`));
+
 /** Neto de las que no están canceladas. */
 export const totalVigente = (cotizaciones: CotizacionVista[]) =>
   cotizaciones.reduce((suma, c) => (c.estado === 'cancelada' ? suma : suma + c.total), 0);
 
 /** Solo las que no son pedido ni están canceladas se pueden editar y enviar (como en Odoo). */
-export const modificable = (c: Cotizacion) => c.estado === 'borrador' || c.estado === 'enviada';
+/** Lo que se edita de una orden; el importe se recalcula con su partida (mismas reglas que la cotización). */
+export interface CambiosPedido {
+  /** ISO 8601 con el offset de la planta. */
+  fechaHoraEntrega: string;
+  volumenM3: number;
+  /** Precio especial del concreto por m³; sin él, el del tarifario. */
+  precioM3?: number;
+  metodoPago: MetodoPago;
+}
+
+/** Una orden se edita mientras no se entregue ni se cancele. */
+export const pedidoEditable = (p: Pedido) => p.estado === 'programado';
+
+export const modificable = (c: Cotizacion) => c.estado === 'recibida' || c.estado === 'borrador' || c.estado === 'enviada';
 
 /** Las plantas de la concretera (ESC, XPJ, CZM, CUN) con su zona horaria. */
 export const PLANTAS_ERP = RAZONES_SOCIALES.flatMap((r) => r.plantas);
@@ -542,12 +589,19 @@ export function siguienteFolio(folios: string[], plantaId: string, fechaIso: str
   return prefijo + String(Math.max(0, ...usados) + 1).padStart(3, '0');
 }
 
-export type NuevaCotizacion = Pick<Cotizacion, 'clienteId' | 'plantaId' | 'partidas' | 'descuento'>;
+/** `baseId`: la cotización de la que se partió ("Nueva basada en esta"), para comparar precios. */
+export type NuevaCotizacion = Pick<Cotizacion, 'clienteId' | 'plantaId' | 'partidas' | 'descuento' | 'baseId'>;
+
+/** Km incluidos en el precio y $ por km adicional por m³ con que empieza una cotización. */
+// shortcut: tarifa de ejemplo (20 km, como dice el PDF); con backend, la de la configuración de la concretera.
+export const TRASLADO_POR_OMISION = { incluidosKm: 20, precioKm: 12 };
 
 /** Pedido con los nombres resueltos (cliente, obra y planta) y la zona de su planta. */
 function vistaPedido(p: Pedido, cat: Catalogo): PedidoVista {
   const planta = PLANTAS.find((x) => x.id === p.plantaId)!;
   return {
+    metodoPago: 'sin_metodo',
+    estatusPlanta: 'no_enviado',
     ...p,
     clienteNombre: cat.clientes.find((x) => x.id === p.clienteId)!.nombre,
     obraNombre: cat.obras.find((o) => o.id === p.obraId)!.nombre,
@@ -559,7 +613,7 @@ function vistaPedido(p: Pedido, cat: Catalogo): PedidoVista {
 const folioPedido = (consecutivo: number) => `PED-26-${String(consecutivo).padStart(4, '0')}`;
 
 /** Un pedido por partida (pedidoDePartida, la misma regla que el portal), de la planta de la cotización. */
-const pedidosDe = (c: Cotizacion, primerConsecutivo: number, cat: Catalogo = EJEMPLO): PedidoVista[] =>
+const pedidosDe = (c: Cotizacion, primerConsecutivo: number, cat: Catalogo = EJEMPLO, metodoPago: MetodoPago = 'sin_metodo'): PedidoVista[] =>
   c.partidas.map((p, i) => {
     const folio = folioPedido(primerConsecutivo + i);
     return vistaPedido({
@@ -570,15 +624,25 @@ const pedidosDe = (c: Cotizacion, primerConsecutivo: number, cat: Catalogo = EJE
       cotizacionId: c.id,
       ...pedidoDePartida(p, c.descuento),
       estado: 'programado',
-      cobro: 'por_facturar',
+      cobro: 'por_cobrar',
+      metodoPago,
     }, cat);
   });
 
-/** Los de las cotizaciones demo que ya son pedido, de la más antigua a la más reciente; los de antes del 5/11, entregados. */
+/**
+ * Los de las cotizaciones demo que ya son pedido, de la más antigua a la más reciente, todos por cobrar; los de antes
+ * del 5/11, entregados (y confirmados por planta) y el del Puente Periférico, ya enviado a planta.
+ */
 const PEDIDOS: PedidoVista[] = COTIZACIONES.filter((c) => c.estado === 'pedido')
   .reverse()
   .flatMap((c, i) => pedidosDe(c, 151 + i))
-  .map((p): PedidoVista => (p.fechaHoraEntrega < '2026-11-05' ? { ...p, estado: 'entregado', cobro: 'facturado' } : p))
+  .map((p): PedidoVista =>
+    p.fechaHoraEntrega < '2026-11-05'
+      ? { ...p, estado: 'entregado', estatusPlanta: 'confirmado', metodoPago: 'transferencia' }
+      : p.cotizacionId === 'EPI-PRES-ESC-26089'
+        ? { ...p, estatusPlanta: 'enviado' }
+        : p,
+  )
   .reverse();
 
 /** Clave de cada registro en el historial (HistorialService). */
@@ -586,7 +650,132 @@ export const registro = {
   cotizacion: (id: string) => 'cotizacion:' + id,
   pedido: (folio: string) => 'pedido:' + folio,
   cliente: (id: string) => 'cliente:' + id,
+  producto: (id: string) => 'producto:' + id,
+  lista: (id: string) => 'lista-precios:' + id,
+  programa: (id: string) => 'programa:' + id,
 };
+
+/** Lo que se captura al dar de alta un producto. */
+export interface NuevoProducto {
+  tipo: TipoProducto;
+  configuracion?: ConfigConcreto;
+  equipo?: EquipoServicio;
+  codigo: string;
+  nombre: string;
+  unidad: string;
+  precio: number;
+  descripcion: string;
+  existencias?: number;
+  minimoExistencias?: number;
+}
+
+/** "CON-", "SRV-" o "GEN-" + el nombre en mayúsculas sin acentos (p. ej. GEN-SACO-CEMENTO-50KG), sin repetirse. */
+export function codigoSugerido(tipo: TipoProducto, nombre: string, usados: string[]): string {
+  const prefijo = { concreto: 'CON', servicio: 'SRV', general: 'GEN' }[tipo];
+  const base = `${prefijo}-${normalizar(nombre).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'PRODUCTO'}`;
+  let codigo = base;
+  for (let n = 2; usados.includes(codigo); n++) codigo = `${base}-${n}`;
+  return codigo;
+}
+
+/**
+ * Opciones fijas de un concreto, de la lista PRODUCTOS-ESC-XPJ de planta: f´c (o MR), edad (N28 normal; RR, resistencia
+ * rápida a 3, 7 o 14 días), revenimiento en cm y tipo de suministro. Cada una admite "Personalizado".
+ */
+export const OPCIONES_CONCRETO = {
+  fc: ['50', '100', '150', '200', '250', '300', '350', 'MR42', 'MR45', 'MR48'],
+  edad: [
+    { id: '28', nombre: '28 días', nota: 'Normal' },
+    { id: '3', nombre: '3 días', nota: 'Rápida' },
+    { id: '7', nombre: '7 días', nota: 'Rápida' },
+    { id: '14', nombre: '14 días', nota: 'Rápida' },
+  ],
+  rev: ['10', '14', '16', '18'],
+  suministro: [
+    { id: 'TD', nombre: 'Tiro directo' },
+    { id: 'BP', nombre: 'Bomba' },
+  ],
+} as const;
+
+/** Tipos de equipo que se rentan como servicio. */
+export const TIPOS_EQUIPO = {
+  revolvedor: 'Camión revolvedor',
+  'bomba-pluma': 'Bomba pluma',
+  'bomba-estacionaria': 'Bomba estacionaria',
+  aplanadora: 'Aplanadora',
+  vibrador: 'Vibrador',
+  allanadora: 'Allanadora',
+} as const;
+export type TipoEquipo = keyof typeof TIPOS_EQUIPO;
+
+/** Una unidad de la empresa (número económico) que puede atender un servicio de renta. */
+export interface Equipo {
+  id: string;
+  tipo: TipoEquipo;
+  numero: string;
+  descripcion: string;
+}
+
+// shortcut: equipos fijos de demostración; cuando Flota los administre, leerlos de ahí.
+export const EQUIPOS: Equipo[] = [
+  ...['ECO-09', 'ECO-11', 'ECO-14', 'ECO-17', 'ECO-21', 'ECO-23'].map((numero) => ({
+    id: numero.toLowerCase(),
+    tipo: 'revolvedor' as const,
+    numero,
+    descripcion: 'Olla de 7 m³',
+  })),
+  { id: 'bp-01', tipo: 'bomba-pluma', numero: 'BP-01', descripcion: 'Pluma de 36 m' },
+  { id: 'bp-02', tipo: 'bomba-pluma', numero: 'BP-02', descripcion: 'Pluma de 42 m' },
+  { id: 'be-01', tipo: 'bomba-estacionaria', numero: 'BE-01', descripcion: 'Estacionaria con 60 m de tubería' },
+  { id: 'ap-01', tipo: 'aplanadora', numero: 'AP-01', descripcion: 'Rodillo vibratorio' },
+  { id: 'vb-01', tipo: 'vibrador', numero: 'VB-01', descripcion: 'Vibrador de inmersión' },
+  { id: 'vb-02', tipo: 'vibrador', numero: 'VB-02', descripcion: 'Vibrador de inmersión' },
+  { id: 'al-01', tipo: 'allanadora', numero: 'AL-01', descripcion: 'Allanadora de 36 pulgadas' },
+];
+
+/** "Camión revolvedor · ECO-09, ECO-11" o "… · sin conectar". */
+export function textoEquipo(e: EquipoServicio): string {
+  const tipo = TIPOS_EQUIPO[e.tipo as TipoEquipo] ?? 'Otro equipo';
+  const unidades = e.unidades.map((id) => EQUIPOS.find((x) => x.id === id)?.numero ?? id);
+  return `${tipo} · ${unidades.length ? unidades.join(', ') : 'sin conectar'}`;
+}
+
+const edadCodigo = (dias: string) => (dias === '28' ? 'N28' : `RR${dias}`);
+
+/** Código interno como en la lista de planta: "200 - N28 - 14 - BP"; vacío si falta algo. */
+export function codigoConcreto(c: ConfigConcreto): string {
+  const partes = [c.fc, c.edad && edadCodigo(c.edad), c.rev, c.suministro].map((x) => x.trim().toUpperCase());
+  return partes.every(Boolean) ? partes.join(' - ') : '';
+}
+
+/** Mismo código con su número de variante: "200 - N28 - 14 - BP - 2", el primero libre. */
+export function codigoVariante(base: string, usados: string[]): string {
+  let n = 2;
+  while (usados.includes(`${base} - ${n}`)) n++;
+  return `${base} - ${n}`;
+}
+
+/** "Concreto f´c 200 kg/cm² · 28 días · rev. 14 cm · Bomba" */
+export function nombreConcreto(c: ConfigConcreto): string {
+  const fc = c.fc.trim().toUpperCase();
+  const resistencia = fc.startsWith('MR') ? `Concreto MR ${fc.slice(2)}` : `Concreto f´c ${fc}`;
+  const edad = c.edad === '28' ? '28 días' : `RR ${c.edad} días`;
+  const suministro = OPCIONES_CONCRETO.suministro.find((s) => s.id === c.suministro)?.nombre ?? c.suministro.toUpperCase();
+  return `${resistencia} kg/cm² · ${edad} · rev. ${c.rev} cm · ${suministro}`;
+}
+
+/** Lo que se edita de un producto (el tipo y las existencias no: las existencias van con entradas y salidas). */
+export type CambiosProducto = Pick<
+  ProductoTarifa,
+  'codigo' | 'nombre' | 'unidad' | 'precio' | 'descripcion' | 'minimoExistencias' | 'configuracion' | 'equipo'
+>;
+
+/** Los del tarifario: su precio y su unidad los usa el cotizador, así que aquí no se cambian. */
+export const delTarifario = (p: ProductoTarifa) => PRODUCTOS.some((x) => x.id === p.id);
+
+/** Productos generales con existencias en su mínimo o por debajo. */
+export const existenciasBajas = (p: ProductoTarifa) =>
+  p.existencias != null && p.minimoExistencias != null && p.existencias <= p.minimoExistencias;
 
 const nombreEstado = (e: EstadoCotizacion) => ESTADOS_COTIZACION[e].nombre;
 const cambioEstado = (antes: EstadoCotizacion, despues: EstadoCotizacion): Cambio[] =>
@@ -644,8 +833,14 @@ function historialDemo(): EventoHistorial[] {
 
   for (const c of COTIZACIONES) {
     const r = registro.cotizacion(c.id);
-    agregar(r, c.fecha, c.vendedorNombre, 'Cotización creada', { detalles: [`${c.obrasNombre} · neto $${pesos(c.total)}`] });
-    if (c.estado === 'borrador') continue;
+    const detalles = [`${c.obrasNombre} · neto $${pesos(c.total)}`];
+    if (c.origen === 'portal') {
+      const contacto = CLIENTES.find((x) => x.id === c.clienteId)!.contacto;
+      agregar(r, c.fecha, `${contacto.nombre} ${contacto.apellidos}`.trim(), 'Recibida desde el portal de clientes', { detalles });
+    } else {
+      agregar(r, c.fecha, c.vendedorNombre, 'Cotización creada', { detalles });
+    }
+    if (c.estado === 'borrador' || c.estado === 'recibida') continue;
     agregar(r, masMinutos(c.fecha, 45), c.vendedorNombre, 'Cotización enviada al cliente', {
       cambios: cambioEstado('borrador', 'enviada'),
     });
@@ -668,10 +863,7 @@ function historialDemo(): EventoHistorial[] {
     agregar(r, masMinutos(c.fecha, 24 * 60), c.vendedorNombre, `Orden de venta creada desde la cotización ${c.folio}`);
     if (p.estado === 'entregado') {
       agregar(r, masMinutos(p.fechaHoraEntrega, 180), 'Luis Canché', 'Entrega completada', {
-        cambios: [
-          { campo: 'Estado', antes: ESTADO_PEDIDO.programado, despues: ESTADO_PEDIDO.entregado },
-          { campo: 'Cobro', antes: ESTADO_COBRO.por_facturar, despues: ESTADO_COBRO.facturado },
-        ],
+        cambios: [{ campo: 'Estado', antes: ESTADO_PEDIDO.programado, despues: ESTADO_PEDIDO.entregado }],
       });
     }
   }
@@ -697,6 +889,8 @@ export class VentasService {
   /** El más reciente primero. */
   readonly pedidos = signal<PedidoVista[]>(PEDIDOS);
   readonly clientes = signal<Cliente[]>(CLIENTES);
+  /** El tarifario y los productos que se dan de alta (concreto, servicios y productos generales). */
+  readonly productos = signal<ProductoTarifa[]>(PRODUCTOS);
   /** Las obras de los clientes; crece con los lugares de entrega que se dan de alta al cotizar. */
   readonly obras = signal<Obra[]>(OBRAS);
   private consecutivo = 150 + PEDIDOS.length;
@@ -724,7 +918,8 @@ export class VentasService {
   /** A la cuenta del portal si el cliente está conectado; si no, al correo que se indicó. */
   enviar(id: string, correo: string, portal: boolean): void {
     const antes = this.buscar(id)!;
-    this.cambiar(id, (c) => ({ ...c, estado: 'enviada', envio: { correo, portal, fecha: new Date().toISOString() } }));
+    // Lo que se envía, el cliente lo ve.
+    this.cambiar(id, (c) => ({ ...c, estado: 'enviada', ocultaAlCliente: undefined, envio: { correo, portal, fecha: new Date().toISOString() } }));
     this.historial.registrar(registro.cotizacion(id), {
       texto: portal ? `Enviada al portal de ${antes.clienteNombre} (${correo})` : `Enviada por correo a ${correo}`,
       cambios: cambioEstado(antes.estado, 'enviada'),
@@ -735,10 +930,10 @@ export class VentasService {
    * Como "Confirmar" en Odoo: la cotización pasa a pedido y genera un pedido por partida (cada entrega es una orden de
    * venta, como al aceptarla en el portal). Devuelve los pedidos nuevos; si ya no se podía confirmar, ninguno.
    */
-  confirmar(id: string): PedidoVista[] {
+  confirmar(id: string, metodoPago: MetodoPago = 'sin_metodo'): PedidoVista[] {
     const c = this.buscar(id);
     if (!c || !modificable(c)) return [];
-    const nuevos = pedidosDe(c, this.consecutivo + 1, this.catalogo());
+    const nuevos = pedidosDe(c, this.consecutivo + 1, this.catalogo(), metodoPago);
     this.consecutivo += nuevos.length;
     this.pedidos.update((lista) => [...nuevos, ...lista]);
     this.cambiar(id, (x) => ({ ...x, estado: 'pedido' }));
@@ -844,21 +1039,40 @@ export class VentasService {
       n.plantaId,
       fecha,
     );
-    const c = vista({ ...n, id: folio, folio, fecha, serie: folio, revision: 0, vendedorId, estado: 'borrador' }, this.catalogo());
+    const { baseId, ...datos } = n;
+    const c = vista(
+      { ...datos, ...(baseId ? { baseId } : {}), id: folio, folio, fecha, serie: folio, revision: 0, vendedorId, estado: 'borrador' },
+      this.catalogo(),
+    );
     this.cotizaciones.update((lista) => [c, ...lista]);
+    const base = baseId ? this.buscar(baseId) : undefined;
     this.historial.registrar(registro.cotizacion(c.id), {
-      texto: 'Cotización creada',
+      texto: base ? `Cotización creada a partir de ${base.folio}` : 'Cotización creada',
       detalles: [`${c.partidas.length === 1 ? '1 producto' : `${c.partidas.length} productos`}, neto $${pesos(c.total)}`],
     });
+    if (base) {
+      this.historial.registrar(registro.cotizacion(base.id), {
+        texto: `Se creó ${c.folio} a partir de esta`,
+        detalles: [`Neto $${pesos(base.total)} → $${pesos(c.total)}`],
+      });
+    }
     return c;
+  }
+
+  /** Que el cliente la vea o no en el portal (no cambia su estado). */
+  cambiarVisibilidad(id: string, visible: boolean): void {
+    this.cambiar(id, (c) => ({ ...c, ocultaAlCliente: visible ? undefined : true }));
+    this.historial.registrar(registro.cotizacion(id), {
+      texto: visible ? 'Visible otra vez para el cliente en el portal' : 'Oculta al cliente: ya no la ve en el portal',
+    });
   }
 
   /**
    * Orden de venta directa, sin pasar por cotización: una por producto, como al confirmar. Con `conCotizacion`, además
    * queda su cotización (creada y confirmada) como respaldo; sin ella, cada orden guarda su partida. Devuelve las órdenes.
    */
-  crearOrdenes(n: NuevaCotizacion, vendedorId: string, conCotizacion: boolean): PedidoVista[] {
-    if (conCotizacion) return this.confirmar(this.crear(n, vendedorId).id);
+  crearOrdenes(n: NuevaCotizacion, vendedorId: string, conCotizacion: boolean, metodoPago: MetodoPago = 'sin_metodo'): PedidoVista[] {
+    if (conCotizacion) return this.confirmar(this.crear(n, vendedorId).id, metodoPago);
     const nuevos = n.partidas.map((p, i) => {
       const folio = folioPedido(this.consecutivo + 1 + i);
       return vistaPedido(
@@ -869,7 +1083,8 @@ export class VentasService {
           plantaId: n.plantaId,
           ...pedidoDePartida(p, n.descuento),
           estado: 'programado',
-          cobro: 'por_facturar',
+          cobro: 'por_cobrar',
+          metodoPago,
           partida: p,
           ...(n.descuento ? { descuento: n.descuento } : {}),
         },
@@ -885,6 +1100,199 @@ export class VentasService {
       });
     }
     return nuevos;
+  }
+
+  /** Alta de un producto: concreto, servicio o producto general (con sus existencias). Queda en su historial. */
+  crearProducto(n: NuevoProducto): ProductoTarifa {
+    const categoria = n.tipo;
+    const general = n.tipo === 'general';
+    const producto: ProductoTarifa = {
+      id: 'p-' + crypto.randomUUID().slice(0, 8),
+      codigo: n.codigo.trim().toUpperCase(),
+      nombre: n.nombre.trim(),
+      categoria,
+      unidad: n.unidad,
+      precio: n.precio,
+      descripcion: n.descripcion.trim(),
+      ...(general ? { existencias: n.existencias ?? 0, minimoExistencias: n.minimoExistencias ?? 0 } : {}),
+      ...(n.configuracion ? { configuracion: n.configuracion } : {}),
+      ...(n.equipo ? { equipo: n.equipo } : {}),
+    };
+    this.productos.update((lista) => [...lista, producto]);
+    this.historial.registrar(registro.producto(producto.id), {
+      texto: 'Producto dado de alta',
+      detalles: [
+        `${TIPOS_PRODUCTO[n.tipo]} · $${pesos(producto.precio)} por ${producto.unidad.toLowerCase()}`,
+        ...(general ? [`Existencias iniciales: ${producto.existencias} · aviso con ${producto.minimoExistencias} o menos`] : []),
+        ...(producto.equipo ? [`Renta de equipo: ${textoEquipo(producto.equipo)}`] : []),
+      ],
+    });
+    return producto;
+  }
+
+  /**
+   * Editar un producto: nombre, descripción, el equipo de los servicios de renta y, si no es del tarifario, código
+   * (lo arma el formulario), configuración, unidad y precio; de los generales, el mínimo de existencias. Queda en su
+   * historial con lo que cambió (si nada cambió, no se anota).
+   */
+  editarProducto(id: string, c: CambiosProducto): void {
+    const antes = this.productos().find((p) => p.id === id);
+    if (!antes) return;
+    const fijo = delTarifario(antes);
+    const { equipo: _equipo, ...resto } = antes;
+    const despues: ProductoTarifa = {
+      ...resto,
+      nombre: c.nombre.trim(),
+      descripcion: c.descripcion.trim(),
+      ...(fijo ? {} : { codigo: c.codigo.trim().toUpperCase(), unidad: c.unidad, precio: c.precio }),
+      ...(!fijo && c.configuracion ? { configuracion: c.configuracion } : {}),
+      ...(c.equipo ? { equipo: c.equipo } : {}),
+      ...(antes.existencias != null && c.minimoExistencias != null ? { minimoExistencias: c.minimoExistencias } : {}),
+    };
+    const cambios: Cambio[] = [];
+    const campo = (nombre: string, a: string, d: string) => a !== d && cambios.push({ campo: nombre, antes: a, despues: d });
+    campo('Código', antes.codigo, despues.codigo);
+    campo('Nombre', antes.nombre, despues.nombre);
+    campo('Unidad', antes.unidad, despues.unidad);
+    campo('Precio de lista', '$' + pesos(antes.precio), '$' + pesos(despues.precio));
+    campo('Descripción', antes.descripcion || '—', despues.descripcion || '—');
+    campo('Aviso de existencias', String(antes.minimoExistencias ?? '—'), String(despues.minimoExistencias ?? '—'));
+    const equipo = (p: ProductoTarifa) => (p.equipo ? textoEquipo(p.equipo) : 'No es renta de equipo');
+    campo('Renta de equipo', equipo(antes), equipo(despues));
+    if (!cambios.length) return;
+    this.productos.update((lista) => lista.map((p) => (p.id === id ? despues : p)));
+    this.historial.registrar(registro.producto(id), { texto: 'Producto editado', cambios });
+  }
+
+  /** Entrada (compra, devolución) o salida (venta, merma) de un producto general; la nota dice por qué. */
+  moverExistencias(id: string, movimiento: 'entrada' | 'salida', cantidad: number, nota: string): void {
+    const antes = this.productos().find((p) => p.id === id);
+    if (!antes || antes.existencias == null) return;
+    const despues = antes.existencias + (movimiento === 'entrada' ? cantidad : -cantidad);
+    this.productos.update((lista) => lista.map((p) => (p.id === id ? { ...p, existencias: despues } : p)));
+    this.historial.registrar(registro.producto(id), {
+      texto: movimiento === 'entrada' ? `Entrada de ${cantidad} ${antes.unidad.toLowerCase()}` : `Salida de ${cantidad} ${antes.unidad.toLowerCase()}`,
+      cambios: [{ campo: 'Existencias', antes: String(antes.existencias), despues: String(despues) }],
+      ...(nota.trim() ? { detalles: [nota.trim()] } : {}),
+    });
+  }
+
+  /**
+   * Dónde se usa un producto: las cotizaciones (de la más reciente) y las órdenes que lo llevan, y los m³ de esas
+   * cotizaciones (sin las canceladas).
+   */
+  usoDe(productoId: string): { cotizaciones: CotizacionVista[]; pedidos: PedidoVista[]; m3: number } {
+    const cotizaciones = this.cotizaciones()
+      .filter((c) => c.partidas.some((p) => partidaUsa(p, productoId)))
+      .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha));
+    const pedidos = this.pedidos().filter((p) => {
+      const partida = this.partidaDe(p).partida;
+      return !!partida && partidaUsa(partida, productoId);
+    });
+    const m3 = cotizaciones
+      .filter((c) => c.estado !== 'cancelada')
+      .flatMap((c) => c.partidas.filter((p) => partidaUsa(p, productoId)))
+      .reduce((t, p) => t + p.volumenM3, 0);
+    return { cotizaciones, pedidos, m3 };
+  }
+
+  /** La partida de la que sale la orden: la suya (directa o ya editada) o la de su cotización, con su descuento. */
+  partidaDe(p: Pedido): { partida?: PartidaCotizacion; descuento?: number } {
+    const cot = this.cotizaciones().find((x) => x.id === p.cotizacionId);
+    return { partida: p.partida ?? cot?.partidas.find((x) => x.id === p.partidaId), descuento: p.descuento ?? cot?.descuento };
+  }
+
+  /**
+   * Editar una orden: entrega, volumen, precio especial y método de pago. Guarda su propia partida (la cotización no
+   * cambia) y recalcula el importe. Si ya estaba con planta y cambia la entrega o el volumen, se reenvía a planta para
+   * que lo confirme. Queda en su historial con lo que cambió.
+   */
+  editarPedido(id: string, c: CambiosPedido): void {
+    const antes = this.pedidos().find((p) => p.id === id);
+    if (!antes || !pedidoEditable(antes)) return;
+    const { partida: base, descuento } = this.partidaDe(antes);
+    const partida = base ? { ...base, volumenM3: c.volumenM3, entrega: c.fechaHoraEntrega, precioM3: c.precioM3 } : undefined;
+    const importe = partida ? totales(lineasPartida(partida), descuento).neto : antes.importe;
+    const cambiaEntrega = c.fechaHoraEntrega !== antes.fechaHoraEntrega || c.volumenM3 !== antes.volumenM3;
+    const conPlanta = antes.estatusPlanta === 'enviado' || antes.estatusPlanta === 'confirmado' || antes.estatusPlanta === 'actualizacion';
+    const reenviar = cambiaEntrega && conPlanta;
+
+    const cambios: Cambio[] = [];
+    const campo = (nombre: string, a: string, d: string) => a !== d && cambios.push({ campo: nombre, antes: a, despues: d });
+    campo('Entrega', fechaHoraCorta(antes.fechaHoraEntrega), fechaHoraCorta(c.fechaHoraEntrega));
+    campo('Volumen', `${antes.volumenM3} m³`, `${c.volumenM3} m³`);
+    if (base) campo('Precio del concreto', '$' + pesos(base.precioM3 ?? precioConcreto(base)), '$' + pesos(c.precioM3 ?? precioConcreto(base)));
+    campo('Método de pago', METODO_PAGO[antes.metodoPago ?? 'sin_metodo'], METODO_PAGO[c.metodoPago]);
+    campo('Importe', '$' + pesos(antes.importe), '$' + pesos(importe));
+    if (reenviar) campo('Estatus planta', ESTATUS_PLANTA[antes.estatusPlanta!], ESTATUS_PLANTA.enviado);
+    if (!cambios.length) return;
+
+    this.cambiarPedido(id, {
+      fechaHoraEntrega: c.fechaHoraEntrega,
+      volumenM3: c.volumenM3,
+      metodoPago: c.metodoPago,
+      importe,
+      ...(partida ? { partida, ...(descuento ? { descuento } : {}) } : {}),
+      ...(reenviar ? { estatusPlanta: 'enviado' as const, solicitudPlanta: undefined } : {}),
+    });
+    this.historial.registrar(registro.pedido(antes.folio), {
+      texto: 'Orden editada',
+      cambios,
+      ...(reenviar ? { detalles: [`Se reenvió a ${antes.plantaNombre} para que confirme los cambios.`] } : {}),
+    });
+  }
+
+  /** Cobro de una orden (Por cobrar → Pagado, Crédito…); queda en su historial. */
+  cambiarCobro(id: string, cobro: EstadoCobro): void {
+    const antes = this.pedidos().find((p) => p.id === id);
+    if (!antes || antes.cobro === cobro) return;
+    this.cambiarPedido(id, { cobro });
+    this.historial.registrar(registro.pedido(antes.folio), {
+      texto: 'Cobro actualizado',
+      cambios: [{ campo: 'Cobro', antes: ESTADO_COBRO[antes.cobro], despues: ESTADO_COBRO[cobro] }],
+    });
+  }
+
+  cambiarMetodoPago(id: string, metodoPago: MetodoPago): void {
+    const antes = this.pedidos().find((p) => p.id === id);
+    if (!antes || antes.metodoPago === metodoPago) return;
+    this.cambiarPedido(id, { metodoPago });
+    this.historial.registrar(registro.pedido(antes.folio), {
+      texto: 'Método de pago actualizado',
+      cambios: [{ campo: 'Método de pago', antes: METODO_PAGO[antes.metodoPago ?? 'sin_metodo'], despues: METODO_PAGO[metodoPago] }],
+    });
+  }
+
+  /**
+   * El requerimiento a la planta y su respuesta: enviar (o reenviar), confirmar, pedir actualización (nueva fecha de
+   * entrega, ISO con offset, y nota) o rechazar (motivo). Aceptar la actualización cambia la entrega y la confirma.
+   */
+  estatusPlanta(id: string, estatus: EstatusPlanta, solicitud?: { fecha?: string; nota: string }): void {
+    const antes = this.pedidos().find((p) => p.id === id);
+    if (!antes) return;
+    const cambios: Cambio[] = [{ campo: 'Estatus planta', antes: ESTATUS_PLANTA[antes.estatusPlanta ?? 'no_enviado'], despues: ESTATUS_PLANTA[estatus] }];
+    const aceptaFecha = estatus === 'confirmado' && antes.estatusPlanta === 'actualizacion' && antes.solicitudPlanta?.fecha;
+    if (aceptaFecha) cambios.push({ campo: 'Entrega', antes: fechaHoraCorta(antes.fechaHoraEntrega), despues: fechaHoraCorta(aceptaFecha) });
+    this.cambiarPedido(id, {
+      estatusPlanta: estatus,
+      solicitudPlanta: solicitud,
+      ...(aceptaFecha ? { fechaHoraEntrega: aceptaFecha } : {}),
+    });
+    const texto = {
+      no_enviado: 'Requerimiento retirado de planta',
+      enviado: antes.estatusPlanta === 'no_enviado' ? `Requerimiento enviado a ${antes.plantaNombre}` : `Requerimiento reenviado a ${antes.plantaNombre}`,
+      confirmado: aceptaFecha ? 'Nueva fecha aceptada: planta confirmó el pedido' : `${antes.plantaNombre} confirmó el pedido`,
+      actualizacion: `${antes.plantaNombre} pide actualizar el pedido`,
+      rechazada: `${antes.plantaNombre} rechazó el pedido`,
+    }[estatus];
+    const detalles = solicitud
+      ? [solicitud.fecha ? `Nueva entrega propuesta: ${fechaHoraCorta(solicitud.fecha)}` : '', solicitud.nota].filter(Boolean)
+      : undefined;
+    this.historial.registrar(registro.pedido(antes.folio), { texto, cambios, ...(detalles ? { detalles } : {}) });
+  }
+
+  private cambiarPedido(id: string, cambio: Partial<PedidoVista>): void {
+    this.pedidos.update((lista) => lista.map((p) => (p.id === id ? { ...p, ...cambio } : p)));
   }
 
   pedidosDe(cotizacionId: string): PedidoVista[] {

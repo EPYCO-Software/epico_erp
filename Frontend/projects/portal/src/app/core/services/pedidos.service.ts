@@ -19,7 +19,7 @@ const PEDIDOS_DEMO: Pedido[] = [
   {
     id: 'pe-demo-2', folio: 'PED-26-0137', clienteId: 'c1', plantaId: 'ESC', obraId: 'o2',
     producto: 'Cimentación · f´c 200 kg/cm² con bombeo', volumenM3: 22, fechaHoraEntrega: '2026-10-29T08:00:00-06:00', estado: 'entregado',
-    importe: 107184, cobro: 'en_facturacion',
+    importe: 107184, cobro: 'por_facturar',
   },
   {
     id: 'pe-demo-3', folio: 'PED-26-0133', clienteId: 'c1', plantaId: 'CZM', obraId: 'o1',
@@ -91,7 +91,7 @@ export class PedidosService {
       cotizacionId: c.id,
       ...pedidoDePartida(p, c.descuento),
       estado: 'programado',
-      cobro: 'por_facturar',
+      cobro: 'por_cobrar',
     }));
     this._pedidos.update((p) => [...p, ...nuevos]);
     return nuevos;

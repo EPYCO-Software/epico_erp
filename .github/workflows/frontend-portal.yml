@@ -1,0 +1,30 @@
+name: Frontend Portal
+
+# Solo corre si cambia el portal o algo compartido (ui, dependencias, Dockerfile…).
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Frontend/projects/portal/**'
+      - 'Frontend/projects/ui/**'
+      - 'Frontend/package.json'
+      - 'Frontend/package-lock.json'
+      - 'Frontend/angular.json'
+      - 'Frontend/tsconfig.json'
+      - 'Frontend/Dockerfile'
+      - 'Frontend/docker/**'
+      - '.github/workflows/frontend-portal.yml'
+      - '.github/workflows/frontend-app.yml'
+  workflow_dispatch:
+
+jobs:
+  portal:
+    uses: ./.github/workflows/frontend-app.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      app: portal
+      service_dev: epyco-cliente-dev
+      service_prod: epyco-cliente
+    secrets: inherit

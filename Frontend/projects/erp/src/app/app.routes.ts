@@ -100,6 +100,13 @@ export const routes: Routes = [
             loadComponent: () => import('./features/ventas/cotizaciones'),
           },
           {
+            // La misma lista, abierta en las que llegaron del portal (data.recibidas llega como input).
+            path: 'cotizaciones/recibidas',
+            title: 'Cotizaciones recibidas · EPICO ERP',
+            data: { recibidas: true },
+            loadComponent: () => import('./features/ventas/cotizaciones'),
+          },
+          {
             path: 'cotizaciones/nueva',
             title: 'Nueva cotización · EPICO ERP',
             loadComponent: () => import('./features/ventas/nueva-cotizacion'),
@@ -130,6 +137,95 @@ export const routes: Routes = [
             loadComponent: () => import('./features/ventas/pedido'),
           },
           {
+            path: 'productos',
+            title: 'Productos · EPICO ERP',
+            loadComponent: () => import('./features/ventas/productos'),
+          },
+          {
+            path: 'productos/nuevo',
+            title: 'Nuevo producto · EPICO ERP',
+            loadComponent: () => import('./features/ventas/nuevo-producto'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
+            path: 'productos/:id',
+            // El nombre vigente (también los dados de alta), sin cargar Ventas con la app: se importa al abrirla.
+            title: (ruta) => {
+              const injector = inject(Injector);
+              return import('./features/ventas/datos').then(
+                (m) => `${injector.get(m.VentasService).productos().find((p) => p.id === ruta.paramMap.get('id'))?.nombre ?? 'Producto'} · EPICO ERP`,
+              );
+            },
+            loadComponent: () => import('./features/ventas/producto'),
+          },
+          {
+            path: 'listas-de-precios',
+            title: 'Listas de precios · EPICO ERP',
+            loadComponent: () => import('./features/ventas/listas-precios'),
+          },
+          {
+            path: 'listas-de-precios/nueva',
+            title: 'Nueva lista de precios · EPICO ERP',
+            loadComponent: () => import('./features/ventas/nueva-lista'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
+            path: 'listas-de-precios/:id',
+            title: (ruta) => {
+              const injector = inject(Injector);
+              return import('./features/ventas/precios').then(
+                (m) => `${injector.get(m.ListasPreciosService).lista(ruta.paramMap.get('id') ?? '')?.nombre ?? 'Lista de precios'} · EPICO ERP`,
+              );
+            },
+            loadComponent: () => import('./features/ventas/lista-precios'),
+          },
+          {
+            path: 'descuentos-y-lealtad',
+            title: 'Descuentos y programas de lealtad · EPICO ERP',
+            loadComponent: () => import('./features/ventas/programas'),
+          },
+          {
+            path: 'descuentos-y-lealtad/nuevo',
+            title: 'Nuevo programa · EPICO ERP',
+            loadComponent: () => import('./features/ventas/nuevo-programa'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
+            path: 'descuentos-y-lealtad/:id',
+            title: (ruta) => {
+              const injector = inject(Injector);
+              return import('./features/ventas/lealtad').then(
+                (m) => `${injector.get(m.ProgramasService).programa(ruta.paramMap.get('id') ?? '')?.nombre ?? 'Programa'} · EPICO ERP`,
+              );
+            },
+            loadComponent: () => import('./features/ventas/programa'),
+          },
+          {
+            path: 'reportes/ventas',
+            title: 'Análisis de ventas · EPICO ERP',
+            loadComponent: () => import('./features/ventas/reporte-ventas'),
+          },
+          {
+            path: 'reportes/vendedores',
+            title: 'Reporte de vendedores · EPICO ERP',
+            loadComponent: () => import('./features/ventas/reporte-vendedores'),
+          },
+          {
+            path: 'reportes/productos',
+            title: 'Reporte de productos · EPICO ERP',
+            loadComponent: () => import('./features/ventas/reporte-productos'),
+          },
+          {
+            path: 'reportes/clientes',
+            title: 'Reporte de clientes · EPICO ERP',
+            loadComponent: () => import('./features/ventas/reporte-clientes'),
+          },
+          {
+            path: 'por-cobrar',
+            title: 'Por cobrar · EPICO ERP',
+            loadComponent: () => import('./features/ventas/por-cobrar'),
+          },
+          {
             path: 'clientes',
             title: 'Clientes · EPICO ERP',
             loadComponent: () => import('./features/ventas/clientes'),
@@ -145,7 +241,7 @@ export const routes: Routes = [
             },
             loadComponent: () => import('./features/ventas/cliente'),
           },
-          ...menuEnConstruccion('ventas', ['/ventas/cotizaciones', '/ventas/ordenes', '/ventas/clientes']),
+          ...menuEnConstruccion('ventas', ['/ventas/cotizaciones', '/ventas/cotizaciones/recibidas', '/ventas/ordenes', '/ventas/por-cobrar', '/ventas/productos', '/ventas/listas-de-precios', '/ventas/descuentos-y-lealtad', '/ventas/reportes/ventas', '/ventas/reportes/vendedores', '/ventas/reportes/productos', '/ventas/reportes/clientes', '/ventas/clientes']),
         ],
       },
       {

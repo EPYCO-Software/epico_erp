@@ -1,5 +1,5 @@
 import { PartidaCotizacion } from '../models/cotizacion';
-import { RESISTENCIAS, lineasPartida, pedidoDePartida, totalesCotizacion } from './formato';
+import { PRODUCTOS, RESISTENCIAS, lineasPartida, partidaUsa, pedidoDePartida, precioConcreto, totalesCotizacion } from './formato';
 
 const partida: PartidaCotizacion = {
   id: 'p1',
@@ -62,5 +62,22 @@ describe('formato de la cotización', () => {
       fechaHoraEntrega: '2026-11-20T08:00:00-06:00',
       importe: 41760,
     });
+  });
+
+  it('el catálogo de Productos sale del mismo tarifario: precios iguales a los de la cotización', () => {
+    const precio = (id: string) => PRODUCTOS.find((p) => p.id === id)!.precio;
+    expect(precio('fc-200')).toBe(precioConcreto(partida));
+    expect(precio('servicio-bomba-estacionaria')).toBe(lineasPartida(partida)[1].precio);
+    expect(PRODUCTOS.find((p) => p.id === 'servicio-bomba-estacionaria')!.minimo).toBe(10);
+    expect(new Set(PRODUCTOS.map((p) => p.id)).size).toBe(PRODUCTOS.length);
+    expect(PRODUCTOS.filter((p) => p.categoria === 'concreto-fc')).toHaveLength(RESISTENCIAS.fc.length);
+  });
+
+  it('partidaUsa reconoce concreto, servicios y ajustes de una partida', () => {
+    expect(partidaUsa(partida, 'fc-200')).toBe(true);
+    expect(partidaUsa(partida, 'fc-250')).toBe(false);
+    expect(partidaUsa(partida, 'servicio-bomba-estacionaria')).toBe(true);
+    expect(partidaUsa(partida, 'servicio-bomba-pluma')).toBe(false);
+    expect(partidaUsa({ ...partida, especificacion: { ...partida.especificacion, aditivos: ['fibra-sintetica'] } }, 'aditivo-fibra-sintetica')).toBe(true);
   });
 });

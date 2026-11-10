@@ -25,6 +25,8 @@ import { EditorCliente } from './editor-cliente';
  */
 @Component({
   selector: 'app-detalle-cliente',
+  // Bloque: un host en línea con bloques adentro hace que el navegador lo ponga encima de sus botones al apuntar.
+  host: { class: 'block' },
   imports: [EditorCliente, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, RouterLink],
   template: `
     <div class="flex items-start justify-between gap-3">

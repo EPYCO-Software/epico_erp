@@ -18,7 +18,7 @@ describe('PedidosService', () => {
       ['PED-26-0143', 'o1', 'CZM', 'c-demo-1'],
     ]);
     expect(nuevos[1].fechaHoraEntrega).toBe(c.partidas[1].entrega);
-    expect(nuevos[0]).toMatchObject({ cobro: 'por_facturar', importe: 99528 }); // 20 m³ f´c 200 + bombeo + muestreo, con IVA
+    expect(nuevos[0]).toMatchObject({ cobro: 'por_cobrar', importe: 99528 }); // 20 m³ f´c 200 + bombeo + muestreo, con IVA
     expect(s.deCotizacion('c-demo-1')).toHaveLength(2);
   });
 

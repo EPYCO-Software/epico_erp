@@ -1,0 +1,30 @@
+name: Frontend ERP
+
+# Solo corre si cambia el ERP o algo compartido (ui, dependencias, Dockerfile…).
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Frontend/projects/erp/**'
+      - 'Frontend/projects/ui/**'
+      - 'Frontend/package.json'
+      - 'Frontend/package-lock.json'
+      - 'Frontend/angular.json'
+      - 'Frontend/tsconfig.json'
+      - 'Frontend/Dockerfile'
+      - 'Frontend/docker/**'
+      - '.github/workflows/frontend-erp.yml'
+      - '.github/workflows/frontend-app.yml'
+  workflow_dispatch:
+
+jobs:
+  erp:
+    uses: ./.github/workflows/frontend-app.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      app: erp
+      service_dev: epyco-erp-dev
+      service_prod: epyco-erp
+    secrets: inherit

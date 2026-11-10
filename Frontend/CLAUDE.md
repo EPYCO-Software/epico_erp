@@ -188,6 +188,88 @@ projects/
                            sin cotización; cada una guarda su `partida` y `descuento` para sus líneas y su PDF) o
                            "Crear orden y cotización" (la cotización queda de respaldo, confirmada).
                            VentasService.crearOrdenes.
+                           Recibidas: estado "recibida" (origen 'portal': la pidió el cliente; folio EPI-WEB), en
+                           Ventas → Órdenes → Cotizaciones recibidas (/ventas/cotizaciones/recibidas, la misma lista
+                           con el filtro "Recibida"); se editan, envían o confirman como las demás y sus pasos empiezan
+                           en Recibida. El editor (editor-cotizacion.ts) tiene el traslado como al crearla (distancia
+                           por producto, km incluidos y $ por km). El lápiz es un botón dividido: Editar (si ya no se
+                           puede, Nueva basada en esta) y, en su flecha, Nueva basada en esta (/ventas/cotizaciones/
+                           nueva?base=ID: misma hoja con sus datos; queda con `baseId`) y Ocultar/Mostrar al cliente
+                           (`ocultaAlCliente`; enviarla la vuelve visible). "Cotizaciones relacionadas" muestra la base y
+                           las que salieron de ella, con la diferencia de neto (verde si bajó el precio).
+                           Órdenes: cobro (EstadoCobro de ui: Por cobrar, Por facturar, Facturado, Crédito, Pagado,
+                           Finalizado; toda orden nace "por cobrar"), método de pago (Sin método / Transferencia; al
+                           crear una orden es obligatorio, al confirmar una cotización queda "sin método") y estatus
+                           planta (No enviado, Enviado, Confirmado, Actualización, Rechazada). cambiar-cobro.ts: menú de
+                           cobros con segunda confirmación (confirm), solo en la orden abierta (vista previa o vista
+                           completa): nunca desde una lista, para que se vea la orden completa. planta-pedido.ts:
+                           "Enviar requerimiento a planta" y la respuesta de planta (confirmar, pedir actualización con
+                           nueva fecha y nota, rechazar con motivo); aceptar la actualización cambia la entrega y la
+                           confirma. VentasService: cambiarCobro, cambiarMetodoPago, estatusPlanta (con historial).
+                           por-cobrar.ts (Ventas → Por cobrar → Órdenes por cobrar, /ventas/por-cobrar): solo las
+                           órdenes por cobrar, como las demás listas: casillas (una, varias o todas), vista previa con
+                           clic, vista completa con doble clic; la orden que cambia de cobro sale de la lista. En Por
+                           cobrar y Órdenes la columna Planta siempre a la vista (PlantaFila): sin enviar, "Enviar a
+                           planta" sin abrir la orden (en Por cobrar, también las marcadas); enviada, su estatus y
+                           "sin respuesta" si planta no contesta.
+                           Editar orden (editor-pedido.ts, en Órdenes y Por cobrar mientras esté programada): entrega,
+                           volumen, precio especial y método de pago; VentasService.editarPedido guarda su propia
+                           partida (la cotización no cambia), recalcula el importe y, si ya estaba con planta y cambia
+                           la entrega o el volumen, la reenvía a planta. Las listas preguntan antes de dejar una orden
+                           con cambios sin guardar.
+                           Productos (Ventas → Productos → Productos, /ventas/productos y /ventas/productos/:id): el
+                           tarifario de ui (PRODUCTOS: concretos f´c y MR, ajustes de edad, cemento RS y aditivos,
+                           servicios y renta de maquinaria, con código, unidad, precio de lista y mínimo), como las
+                           demás listas: casillas, vista previa (detalle-producto.ts) y vista completa con historial.
+                           Su uso: VentasService.usoDe (cotizaciones y órdenes que lo llevan, m³; partidaUsa de ui).
+                           Los precios son los mismos con que se cotiza: PRECIO_SERVICIO y las tablas de formato.ts.
+                           Tipos de producto (TipoProducto de ui): Concreto (lo principal), Servicio y Producto general
+                           (extras: sacos de cemento…); filtro por tipo en la lista. Alta (/ventas/productos/nuevo,
+                           nuevo-producto.ts) y edición (vista previa y completa) usan el mismo form-producto.ts: el
+                           código no se escribe, se arma solo (servicio/general: codigoSugerido con el nombre; concreto:
+                           f´c, edad, rev. y suministro con las opciones fijas de la lista de planta PRODUCTOS-ESC-XPJ
+                           (OPCIONES_CONCRETO) o Personalizado → codigoConcreto "200 - N28 - 14 - BP" y nombreConcreto;
+                           misma configuración que otro producto = aviso y solo como variante, codigoVariante "… - 2").
+                           Descripción y unidad obligatorias (UNIDADES_PRODUCTO). Servicios: renta de equipo
+                           (EquipoServicio): tipo (TIPOS_EQUIPO) y unidades conectadas de EQUIPOS, o "no conectar por
+                           ahora"; shortcut: EQUIPOS es fijo de demo hasta que Flota lo administre. Generales:
+                           existencias y mínimo, aviso "Pocas existencias", entradas/salidas en su detalle
+                           (moverExistencias). Del tarifario (delTarifario) solo se editan nombre, descripción y equipo:
+                           código, unidad y precio los usa el cotizador. El tipo no se edita. Resumen "Así quedará".
+                           shortcut: los productos dados de alta aún no se agregan a cotizaciones u órdenes.
+                           Listas de precios (/ventas/listas-de-precios, listas-precios.ts; precios.ts con
+                           ListasPreciosService): como en Odoo, varias listas con nombre, moneda (MXN/USD) y plantas
+                           (ninguna = todas; lo común, una por planta). Nueva (nueva-lista.ts) y Editar usan
+                           editor-lista.ts; detalle-lista.ts (vista previa y completa, lista-precios.ts) con sus líneas:
+                           "Agregar una línea" o clic abre regla-precio.ts (diálogo: aplicar a producto/todos o
+                           categoría; descuento, fórmula o precio fijo; cantidad mínima; vigencia; Guardar y crear
+                           nuevo). Historial en registro.lista. shortcut: aún no se aplican al cotizar.
+                           Descuentos y programas de lealtad (/ventas/descuentos-y-lealtad, programas.ts; lealtad.ts con
+                           ProgramasService y evaluar()): las 7 plantillas de Odoo (PLANTILLAS: promoción automática,
+                           código, compra X recibe Y, cupón de la próxima orden, tarjeta de lealtad con puntos, cupones
+                           únicos y tarjeta de sellos), en tarjetas en Nuevo (nuevo-programa.ts, ?plantilla=) y si no hay
+                           programas. form-programa.ts (alta y edición, solo los campos de su tipo); detalle-programa.ts
+                           con cupones (generar, marcar usados) y probar-programa.ts: orden de ejemplo → evaluar() dice
+                           descuento, por qué y lo que gana (puntos, sellos, cupón). shortcut: aún no se aplican al
+                           cotizar ni se guardan puntos/sellos por cliente.
+                           Reportes (/ventas/reportes/…): piezas comunes en reporte-fuente.ts (ReporteFuente: historial
+                           de demostración + órdenes del ERP, sin IVA, con nombres y precios de lista),
+                           filtros-reporte.ts (periodo, plantas, producto, vendedor, cliente, comparar con el periodo
+                           anterior o el año pasado; cada reporte oculta el de lo que analiza), indicadores-reporte.ts,
+                           tabla-reporte.ts (ordenable, renglón elegible, pie con totales, csvDeTabla) y grafica.ts (SVG
+                           propio: barras/líneas/participación, teclado y detalle). reporte-datos.ts: periodos, filtrar,
+                           medir, agrupar (tabla dinámica), resumir (un renglón por entidad), variación, csv.
+                           - Ventas (reporte-ventas.ts): Gráfica / Tabla dinámica / Lista, reportes rápidos.
+                           - Vendedores: ranking (participación, variación, ticket, clientes, vs. lista), evolución,
+                             por planta o participación, y el detalle del vendedor.
+                           - Productos: concreto/servicios/todo; m³ por producto y planta (en orden de resistencia),
+                             mezcla o tendencia; % de órdenes con bombeo; precio obtenido vs. lista; detalle con enlace.
+                           - Clientes: cartera con estado (nuevo, recuperado, creciendo, estable, bajando, inactivo),
+                             Pareto (% acumulado), días sin comprar, clientes en riesgo, concentración en los 5 mayores;
+                             detalle con últimas órdenes y enlace a la ficha.
+                           Colores: paleta validada del skill dataviz, fija por entidad (ORDEN_SERIE). shortcut:
+                           historialDemo inventa ~3 años de ventas y CLIENTES_HISTORIAL (clientes sin ficha) hasta tener
+                           backend.
                            Prueba solo en Cotizaciones: la vista previa en Liquid Glass (`liquido`). Si gusta, pasa a
                            todas.
         features/auth/     login del ERP (/login) y capas-glass.ts: baraja de 3 cartas de vidrio (la principal con cara
@@ -456,8 +538,9 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 - `Dockerfile` único con `--build-arg APP=erp|portal`: compila con Node 24 y sirve `dist/<app>/browser` con
   nginx sin root en el puerto 8080 (`docker/nginx.conf`: fallback SPA a `index.html`, `index.html` sin caché y JS/CSS
   con hash cacheados un año).
-- `.github/workflows/docker.yml`: en cada push a `main` (o a mano) construye las dos imágenes y las sube a GHCR
-  (`ghcr.io/<usuario>/epico_erp-erp` y `-portal`, etiquetas `latest` y `sha-…`). El job `deploy` está vacío.
+- `.github/workflows/frontend-erp.yml` / `frontend-portal.yml`: con push a `develop`/`main` que toque esa app (o
+  `ui`, dependencias, Dockerfile) construyen SOLO esa imagen (`ghcr.io/<usuario>/epico_erp-erp|-portal`, etiquetas
+  `develop`/`latest` y `sha-…`) y la despliegan por SSH en el VPS (lógica en `frontend-app.yml`).
 - Probar siempre lo que dependa de librerías CommonJS cargadas con `import()` (p. ej. Leaflet) en el build de
   producción: ahí el módulo puede llegar bajo `default`.
 
