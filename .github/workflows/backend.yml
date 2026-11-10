@@ -19,7 +19,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/yumil22/epico-erp-backend
 
 jobs:
   validate:
@@ -63,7 +62,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
-          images: ${{ env.IMAGE_NAME }}
+          # metadata-action normaliza el propietario a minúsculas para GHCR.
+          # Al usar repository_owner, el workflow sigue funcionando si el repo
+          # vuelve a transferirse a otra cuenta u organización.
+          images: ghcr.io/${{ github.repository_owner }}/epico-erp-backend
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-

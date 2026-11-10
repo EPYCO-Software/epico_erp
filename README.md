@@ -136,7 +136,7 @@ El workflow `.github/workflows/backend.yml` realiza lo siguiente:
 
 1. Compila el backend en cada pull request que modifica `Backend/`.
 2. Construye y publica la imagen en
-   `ghcr.io/yumil22/epico-erp-backend` al hacer push a `main`.
+   `ghcr.io/epyco-software/epico-erp-backend` al hacer push a `main`.
 3. Genera las etiquetas `latest`, `sha-<commit>` y etiquetas de versión para
    tags Git como `v1.2.0`.
 4. Opcionalmente despliega en el VPS después de publicar `latest`.
@@ -210,7 +210,7 @@ Si el paquete de GHCR es privado, iniciar sesión una sola vez en el VPS con un
 token que tenga permiso `read:packages`:
 
 ```bash
-echo "TU_GITHUB_TOKEN" | docker login ghcr.io -u Yumil22 --password-stdin
+echo "TU_GITHUB_TOKEN" | docker login ghcr.io -u TU_USUARIO_GITHUB --password-stdin
 ```
 
 Despliegue manual o actualización:

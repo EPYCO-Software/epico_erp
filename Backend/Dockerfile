@@ -27,7 +27,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/publish .
 
-LABEL org.opencontainers.image.source="https://github.com/Yumil22/epico_erp"
+LABEL org.opencontainers.image.source="https://github.com/EPYCO-Software/epico_erp"
 LABEL org.opencontainers.image.description="API de EPICO ERP"
 
 ENV ASPNETCORE_HTTP_PORTS=8080 \
