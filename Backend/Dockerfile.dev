@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+WORKDIR /workspace
+
+ENV ASPNETCORE_ENVIRONMENT=Development \
+    ASPNETCORE_HTTP_PORTS=8080 \
+    DOTNET_USE_POLLING_FILE_WATCHER=true \
+    DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER=true
+
+COPY Backend/EPICO_ERP.slnx Backend/
+COPY Backend/src/EPICO.Api/EPICO.Api.csproj Backend/src/EPICO.Api/
+COPY Backend/src/EPICO.Application/EPICO.Application.csproj Backend/src/EPICO.Application/
+COPY Backend/src/EPICO.Contracts/EPICO.Contracts.csproj Backend/src/EPICO.Contracts/
+COPY Backend/src/EPICO.Domain/EPICO.Domain.csproj Backend/src/EPICO.Domain/
+COPY Backend/src/EPICO.Infrastructure/EPICO.Infrastructure.csproj Backend/src/EPICO.Infrastructure/
+RUN dotnet restore Backend/src/EPICO.Api/EPICO.Api.csproj
+
+COPY Backend/ Backend/
+
+EXPOSE 8080
+CMD ["dotnet", "watch", "--project", "Backend/src/EPICO.Api/EPICO.Api.csproj", "run", "--no-launch-profile"]
+

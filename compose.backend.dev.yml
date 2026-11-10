@@ -1,0 +1,49 @@
+name: epico-backend-dev
+
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: epico_erp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d epico_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Backend/Dockerfile.dev
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__Default: Host=database;Port=5432;Database=epico_erp;Username=postgres;Password=postgres
+      Cors__AllowedOrigins__0: http://localhost:4200
+    ports:
+      - "${BACKEND_PORT:-5157}:8080"
+    volumes:
+      - ./Backend:/workspace/Backend
+      - nuget_dev_cache:/root/.nuget/packages
+    depends_on:
+      database:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >-
+        dotnet run --project Backend/src/EPICO.Api/EPICO.Api.csproj --no-launch-profile -- --migrate &&
+        dotnet watch --project Backend/src/EPICO.Api/EPICO.Api.csproj run --no-launch-profile
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
+  nuget_dev_cache:
+
