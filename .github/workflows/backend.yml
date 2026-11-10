@@ -1,0 +1,129 @@
+name: Backend CI, imagen y despliegue
+
+on:
+  pull_request:
+    paths:
+      - "Backend/**"
+      - ".dockerignore"
+      - "compose.backend.*.yml"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+    paths:
+      - "Backend/**"
+      - ".dockerignore"
+      - "compose.backend.*.yml"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  validate:
+    name: Compilar y validar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restaurar dependencias
+        run: dotnet restore Backend/EPICO_ERP.slnx
+
+      - name: Compilar
+        run: dotnet build Backend/EPICO_ERP.slnx --configuration Release --no-restore
+
+  image:
+    name: Construir y publicar imagen
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
+
+      - name: Iniciar sesión en GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generar etiquetas de imagen
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          # metadata-action normaliza el propietario a minúsculas para GHCR.
+          # Al usar repository_owner, el workflow sigue funcionando si el repo
+          # vuelve a transferirse a otra cuenta u organización.
+          images: ghcr.io/${{ github.repository_owner }}/epico-erp-backend
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+            type=sha,prefix=sha-
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Construir y publicar
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          file: Backend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Desplegar en VPS (${{ github.ref_name }})
+    needs: image
+    # main -> production, develop -> development. Mismo VPS: los secrets van a nivel
+    # de repositorio, junto con VPS_PATH, VPS_SERVICE_DEV y VPS_SERVICE_PROD.
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      vars.ENABLE_VPS_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    concurrency: deploy-${{ github.ref_name }}
+    steps:
+      # shortcut: no verifica la huella del servidor (accept-new en runner limpio = acepta cualquiera);
+      # si se necesita más seguridad, volver a un secret VPS_KNOWN_HOSTS con ssh-keyscan.
+      - name: Configurar acceso SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf 'Host *\n  StrictHostKeyChecking accept-new\n' > ~/.ssh/config
+
+      # Las migraciones corren con la misma imagen del servicio (ENTRYPOINT + --migrate).
+      # El compose del VPS toma PROD_*/DEV_* de .env.production (no de .env).
+      - name: Pull y despliegue del servicio
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+          VPS_PATH: ${{ vars.VPS_PATH }}
+          VPS_SERVICE: ${{ github.ref == 'refs/heads/main' && vars.VPS_SERVICE_PROD || vars.VPS_SERVICE_DEV }}
+        run: |
+          : "${VPS_HOST:?Falta el secret VPS_HOST}" "${VPS_USER:?Falta el secret VPS_USER}"
+          : "${VPS_PATH:?Falta la variable VPS_PATH}" "${VPS_SERVICE:?Falta la variable VPS_SERVICE_DEV o VPS_SERVICE_PROD}"
+          ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "set -e
+            cd '$VPS_PATH'
+            docker compose --env-file .env.production pull '$VPS_SERVICE'
+            docker compose --env-file .env.production run --rm '$VPS_SERVICE' --migrate
+            docker compose --env-file .env.production up -d '$VPS_SERVICE'
+            docker image prune -f"

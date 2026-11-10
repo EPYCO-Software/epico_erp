@@ -1,0 +1,17 @@
+Table Customers {
+  Id uuid [pk, not null]
+  CompanyName text [not null]
+  ComercialName text [not null]
+  RFC text
+  RegimenFiscal text
+  CPFiscal text
+  LogoFileId uuid
+  ZonaHoraria text [not null]
+  CsdCerFileId uuid
+  CsdKeyFileId uuid
+  CsdPasswordEncrypted text
+  CsdExpirationDate timestamp
+  CreatedAt timestamp [not null]
+  UpdatedAt timestamp [not null]
+  IsDeleted boolean [not null]
+}
