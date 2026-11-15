@@ -1,0 +1,373 @@
+{
+  "fuente": "Generado de Frontend/projects/ui/src/lib/cotizacion/formato.ts (PRODUCTOS, CATEGORIAS_PRODUCTO). El seed solo agrega lo que falta; los precios que se cambien en la API no se pisan.",
+  "iva": 0.16,
+  "categorias": [
+    {
+      "clave": "concreto-fc",
+      "nombre": "Concreto f´c",
+      "tipo": "concreto"
+    },
+    {
+      "clave": "concreto-mr",
+      "nombre": "Concreto MR",
+      "tipo": "concreto"
+    },
+    {
+      "clave": "ajuste",
+      "nombre": "Ajuste al concreto",
+      "tipo": "concreto"
+    },
+    {
+      "clave": "concreto",
+      "nombre": "Concreto",
+      "tipo": "concreto"
+    },
+    {
+      "clave": "servicio",
+      "nombre": "Servicio",
+      "tipo": "servicio"
+    },
+    {
+      "clave": "maquinaria",
+      "nombre": "Renta de maquinaria",
+      "tipo": "servicio"
+    },
+    {
+      "clave": "general",
+      "nombre": "Producto general",
+      "tipo": "general"
+    }
+  ],
+  "productos": [
+    {
+      "codigo": "CON-FC-100",
+      "nombre": "Concreto f´c 100 kg/cm²",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 3000,
+      "minimo": null,
+      "descripcion": "Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.",
+      "concretoFc": "100",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-FC-150",
+      "nombre": "Concreto f´c 150 kg/cm²",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 3350,
+      "minimo": null,
+      "descripcion": "Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.",
+      "concretoFc": "150",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-FC-200",
+      "nombre": "Concreto f´c 200 kg/cm²",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 3700,
+      "minimo": null,
+      "descripcion": "Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.",
+      "concretoFc": "200",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-FC-250",
+      "nombre": "Concreto f´c 250 kg/cm²",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 3950,
+      "minimo": null,
+      "descripcion": "Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.",
+      "concretoFc": "250",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-FC-300",
+      "nombre": "Concreto f´c 300 kg/cm²",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 4250,
+      "minimo": null,
+      "descripcion": "Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.",
+      "concretoFc": "300",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-FC-350",
+      "nombre": "Concreto f´c 350 kg/cm²",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 4600,
+      "minimo": null,
+      "descripcion": "Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.",
+      "concretoFc": "350",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-FC-400",
+      "nombre": "Concreto f´c 400 kg/cm²",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 5000,
+      "minimo": null,
+      "descripcion": "Concreto premezclado por resistencia a compresión a 28 días; revenimiento, TMA y colocación a elegir.",
+      "concretoFc": "400",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-MR-36",
+      "nombre": "Concreto MR 36 kg/cm²",
+      "categoria": "concreto-mr",
+      "unidad": "M3",
+      "precio": 3900,
+      "minimo": null,
+      "descripcion": "Concreto para pavimentos por módulo de ruptura (resistencia a flexión).",
+      "concretoFc": "MR36",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-MR-40",
+      "nombre": "Concreto MR 40 kg/cm²",
+      "categoria": "concreto-mr",
+      "unidad": "M3",
+      "precio": 4100,
+      "minimo": null,
+      "descripcion": "Concreto para pavimentos por módulo de ruptura (resistencia a flexión).",
+      "concretoFc": "MR40",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-MR-42",
+      "nombre": "Concreto MR 42 kg/cm²",
+      "categoria": "concreto-mr",
+      "unidad": "M3",
+      "precio": 4250,
+      "minimo": null,
+      "descripcion": "Concreto para pavimentos por módulo de ruptura (resistencia a flexión).",
+      "concretoFc": "MR42",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-MR-45",
+      "nombre": "Concreto MR 45 kg/cm²",
+      "categoria": "concreto-mr",
+      "unidad": "M3",
+      "precio": 4450,
+      "minimo": null,
+      "descripcion": "Concreto para pavimentos por módulo de ruptura (resistencia a flexión).",
+      "concretoFc": "MR45",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "CON-MR-48",
+      "nombre": "Concreto MR 48 kg/cm²",
+      "categoria": "concreto-mr",
+      "unidad": "M3",
+      "precio": 4700,
+      "minimo": null,
+      "descripcion": "Concreto para pavimentos por módulo de ruptura (resistencia a flexión).",
+      "concretoFc": "MR48",
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-EDAD-3",
+      "nombre": "Resistencia a 3 días",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 550,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³ cuando la resistencia se pide a 3 días en lugar de 28.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-EDAD-7",
+      "nombre": "Resistencia a 7 días",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 300,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³ cuando la resistencia se pide a 7 días en lugar de 28.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-EDAD-14",
+      "nombre": "Resistencia a 14 días",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 150,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³ cuando la resistencia se pide a 14 días en lugar de 28.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-CEM-RS",
+      "nombre": "Cemento CPC 30R RS",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 250,
+      "minimo": null,
+      "descripcion": "Cemento resistente a sulfatos (ambiente marino); se suma al precio del concreto por m³.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-ADT-ACELERANTE",
+      "nombre": "Aditivo: acelerante",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 120,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-ADT-RETARDANTE",
+      "nombre": "Aditivo: retardante",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 100,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-ADT-IMPERMEABILIZANTE",
+      "nombre": "Aditivo: impermeabilizante integral",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 180,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-ADT-FIBRA-SINTETICA",
+      "nombre": "Aditivo: fibra sintética",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 150,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "AJ-ADT-FIBRA-METALICA",
+      "nombre": "Aditivo: fibra metálica",
+      "categoria": "ajuste",
+      "unidad": "M3",
+      "precio": 600,
+      "minimo": null,
+      "descripcion": "Se suma al precio del concreto por m³.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "SRV-BOMBA-ESTACIONARIA",
+      "nombre": "Bombeo de concreto",
+      "categoria": "servicio",
+      "unidad": "M3",
+      "precio": 500,
+      "minimo": 10,
+      "descripcion": "Bomba estacionaria con tubería hasta el punto de colado.",
+      "concretoFc": null,
+      "equipoTipo": "bomba_estacionaria"
+    },
+    {
+      "codigo": "SRV-BOMBA-PLUMA",
+      "nombre": "Bomba pluma",
+      "categoria": "servicio",
+      "unidad": "M3",
+      "precio": 650,
+      "minimo": 20,
+      "descripcion": "Para colados en altura o con gran alcance horizontal.",
+      "concretoFc": null,
+      "equipoTipo": "bomba_pluma"
+    },
+    {
+      "codigo": "SRV-COLADO-NOCTURNO",
+      "nombre": "Colado en horario nocturno",
+      "categoria": "servicio",
+      "unidad": "M3",
+      "precio": 250,
+      "minimo": null,
+      "descripcion": "Para vialidades con tránsito o días de calor extremo.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "SRV-MUESTREO-LABORATORIO",
+      "nombre": "Muestreo y ensaye de cilindros",
+      "categoria": "servicio",
+      "unidad": "SRV",
+      "precio": 1800,
+      "minimo": null,
+      "descripcion": "Nuestro laboratorio muestrea en obra y entrega resultados a 7 y 28 días.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "SRV-ASESORIA-TECNICA",
+      "nombre": "Asesoría técnica en obra",
+      "categoria": "servicio",
+      "unidad": "VIS",
+      "precio": 2500,
+      "minimo": null,
+      "descripcion": "Un técnico acompaña la colocación, el vibrado y el curado.",
+      "concretoFc": null,
+      "equipoTipo": null
+    },
+    {
+      "codigo": "REN-APLANADORA",
+      "nombre": "Renta de aplanadora",
+      "categoria": "maquinaria",
+      "unidad": "DIA",
+      "precio": 3500,
+      "minimo": null,
+      "descripcion": "Rodillo compactador para la base antes de colar.",
+      "concretoFc": null,
+      "equipoTipo": "aplanadora"
+    },
+    {
+      "codigo": "REN-VIBRADOR",
+      "nombre": "Renta de vibrador de concreto",
+      "categoria": "maquinaria",
+      "unidad": "DIA",
+      "precio": 600,
+      "minimo": null,
+      "descripcion": "De inmersión, para consolidar y evitar huecos.",
+      "concretoFc": null,
+      "equipoTipo": "vibrador"
+    },
+    {
+      "codigo": "REN-ALLANADORA",
+      "nombre": "Renta de allanadora",
+      "categoria": "maquinaria",
+      "unidad": "DIA",
+      "precio": 1200,
+      "minimo": null,
+      "descripcion": "\"Helicóptero\" para acabado pulido de firmes y pisos.",
+      "concretoFc": null,
+      "equipoTipo": "allanadora"
+    },
+    {
+      "codigo": "SRV-TRASLADO",
+      "nombre": "Traslado adicional",
+      "categoria": "servicio",
+      "unidad": "M3",
+      "precio": 0,
+      "minimo": null,
+      "descripcion": "Km después de los incluidos, por m³; el precio por km se pone en cada cotización.",
+      "concretoFc": null,
+      "equipoTipo": null
+    }
+  ]
+}

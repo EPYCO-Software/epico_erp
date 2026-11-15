@@ -1,0 +1,1278 @@
+// EPICO ERP · esquema global de la base de datos (PostgreSQL)
+// Se ve con la extensión "dbdiagram (dbml)" de VS Code: abrir este archivo y "Preview".
+//
+// Convenciones
+// - Multiempresa como Odoo: Organizacion (el grupo que contrata) → Empresa (razón social, factura) → Sucursal (planta).
+//   Toda tabla de negocio cuelga de una Empresa o de una Organizacion; la API filtra por los accesos del usuario.
+// - Clientes, productos, listas y programas son de la Organizacion (compartidos entre sus razones sociales);
+//   EmpresaRestringidaId los limita a una sola razón social.
+// - Usuario es cualquier persona que entra (personal o cliente del portal); el cliente entra por ClienteContacto.UsuarioId.
+// - Base: Id uuid, CreatedAt, UpdatedAt, IsDeleted (borrado lógico), igual que BaseEntity en el backend.
+// - RegistroTipo + RegistroId: referencia a "cualquier registro" (historial, archivos, actividades). Sin FK a propósito.
+// - Trazabilidad como Odoo (mail.thread): cada registro tiene su hilo (Evento) y cada cambio de un campo rastreado
+//   queda en EventoCambio con su valor anterior y nuevo, quién y cuándo. Lo genera el backend al guardar (interceptor de
+//   SaveChanges sobre el ChangeTracker), en la misma transacción: no depende de que cada pantalla lo registre. Los campos
+//   rastreados se marcan en la entidad ([Rastreado], como tracking=True en Odoo); los cambios de líneas (partidas,
+//   reglas) se anotan en el hilo del registro padre. El hilo solo se agrega: nunca se edita ni se borra.
+// - Importes en numeric(14,2) sin IVA salvo que el nombre diga lo contrario; fechas con hora en timestamptz (UTC).
+
+Project epico_erp {
+  database_type: 'PostgreSQL'
+  Note: 'ERP multiempresa para concreteras: ventas, operación, inventario y contabilidad.'
+}
+
+TablePartial Base {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  CreatedAt timestamptz [not null, default: `now()`]
+  CreatedById uuid [note: 'FK a Usuario. Quién lo creó (create_uid de Odoo); vacío = el sistema. Sin línea en el diagrama para no saturarlo']
+  UpdatedAt timestamptz
+  UpdatedById uuid [note: 'FK a Usuario. Quién lo modificó al último (write_uid)']
+  IsDeleted boolean [not null, default: false, note: 'Borrado lógico: el registro y su hilo se conservan']
+}
+
+// ============================================================================================
+// Enums
+// ============================================================================================
+
+Enum tipo_usuario {
+  interno [note: 'Personal de la concretera']
+  portal [note: 'Cliente que entra al portal']
+}
+
+Enum tipo_evento {
+  creado [note: 'Alta del registro']
+  cambio [note: 'Uno o más campos rastreados cambiaron (detalle en EventoCambio)']
+  eliminado [note: 'Borrado lógico']
+  restaurado
+  nota [note: 'Nota interna escrita a mano']
+  mensaje [note: 'Enviado al cliente (correo / portal)']
+  actividad [note: 'Programar, hacer o cancelar una actividad']
+  sistema [note: 'Acción automática: timbrado, envío a planta…']
+}
+
+Enum tipo_dato_cambio {
+  texto
+  numero
+  dinero
+  fecha
+  fecha_hora
+  booleano
+  opcion [note: 'Enum: se guarda la clave y la etiqueta']
+  referencia [note: 'FK: se guarda el Id y el nombre que tenía en ese momento']
+}
+
+Enum tipo_actividad {
+  pendiente
+  correo
+  llamada
+  reunion
+  documento
+}
+
+Enum tipo_conversacion {
+  directa
+  grupo
+  cliente [note: 'Chat del portal con un cliente']
+}
+
+Enum etapa_prospecto {
+  nuevo
+  contactado
+  calificado
+  propuesta
+  ganado
+  perdido
+}
+
+Enum tipo_producto {
+  concreto
+  servicio
+  general
+}
+
+Enum tipo_movimiento_inventario {
+  entrada
+  salida
+  ajuste
+}
+
+Enum tipo_equipo {
+  revolvedor
+  bomba_pluma
+  bomba_estacionaria
+  aplanadora
+  vibrador
+  allanadora
+  otro
+}
+
+Enum aplicar_regla {
+  todos
+  producto
+  categoria
+}
+
+Enum tipo_regla_precio {
+  descuento
+  formula
+  fijo
+}
+
+Enum tipo_programa {
+  promocion
+  codigo
+  compra_x
+  proxima_orden
+  lealtad
+  cupones
+  sellos
+}
+
+Enum tipo_recompensa {
+  porcentaje
+  monto
+  traslado
+}
+
+Enum estado_cotizacion {
+  recibida
+  borrador
+  enviada
+  pedido
+  cancelada
+}
+
+Enum origen_cotizacion {
+  erp
+  portal
+}
+
+Enum estado_pedido {
+  programado
+  en_planta
+  en_ruta
+  en_obra
+  entregado
+  cancelado
+}
+
+Enum estado_cobro {
+  por_cobrar
+  por_facturar
+  facturado
+  credito
+  pagado
+  finalizado
+}
+
+Enum metodo_pago {
+  sin_metodo
+  transferencia
+}
+
+Enum estatus_planta {
+  no_enviado
+  enviado
+  confirmado
+  actualizacion
+  rechazada
+}
+
+Enum estado_viaje {
+  cargando
+  en_ruta
+  en_obra
+  regresando
+  terminado
+}
+
+Enum tipo_cuenta {
+  activo
+  pasivo
+  capital
+  ingreso
+  costo
+  gasto
+  orden
+}
+
+Enum naturaleza_cuenta {
+  deudora
+  acreedora
+}
+
+Enum tipo_diario {
+  ventas
+  compras
+  banco
+  caja
+  general
+}
+
+Enum estado_periodo {
+  abierto
+  cerrado
+}
+
+Enum tipo_poliza {
+  ingreso
+  egreso
+  diario
+}
+
+Enum estado_poliza {
+  borrador
+  publicada
+  cancelada
+}
+
+Enum tipo_impuesto {
+  traslado
+  retencion
+}
+
+Enum estado_cfdi {
+  borrador
+  timbrada
+  cancelada
+}
+
+// ============================================================================================
+// Organización y acceso
+// ============================================================================================
+
+Table Organizacion {
+  ~Base
+  Nombre varchar(200) [not null, note: 'Grupo que contrata el ERP: "Grupo EPICO"']
+  Slug varchar(60) [not null, unique, note: 'Para subdominio o URL: epico']
+  LogoArchivoId uuid [ref: > Archivo.Id]
+  Activa boolean [not null, default: true]
+}
+
+Table Empresa {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  RazonSocial varchar(300) [not null]
+  NombreComercial varchar(300) [not null]
+  RFC varchar(13)
+  RegimenFiscal varchar(3) [note: 'Clave SAT (CatalogoSat regimen_fiscal)']
+  CPFiscal varchar(5)
+  DomicilioFiscal text
+  ZonaHoraria varchar(60) [not null, default: 'America/Mexico_City']
+  MonedaCodigo char(3) [not null, default: 'MXN', ref: > Moneda.Codigo]
+  LogoArchivoId uuid [ref: > Archivo.Id]
+  CsdCerArchivoId uuid [ref: > Archivo.Id]
+  CsdKeyArchivoId uuid [ref: > Archivo.Id]
+  CsdPasswordCifrada text
+  CsdVence date
+
+  Note: 'Razón social: emite CFDI con su CSD. Reemplaza al Customer actual del backend.'
+
+  indexes {
+    (OrganizacionId, RFC) [unique]
+  }
+}
+
+Table Sucursal {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  Codigo varchar(10) [not null, note: 'ESC, XPJ…: va en los folios (EPI-PRES-ESC-26085)']
+  Nombre varchar(200) [not null, note: 'Planta Escárcega']
+  ZonaHoraria varchar(60) [not null]
+  Direccion text
+  Lat numeric(9,6) [note: 'Salida de los camiones: de aquí se mide el traslado']
+  Lng numeric(9,6)
+  Telefono varchar(20)
+  Activa boolean [not null, default: true]
+
+  Note: 'Planta. Una razón social puede tener varias.'
+
+  indexes {
+    (EmpresaId, Codigo) [unique]
+  }
+}
+
+Table Usuario {
+  ~Base
+  Correo varchar(254) [not null, unique]
+  PasswordHash text [not null]
+  Tipo tipo_usuario [not null]
+  Nombre varchar(120) [not null]
+  Apellidos varchar(120)
+  Telefono varchar(20)
+  Puesto varchar(120)
+  FotoArchivoId uuid [ref: > Archivo.Id]
+  Activo boolean [not null, default: true]
+  CorreoVerificado boolean [not null, default: false]
+  IntentosFallidos int [not null, default: 0]
+  BloqueadoHasta timestamptz
+  UltimoAcceso timestamptz
+
+  Note: 'Cualquier persona que entra: personal (UsuarioAcceso) o cliente del portal (ClienteContacto.UsuarioId).'
+}
+
+Table Rol {
+  ~Base
+  OrganizacionId uuid [ref: > Organizacion.Id, note: 'Vacío = rol del sistema (Administrador, Ventas…)']
+  Nombre varchar(100) [not null]
+  Descripcion text
+}
+
+Table RolPermiso {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  RolId uuid [not null, ref: > Rol.Id]
+  Permiso varchar(100) [not null, note: 'ventas.cotizaciones.editar, contabilidad.polizas.publicar…']
+
+  indexes {
+    (RolId, Permiso) [unique]
+  }
+}
+
+Table UsuarioAcceso {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  UsuarioId uuid [not null, ref: > Usuario.Id]
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  SucursalId uuid [ref: > Sucursal.Id, note: 'Vacío = todas las plantas de la empresa']
+  RolId uuid [not null, ref: > Rol.Id]
+  Predeterminado boolean [not null, default: false, note: 'Con la que entra']
+
+  Note: 'Qué empresas y plantas ve el personal, y con qué rol.'
+
+  indexes {
+    (UsuarioId, EmpresaId, SucursalId) [unique]
+  }
+}
+
+Table Sesion {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  UsuarioId uuid [not null, ref: > Usuario.Id]
+  EmpresaId uuid [ref: > Empresa.Id, note: 'Con la que entró (ERP)']
+  RefreshTokenHash text [not null, unique]
+  CreadaEn timestamptz [not null, default: `now()`]
+  ExpiraEn timestamptz [not null]
+  RevocadaEn timestamptz
+  Ip inet
+  Agente text [note: 'Navegador / dispositivo']
+
+  Note: 'Cada inicio de sesión (historial de accesos) y su refresh token.'
+
+  indexes {
+    (UsuarioId, CreadaEn)
+  }
+}
+
+Table PreferenciaUsuario {
+  UsuarioId uuid [pk, ref: - Usuario.Id]
+  Datos jsonb [not null, default: '{}', note: 'Tema, notificaciones (ERP/correo), vista previa, último filtro…']
+  UpdatedAt timestamptz
+}
+
+Table ApiKey {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  RolId uuid [not null, ref: > Rol.Id]
+  Nombre varchar(100) [not null]
+  Prefijo varchar(12) [not null, unique, note: 'Lo visible de la llave para identificarla']
+  Hash text [not null]
+  UltimoUso timestamptz
+  ExpiraEn timestamptz
+  RevocadaEn timestamptz
+
+  Note: 'Integraciones externas (después: el front aún no las usa).'
+}
+
+Table Secuencia {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  SucursalId uuid [ref: > Sucursal.Id]
+  Tipo varchar(30) [not null, note: 'cotizacion, pedido, remision, factura…']
+  Prefijo varchar(30) [not null, note: 'EPI-PRES-ESC-']
+  Siguiente bigint [not null, default: 1]
+
+  Note: 'Folios sin repetirse ni saltarse (se toma con SELECT … FOR UPDATE).'
+
+  indexes {
+    (EmpresaId, SucursalId, Tipo) [unique]
+  }
+}
+
+// ============================================================================================
+// Transversales: archivos, historial, actividades, mensajería
+// ============================================================================================
+
+Table Archivo {
+  ~Base
+  OrganizacionId uuid [ref: > Organizacion.Id]
+  Nombre varchar(255) [not null]
+  TipoMime varchar(100) [not null]
+  TamanoBytes bigint [not null]
+  Ruta text [not null, note: 'Llave en el almacenamiento (disco, S3…)']
+  Sha256 char(64)
+  Categoria varchar(60) [note: 'constancia_fiscal, caratula_bancaria, cfdi_xml, foto…']
+  RegistroTipo varchar(40) [note: 'A qué registro pertenece: Cliente, ClienteDatoFiscal, Pedido…']
+  RegistroId uuid
+  SubidoPorId uuid [ref: > Usuario.Id]
+
+  indexes {
+    (RegistroTipo, RegistroId)
+  }
+}
+
+Table Evento {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  RegistroTipo varchar(40) [not null, note: 'Cotizacion, Pedido, Cliente, Producto…']
+  RegistroId uuid [not null]
+  Fecha timestamptz [not null, default: `now()`]
+  AutorId uuid [ref: > Usuario.Id, note: 'Vacío = el sistema']
+  Tipo tipo_evento [not null]
+  Texto text [not null, note: 'Producto editado, Cambios guardados, la nota escrita…']
+  Detalles jsonb [note: 'Renglones libres: ["Salida de 32 saco", …]. Los cambios de campos van en EventoCambio']
+  SesionId uuid [ref: > Sesion.Id, note: 'Desde qué sesión (IP, navegador): auditoría']
+  RegistroPadreTipo varchar(40) [note: 'Si el cambio fue en una línea: la cotización de la partida']
+  RegistroPadreId uuid
+
+  Note: 'Hilo de cada registro (mail.message de Odoo): alta, cambios, notas, mensajes y actividades. Solo se agrega.'
+
+  indexes {
+    (RegistroTipo, RegistroId, Fecha)
+    (RegistroPadreTipo, RegistroPadreId, Fecha)
+    (AutorId, Fecha)
+  }
+}
+
+Table EventoCambio {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  EventoId uuid [not null, ref: > Evento.Id]
+  Campo varchar(80) [not null, note: 'Nombre técnico: PrecioLista, Estado, ClienteId']
+  Etiqueta varchar(120) [not null, note: 'Como se lee: Precio de lista, Estado, Cliente']
+  TipoDato tipo_dato_cambio [not null]
+  ValorAnterior text [note: 'Legible, como se veía: $245.00, Borrador, Constructora Maya']
+  ValorNuevo text
+  ValorAnteriorCrudo jsonb [note: 'Valor exacto: 245.00, "borrador", el Id; para filtrar o revertir']
+  ValorNuevoCrudo jsonb
+  Orden smallint [not null, default: 0]
+
+  Note: 'Un renglón por campo rastreado que cambió (mail.tracking.value de Odoo). Solo se agrega.'
+
+  indexes {
+    (EventoId)
+    (Campo)
+  }
+}
+
+Table Seguidor {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  RegistroTipo varchar(40) [not null]
+  RegistroId uuid [not null]
+  UsuarioId uuid [not null, ref: > Usuario.Id]
+  Tipos "tipo_evento[]" [not null, note: 'De qué le avisan: cambio, mensaje, nota…']
+  CreatedAt timestamptz [not null, default: `now()`]
+
+  Note: 'Quién sigue un registro (mail.followers): recibe una Notificacion con cada evento. El creador y el vendedor lo siguen solos.'
+
+  indexes {
+    (RegistroTipo, RegistroId, UsuarioId) [unique]
+    (UsuarioId)
+  }
+}
+
+Table Actividad {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  RegistroTipo varchar(40) [not null]
+  RegistroId uuid [not null]
+  Tipo tipo_actividad [not null]
+  Resumen varchar(200) [not null]
+  FechaLimite date [not null]
+  AsignadaAId uuid [not null, ref: > Usuario.Id]
+  Nota text
+  HechaEn timestamptz
+  CanceladaEn timestamptz
+
+  indexes {
+    (AsignadaAId, FechaLimite)
+    (RegistroTipo, RegistroId)
+  }
+}
+
+Table Conversacion {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  Tipo tipo_conversacion [not null]
+  Nombre varchar(120) [note: 'Solo grupos']
+  ClienteId uuid [ref: > Cliente.Id, note: 'Chat del portal']
+}
+
+Table ConversacionParticipante {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  ConversacionId uuid [not null, ref: > Conversacion.Id]
+  UsuarioId uuid [not null, ref: > Usuario.Id]
+  LeidoHasta timestamptz
+
+  indexes {
+    (ConversacionId, UsuarioId) [unique]
+  }
+}
+
+Table Mensaje {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  ConversacionId uuid [not null, ref: > Conversacion.Id]
+  AutorId uuid [not null, ref: > Usuario.Id]
+  Texto text [not null]
+  ArchivoId uuid [ref: > Archivo.Id]
+  EnviadoEn timestamptz [not null, default: `now()`]
+  EditadoEn timestamptz
+
+  indexes {
+    (ConversacionId, EnviadoEn)
+  }
+}
+
+Table Notificacion {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  UsuarioId uuid [not null, ref: > Usuario.Id]
+  Titulo varchar(200) [not null]
+  Texto text
+  Enlace varchar(300) [note: 'Ruta del front: /ventas/cotizaciones/…']
+  RegistroTipo varchar(40)
+  RegistroId uuid
+  CreadaEn timestamptz [not null, default: `now()`]
+  LeidaEn timestamptz
+
+  indexes {
+    (UsuarioId, LeidaEn)
+  }
+}
+
+Table UnidadMedida {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  Clave varchar(10) [not null, unique, note: 'M3, PZA, KG, DIA, KM…']
+  Nombre varchar(40) [not null, note: 'M³, Pieza, Kg, Día, Km…']
+  ClaveSat varchar(3) [note: 'MTQ, H87, KGM, DAY, KMT']
+}
+
+// ============================================================================================
+// Catálogos generales
+// ============================================================================================
+
+Table Moneda {
+  Codigo char(3) [pk, note: 'MXN, USD']
+  Nombre varchar(60) [not null]
+  Decimales smallint [not null, default: 2]
+}
+
+Table TipoCambio {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  MonedaCodigo char(3) [not null, ref: > Moneda.Codigo]
+  Fecha date [not null]
+  Valor numeric(18,6) [not null, note: 'Pesos por unidad de la moneda']
+  Fuente varchar(30) [not null, default: 'DOF']
+
+  indexes {
+    (MonedaCodigo, Fecha) [unique]
+  }
+}
+
+Table CatalogoSat {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  Tipo varchar(40) [not null, note: 'regimen_fiscal, uso_cfdi, forma_pago, metodo_pago, clave_prod_serv, clave_unidad, objeto_imp']
+  Clave varchar(10) [not null]
+  Descripcion text [not null]
+  VigenteDesde date
+  VigenteHasta date
+
+  indexes {
+    (Tipo, Clave) [unique]
+  }
+}
+
+// ============================================================================================
+// Clientes y CRM
+// ============================================================================================
+
+Table Cliente {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  EmpresaRestringidaId uuid [ref: > Empresa.Id, note: 'Vacío = compartido con toda la organización']
+  Nombre varchar(300) [not null, note: 'Comercial: Constructora Maya']
+  Giro varchar(120)
+  Correo varchar(254)
+  Telefono varchar(20)
+  SitioWeb varchar(200)
+  EsPublicoGeneral boolean [not null, default: false, note: 'Venta de mostrador']
+  VendedorId uuid [ref: > Usuario.Id]
+  ListaPreciosId uuid [ref: > ListaPrecios.Id]
+  DiasCredito int [not null, default: 0]
+  LimiteCredito numeric(14,2)
+  Notas text
+
+  indexes {
+    (OrganizacionId, Nombre)
+  }
+}
+
+Table ClienteContacto {
+  ~Base
+  ClienteId uuid [not null, ref: > Cliente.Id]
+  Nombre varchar(120) [not null]
+  Apellidos varchar(120)
+  Puesto varchar(120)
+  Correo varchar(254)
+  Telefono varchar(20)
+  Principal boolean [not null, default: false]
+  UsuarioId uuid [unique, ref: - Usuario.Id, note: 'Si tiene, entra al portal']
+}
+
+Table ClienteDatoFiscal {
+  ~Base
+  ClienteId uuid [not null, ref: > Cliente.Id]
+  Alias varchar(100) [not null]
+  RazonSocial varchar(300) [not null]
+  RFC varchar(13) [not null]
+  RegimenFiscal varchar(3) [not null]
+  UsoCfdi varchar(4) [not null]
+  CodigoPostal varchar(5) [not null]
+  Correo varchar(254) [note: 'A donde llegan sus facturas']
+  DireccionFiscal text
+  Predeterminado boolean [not null, default: false]
+
+  Note: 'Un cliente puede facturar a varias razones sociales. Sus documentos (constancia, carátula) van en Archivo.'
+}
+
+Table Obra {
+  ~Base
+  ClienteId uuid [not null, ref: > Cliente.Id]
+  Nombre varchar(200) [not null]
+  Direccion text [not null]
+  Municipio varchar(120)
+  Referencias text
+  Lat numeric(9,6)
+  Lng numeric(9,6)
+  ResponsableNombre varchar(200)
+  ResponsableFotoArchivoId uuid [ref: > Archivo.Id]
+  Contactos jsonb [note: '[{ nombre, lada, numero }]']
+}
+
+Table Prospecto {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  EmpresaId uuid [ref: > Empresa.Id]
+  Nombre varchar(200) [not null]
+  NombreEmpresa varchar(300)
+  Correo varchar(254)
+  Telefono varchar(20)
+  Origen varchar(60) [note: 'portal, llamada, referido, visita…']
+  Etapa etapa_prospecto [not null, default: 'nuevo']
+  VendedorId uuid [ref: > Usuario.Id]
+  ValorEstimado numeric(14,2)
+  ClienteId uuid [ref: > Cliente.Id, note: 'Cuando se gana y se vuelve cliente']
+  MotivoPerdida text
+}
+
+// ============================================================================================
+// Productos, inventario, equipos, precios y programas
+// ============================================================================================
+
+Table CategoriaProducto {
+  ~Base
+  OrganizacionId uuid [ref: > Organizacion.Id, note: 'Vacío = del sistema']
+  Clave varchar(40) [not null, note: 'concreto-fc, concreto-mr, servicio, maquinaria, general…']
+  Nombre varchar(120) [not null]
+  Tipo tipo_producto [not null]
+}
+
+Table Producto {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  EmpresaRestringidaId uuid [ref: > Empresa.Id]
+  CategoriaId uuid [not null, ref: > CategoriaProducto.Id]
+  Tipo tipo_producto [not null]
+  Codigo varchar(40) [not null, note: 'Se arma solo: 200 - N28 - 14 - BP, SRV-…']
+  Nombre varchar(300) [not null]
+  Descripcion text [not null]
+  UnidadId uuid [not null, ref: > UnidadMedida.Id]
+  PrecioLista numeric(14,2) [not null]
+  MonedaCodigo char(3) [not null, default: 'MXN', ref: > Moneda.Codigo]
+  MinimoCobro numeric(10,2) [note: 'm³ mínimos que se cobran']
+  ClaveProdServSat varchar(8)
+  ControlaExistencias boolean [not null, default: false]
+  MinimoExistencias numeric(14,3)
+  ConcretoFc varchar(6) [note: '200, MR45… (solo concreto)']
+  ConcretoEdadDias smallint
+  ConcretoRevenimientoCm smallint
+  ConcretoSuministro varchar(3) [note: 'TD, BP…']
+  EquipoTipo tipo_equipo [note: 'Servicio de renta: qué equipo']
+  Activo boolean [not null, default: true]
+
+  indexes {
+    (OrganizacionId, Codigo) [unique]
+  }
+}
+
+Table Existencia {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  ProductoId uuid [not null, ref: > Producto.Id]
+  SucursalId uuid [not null, ref: > Sucursal.Id]
+  Cantidad numeric(14,3) [not null, default: 0]
+  UpdatedAt timestamptz
+
+  indexes {
+    (ProductoId, SucursalId) [unique]
+  }
+}
+
+Table MovimientoInventario {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  ProductoId uuid [not null, ref: > Producto.Id]
+  SucursalId uuid [not null, ref: > Sucursal.Id]
+  Tipo tipo_movimiento_inventario [not null]
+  Cantidad numeric(14,3) [not null]
+  Nota text
+  Fecha timestamptz [not null, default: `now()`]
+  UsuarioId uuid [ref: > Usuario.Id]
+  RegistroTipo varchar(40) [note: 'Origen: Pedido, compra…']
+  RegistroId uuid
+
+  indexes {
+    (ProductoId, SucursalId, Fecha)
+  }
+}
+
+Table Equipo {
+  ~Base
+  SucursalId uuid [not null, ref: > Sucursal.Id]
+  Tipo tipo_equipo [not null]
+  NumeroEconomico varchar(20) [not null, note: 'ECO-21, BP-01']
+  Descripcion varchar(200)
+  Placas varchar(15)
+  CapacidadM3 numeric(5,2)
+  Activo boolean [not null, default: true]
+
+  indexes {
+    (SucursalId, NumeroEconomico) [unique]
+  }
+}
+
+Table ProductoEquipo {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  ProductoId uuid [not null, ref: > Producto.Id]
+  EquipoId uuid [not null, ref: > Equipo.Id]
+
+  Note: 'Servicio de renta ↔ unidades que lo atienden (logística).'
+
+  indexes {
+    (ProductoId, EquipoId) [unique]
+  }
+}
+
+Table ListaPrecios {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  EmpresaRestringidaId uuid [ref: > Empresa.Id]
+  Nombre varchar(120) [not null]
+  MonedaCodigo char(3) [not null, ref: > Moneda.Codigo]
+  Activa boolean [not null, default: true]
+}
+
+Table ListaPreciosSucursal {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  ListaPreciosId uuid [not null, ref: > ListaPrecios.Id]
+  SucursalId uuid [not null, ref: > Sucursal.Id]
+
+  Note: 'En qué plantas aplica; sin renglones = todas.'
+
+  indexes {
+    (ListaPreciosId, SucursalId) [unique]
+  }
+}
+
+Table ReglaPrecio {
+  ~Base
+  ListaPreciosId uuid [not null, ref: > ListaPrecios.Id]
+  AplicarA aplicar_regla [not null]
+  ProductoId uuid [ref: > Producto.Id]
+  CategoriaId uuid [ref: > CategoriaProducto.Id]
+  Tipo tipo_regla_precio [not null]
+  PrecioFijo numeric(14,2)
+  DescuentoPct numeric(6,2) [note: 'Negativo = aumento (fórmula)']
+  Recargo numeric(14,2)
+  CantidadMinima numeric(10,2) [not null, default: 0]
+  Inicio date
+  Fin date
+}
+
+Table ProgramaDescuento {
+  ~Base
+  OrganizacionId uuid [not null, ref: > Organizacion.Id]
+  EmpresaRestringidaId uuid [ref: > Empresa.Id]
+  Nombre varchar(200) [not null]
+  Tipo tipo_programa [not null]
+  Activo boolean [not null, default: true]
+  Inicio date
+  Fin date
+  ProductoId uuid [ref: > Producto.Id, note: 'Aplica a (vacío y sin categoría = todo)']
+  CategoriaId uuid [ref: > CategoriaProducto.Id]
+  CompraMinima numeric(14,2) [not null, default: 0]
+  Codigo varchar(20) [note: 'Código promocional']
+  CantidadX int
+  CantidadY int
+  Recompensa tipo_recompensa [not null]
+  Valor numeric(14,2) [not null, default: 0]
+  PesosPorPunto numeric(14,2)
+  PuntosCanje int
+  Meta int [note: 'Sellos para la recompensa']
+}
+
+Table Cupon {
+  ~Base
+  ProgramaId uuid [not null, ref: > ProgramaDescuento.Id]
+  Codigo varchar(20) [not null, unique]
+  ClienteId uuid [ref: > Cliente.Id]
+  GanadoEnPedidoId uuid [ref: > Pedido.Id, note: 'Cupón de la próxima orden']
+  UsadoEnPedidoId uuid [ref: > Pedido.Id]
+  UsadoEn timestamptz
+}
+
+Table SaldoLealtad {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  ProgramaId uuid [not null, ref: > ProgramaDescuento.Id]
+  ClienteId uuid [not null, ref: > Cliente.Id]
+  Saldo numeric(14,2) [not null, default: 0, note: 'Puntos o sellos']
+  UpdatedAt timestamptz
+
+  indexes {
+    (ProgramaId, ClienteId) [unique]
+  }
+}
+
+// ============================================================================================
+// Ventas y operación
+// ============================================================================================
+
+Table Cotizacion {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  SucursalId uuid [not null, ref: > Sucursal.Id]
+  ClienteId uuid [ref: > Cliente.Id, note: 'Vacío = sin cliente (se capturan obra y contacto)']
+  ObraId uuid [ref: > Obra.Id]
+  ContactoNombre varchar(200)
+  ContactoTelefono varchar(20)
+  VendedorId uuid [ref: > Usuario.Id]
+  Folio varchar(40) [not null]
+  Serie varchar(40) [not null]
+  Revision int [not null, default: 0]
+  BaseId uuid [ref: > Cotizacion.Id, note: 'Nueva basada en otra (comparar precios)']
+  Estado estado_cotizacion [not null]
+  Origen origen_cotizacion [not null, default: 'erp']
+  OcultaAlCliente boolean [not null, default: false]
+  Fecha timestamptz [not null]
+  VigenciaHasta date
+  MonedaCodigo char(3) [not null, default: 'MXN', ref: > Moneda.Codigo]
+  ListaPreciosId uuid [ref: > ListaPrecios.Id]
+  Descuento numeric(14,2) [not null, default: 0]
+  Subtotal numeric(14,2) [not null]
+  Iva numeric(14,2) [not null]
+  Total numeric(14,2) [not null]
+  Notas text
+
+  indexes {
+    (EmpresaId, Folio) [unique]
+    (ClienteId, Fecha)
+  }
+}
+
+Table CotizacionPartida {
+  ~Base
+  CotizacionId uuid [not null, ref: > Cotizacion.Id]
+  Orden smallint [not null]
+  Nombre varchar(200) [not null, note: 'Losa de cimentación…']
+  SolucionId varchar(40)
+  ProductoId uuid [ref: > Producto.Id, note: 'El concreto del catálogo, si corresponde']
+  TipoResistencia varchar(2) [not null, note: 'fc o mr']
+  ResistenciaKgCm2 smallint [not null]
+  EdadDias smallint [not null]
+  RevenimientoCm smallint [not null]
+  TmaMm smallint [not null]
+  Cemento varchar(20) [not null]
+  Exposicion varchar(20) [not null]
+  Colocacion varchar(20) [not null]
+  Aditivos "text[]" [not null, default: `'{}'`]
+  VolumenM3 numeric(10,2) [not null]
+  PrecioM3 numeric(14,2) [not null]
+  Entrega timestamptz
+  TrasladoDistanciaKm numeric(8,2)
+  TrasladoIncluidosKm numeric(8,2)
+  TrasladoPrecioKm numeric(10,2)
+}
+
+Table CotizacionLinea {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  PartidaId uuid [not null, ref: > CotizacionPartida.Id]
+  ProductoId uuid [not null, ref: > Producto.Id, note: 'Servicio, maquinaria o producto general']
+  Concepto varchar(300) [not null]
+  Cantidad numeric(12,3) [not null]
+  Dias smallint [note: 'Renta de maquinaria']
+  PrecioUnitario numeric(14,2) [not null]
+  Importe numeric(14,2) [not null]
+}
+
+Table Pedido {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  SucursalId uuid [not null, ref: > Sucursal.Id]
+  ClienteId uuid [not null, ref: > Cliente.Id]
+  ObraId uuid [not null, ref: > Obra.Id]
+  CotizacionId uuid [ref: > Cotizacion.Id]
+  PartidaId uuid [ref: > CotizacionPartida.Id, note: 'Un pedido por partida']
+  VendedorId uuid [ref: > Usuario.Id]
+  Folio varchar(40) [not null]
+  FechaHoraEntrega timestamptz [not null]
+  Estado estado_pedido [not null, default: 'programado']
+  Cobro estado_cobro [not null, default: 'por_cobrar']
+  MetodoPago metodo_pago [not null, default: 'sin_metodo']
+  EstatusPlanta estatus_planta [not null, default: 'no_enviado']
+  SolicitudPlantaFecha timestamptz [note: 'Nueva fecha que pidió la planta']
+  SolicitudPlantaNota text
+  Descuento numeric(14,2) [not null, default: 0]
+  Subtotal numeric(14,2) [not null]
+  Iva numeric(14,2) [not null]
+  Total numeric(14,2) [not null]
+
+  indexes {
+    (EmpresaId, Folio) [unique]
+    (SucursalId, FechaHoraEntrega)
+    (Cobro)
+  }
+}
+
+Table PedidoLinea {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  PedidoId uuid [not null, ref: > Pedido.Id]
+  ProductoId uuid [not null, ref: > Producto.Id]
+  Descripcion varchar(300) [not null, note: 'Especificación legible']
+  Cantidad numeric(12,3) [not null]
+  PrecioUnitario numeric(14,2) [not null]
+  Descuento numeric(14,2) [not null, default: 0]
+  Importe numeric(14,2) [not null]
+}
+
+Table Remision {
+  ~Base
+  PedidoId uuid [not null, ref: > Pedido.Id]
+  Folio varchar(40) [not null]
+  EquipoId uuid [ref: > Equipo.Id, note: 'El camión']
+  OperadorId uuid [ref: > Usuario.Id]
+  OperadorNombre varchar(200)
+  VolumenM3 numeric(6,2) [not null]
+  Estado estado_viaje [not null, default: 'cargando']
+  SalidaEn timestamptz
+  LlegadaEstimada timestamptz
+  LlegadaEn timestamptz
+  TerminadaEn timestamptz
+  FirmaArchivoId uuid [ref: > Archivo.Id, note: 'Firma de recibido']
+
+  Note: 'Cada viaje de camión de un pedido.'
+
+  indexes {
+    (PedidoId)
+  }
+}
+
+Table PosicionGps {
+  Id bigint [pk, increment]
+  EquipoId uuid [not null, ref: > Equipo.Id]
+  RemisionId uuid [ref: > Remision.Id]
+  Lat numeric(9,6) [not null]
+  Lng numeric(9,6) [not null]
+  Fecha timestamptz [not null]
+
+  Note: 'Seguimiento en vivo (después).'
+
+  indexes {
+    (EquipoId, Fecha)
+  }
+}
+
+Table MuestraLaboratorio {
+  ~Base
+  RemisionId uuid [not null, ref: > Remision.Id]
+  FechaMuestreo date [not null]
+  EdadDias smallint [not null]
+  ResistenciaDisenoKgCm2 smallint [not null]
+  ResistenciaObtenidaKgCm2 smallint [note: 'Vacío hasta que se ensaya']
+}
+
+// ============================================================================================
+// Contabilidad y facturación (CFDI)
+// ============================================================================================
+
+Table CuentaContable {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  PadreId uuid [ref: > CuentaContable.Id]
+  Codigo varchar(30) [not null, note: '105-01-001']
+  Nombre varchar(200) [not null]
+  Tipo tipo_cuenta [not null]
+  Naturaleza naturaleza_cuenta [not null]
+  CodigoAgrupadorSat varchar(10)
+  AceptaMovimientos boolean [not null, default: true, note: 'Solo las de último nivel']
+  MonedaCodigo char(3) [ref: > Moneda.Codigo]
+
+  indexes {
+    (EmpresaId, Codigo) [unique]
+  }
+}
+
+Table Diario {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  Nombre varchar(100) [not null]
+  Tipo tipo_diario [not null]
+  CuentaPredeterminadaId uuid [ref: > CuentaContable.Id]
+}
+
+Table PeriodoContable {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  Anio smallint [not null]
+  Mes smallint [not null]
+  Estado estado_periodo [not null, default: 'abierto']
+  CerradoEn timestamptz
+  CerradoPorId uuid [ref: > Usuario.Id]
+
+  indexes {
+    (EmpresaId, Anio, Mes) [unique]
+  }
+}
+
+Table Poliza {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  DiarioId uuid [not null, ref: > Diario.Id]
+  PeriodoId uuid [not null, ref: > PeriodoContable.Id]
+  Numero int [not null]
+  Fecha date [not null]
+  Tipo tipo_poliza [not null]
+  Concepto varchar(300) [not null]
+  Estado estado_poliza [not null, default: 'borrador']
+  RegistroTipo varchar(40) [note: 'Origen: Factura, Pago…']
+  RegistroId uuid
+
+  Note: 'Asiento contable. Al publicar, sus cargos y abonos deben cuadrar.'
+
+  indexes {
+    (EmpresaId, PeriodoId, Tipo, Numero) [unique]
+  }
+}
+
+Table PolizaLinea {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  PolizaId uuid [not null, ref: > Poliza.Id]
+  CuentaId uuid [not null, ref: > CuentaContable.Id]
+  Concepto varchar(300)
+  Cargo numeric(18,2) [not null, default: 0]
+  Abono numeric(18,2) [not null, default: 0]
+  MonedaCodigo char(3) [not null, default: 'MXN', ref: > Moneda.Codigo]
+  TipoCambio numeric(18,6) [not null, default: 1]
+  ClienteId uuid [ref: > Cliente.Id]
+  SucursalId uuid [ref: > Sucursal.Id, note: 'Para resultados por planta']
+}
+
+Table Impuesto {
+  ~Base
+  EmpresaId uuid [ref: > Empresa.Id, note: 'Vacío = del sistema (IVA 16 %)']
+  Nombre varchar(60) [not null]
+  Tipo tipo_impuesto [not null]
+  ImpuestoSat varchar(3) [not null, note: '002 IVA, 001 ISR']
+  TipoFactor varchar(10) [not null, default: 'Tasa']
+  Tasa numeric(8,6) [not null, note: '0.160000']
+  CuentaContableId uuid [ref: > CuentaContable.Id]
+}
+
+Table Factura {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  SucursalId uuid [ref: > Sucursal.Id]
+  ClienteId uuid [not null, ref: > Cliente.Id]
+  ClienteDatoFiscalId uuid [not null, ref: > ClienteDatoFiscal.Id]
+  Serie varchar(10) [not null]
+  Folio int [not null]
+  Uuid uuid [unique, note: 'Folio fiscal, al timbrar']
+  Fecha timestamptz [not null]
+  Estado estado_cfdi [not null, default: 'borrador']
+  MetodoPagoSat varchar(3) [not null, note: 'PUE o PPD']
+  FormaPagoSat varchar(2) [not null]
+  UsoCfdi varchar(4) [not null]
+  MonedaCodigo char(3) [not null, default: 'MXN', ref: > Moneda.Codigo]
+  TipoCambio numeric(18,6) [not null, default: 1]
+  Subtotal numeric(14,2) [not null]
+  Descuento numeric(14,2) [not null, default: 0]
+  Impuestos numeric(14,2) [not null]
+  Total numeric(14,2) [not null]
+  Saldo numeric(14,2) [not null, note: 'Lo que falta por pagar']
+  XmlArchivoId uuid [ref: > Archivo.Id]
+  PdfArchivoId uuid [ref: > Archivo.Id]
+  PolizaId uuid [ref: > Poliza.Id]
+  CanceladaEn timestamptz
+  MotivoCancelacion varchar(2)
+
+  indexes {
+    (EmpresaId, Serie, Folio) [unique]
+    (ClienteId, Saldo)
+  }
+}
+
+Table FacturaLinea {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  FacturaId uuid [not null, ref: > Factura.Id]
+  PedidoId uuid [ref: > Pedido.Id, note: 'Qué pedido factura (una factura puede juntar varios)']
+  ProductoId uuid [not null, ref: > Producto.Id]
+  ClaveProdServ varchar(8) [not null]
+  ClaveUnidad varchar(3) [not null]
+  Descripcion varchar(1000) [not null]
+  Cantidad numeric(12,3) [not null]
+  PrecioUnitario numeric(14,4) [not null]
+  Descuento numeric(14,2) [not null, default: 0]
+  Importe numeric(14,2) [not null]
+  ImpuestoId uuid [ref: > Impuesto.Id]
+}
+
+Table NotaCredito {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  FacturaId uuid [not null, ref: > Factura.Id]
+  Serie varchar(10) [not null]
+  Folio int [not null]
+  Uuid uuid [unique]
+  Fecha timestamptz [not null]
+  Estado estado_cfdi [not null, default: 'borrador']
+  Motivo text [not null]
+  Total numeric(14,2) [not null]
+  XmlArchivoId uuid [ref: > Archivo.Id]
+  PdfArchivoId uuid [ref: > Archivo.Id]
+  PolizaId uuid [ref: > Poliza.Id]
+}
+
+Table CuentaBancaria {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  Banco varchar(100) [not null]
+  Numero varchar(30)
+  Clabe varchar(18)
+  MonedaCodigo char(3) [not null, default: 'MXN', ref: > Moneda.Codigo]
+  CuentaContableId uuid [ref: > CuentaContable.Id]
+}
+
+Table Pago {
+  ~Base
+  EmpresaId uuid [not null, ref: > Empresa.Id]
+  ClienteId uuid [not null, ref: > Cliente.Id]
+  CuentaBancariaId uuid [ref: > CuentaBancaria.Id]
+  Fecha timestamptz [not null]
+  FormaPagoSat varchar(2) [not null, note: '03 transferencia, 01 efectivo…']
+  MonedaCodigo char(3) [not null, default: 'MXN', ref: > Moneda.Codigo]
+  TipoCambio numeric(18,6) [not null, default: 1]
+  Monto numeric(14,2) [not null]
+  Referencia varchar(100)
+  ComplementoUuid uuid [unique, note: 'Complemento de pago (facturas PPD)']
+  XmlArchivoId uuid [ref: > Archivo.Id]
+  PolizaId uuid [ref: > Poliza.Id]
+}
+
+Table PagoAplicacion {
+  Id uuid [pk, default: `gen_random_uuid()`]
+  PagoId uuid [not null, ref: > Pago.Id]
+  FacturaId uuid [not null, ref: > Factura.Id]
+  Monto numeric(14,2) [not null]
+  Parcialidad smallint [not null, default: 1]
+  SaldoAnterior numeric(14,2) [not null]
+  SaldoInsoluto numeric(14,2) [not null]
+
+  indexes {
+    (PagoId, FacturaId) [unique]
+  }
+}
+
+// ============================================================================================
+// Grupos (colores en el diagrama)
+// ============================================================================================
+
+TableGroup organizacion_y_acceso [color: #1A1A1C] {
+  Organizacion
+  Empresa
+  Sucursal
+  Usuario
+  Rol
+  RolPermiso
+  UsuarioAcceso
+  Sesion
+  PreferenciaUsuario
+  ApiKey
+  Secuencia
+}
+
+TableGroup transversales [color: #696D71] {
+  Archivo
+  Evento
+  EventoCambio
+  Seguidor
+  Actividad
+  Conversacion
+  ConversacionParticipante
+  Mensaje
+  Notificacion
+  UnidadMedida
+  Moneda
+  TipoCambio
+  CatalogoSat
+}
+
+TableGroup clientes_y_crm [color: #2A78D6] {
+  Cliente
+  ClienteContacto
+  ClienteDatoFiscal
+  Obra
+  Prospecto
+}
+
+TableGroup productos_y_precios [color: #1BAF7A] {
+  CategoriaProducto
+  Producto
+  Existencia
+  MovimientoInventario
+  Equipo
+  ProductoEquipo
+  ListaPrecios
+  ListaPreciosSucursal
+  ReglaPrecio
+  ProgramaDescuento
+  Cupon
+  SaldoLealtad
+}
+
+TableGroup ventas_y_operacion [color: #D3181E] {
+  Cotizacion
+  CotizacionPartida
+  CotizacionLinea
+  Pedido
+  PedidoLinea
+  Remision
+  PosicionGps
+  MuestraLaboratorio
+}
+
+TableGroup contabilidad [color: #6250D6] {
+  CuentaContable
+  Diario
+  PeriodoContable
+  Poliza
+  PolizaLinea
+  Impuesto
+  Factura
+  FacturaLinea
+  NotaCredito
+  CuentaBancaria
+  Pago
+  PagoAplicacion
+}

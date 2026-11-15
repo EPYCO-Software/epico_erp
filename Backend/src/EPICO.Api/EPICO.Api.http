@@ -1,6 +1,24 @@
-@EPICO.Api_HostAddress = http://localhost:5157
+@api = http://localhost:5157/api/v1
 
-GET {{EPICO.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Login (usuario root del seed; la contraseña sale de Seed__RootPassword)
+# @name login
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "correo": "yumilrf@hotmail.com", "password": "Epico.Dev.2026" }
 
 ###
+@token = {{login.response.body.token}}
+
+GET {{api}}/empresas
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/sucursales
+Authorization: Bearer {{token}}
+
+### Renovar el access token
+POST {{api}}/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{login.response.body.refreshToken}}" }

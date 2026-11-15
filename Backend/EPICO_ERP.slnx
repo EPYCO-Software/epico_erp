@@ -6,4 +6,7 @@
     <Project Path="src/EPICO.Domain/EPICO.Domain.csproj" />
     <Project Path="src/EPICO.Infrastructure/EPICO.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EPICO.Tests/EPICO.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -1,0 +1,3758 @@
+{
+  "version": "3.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "currentViewName": null,
+  "defaultView": {
+    "detailLevel": "All",
+    "relationshipMode": "All",
+    "tablePositions": [
+      {
+        "name": "Organizacion",
+        "schemaName": "public",
+        "x": 309.77099609375,
+        "y": 12
+      },
+      {
+        "name": "Empresa",
+        "schemaName": "public",
+        "x": 1743.974609375,
+        "y": 1133
+      },
+      {
+        "name": "Sucursal",
+        "schemaName": "public",
+        "x": 2684.3203125,
+        "y": 263
+      },
+      {
+        "name": "Usuario",
+        "schemaName": "public",
+        "x": 309.77099609375,
+        "y": 410
+      },
+      {
+        "name": "Rol",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 116
+      },
+      {
+        "name": "RolPermiso",
+        "schemaName": "public",
+        "x": 1743.974609375,
+        "y": 179
+      },
+      {
+        "name": "UsuarioAcceso",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 200
+      },
+      {
+        "name": "Sesion",
+        "schemaName": "public",
+        "x": 2684.3203125,
+        "y": 885
+      },
+      {
+        "name": "PreferenciaUsuario",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 504
+      },
+      {
+        "name": "ApiKey",
+        "schemaName": "public",
+        "x": 1743.974609375,
+        "y": 375
+      },
+      {
+        "name": "Secuencia",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 470
+      },
+      {
+        "name": "Archivo",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 699
+      },
+      {
+        "name": "Evento",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 3620
+      },
+      {
+        "name": "EventoCambio",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 1940
+      },
+      {
+        "name": "Seguidor",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 1352
+      },
+      {
+        "name": "Actividad",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 1622
+      },
+      {
+        "name": "Conversacion",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 2338
+      },
+      {
+        "name": "ConversacionParticipante",
+        "schemaName": "public",
+        "x": 6293.23388671875,
+        "y": 242
+      },
+      {
+        "name": "Mensaje",
+        "schemaName": "public",
+        "x": 6293.23388671875,
+        "y": 1497
+      },
+      {
+        "name": "Notificacion",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 2738
+      },
+      {
+        "name": "UnidadMedida",
+        "schemaName": "public",
+        "x": 309.77099609375,
+        "y": 1096
+      },
+      {
+        "name": "Moneda",
+        "schemaName": "public",
+        "x": 309.77099609375,
+        "y": 1302
+      },
+      {
+        "name": "TipoCambio",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 3104
+      },
+      {
+        "name": "CatalogoSat",
+        "schemaName": "public",
+        "x": 12,
+        "y": 12
+      },
+      {
+        "name": "Cliente",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 740
+      },
+      {
+        "name": "ClienteContacto",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 2736
+      },
+      {
+        "name": "ClienteDatoFiscal",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 221
+      },
+      {
+        "name": "Obra",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 811
+      },
+      {
+        "name": "Prospecto",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 3263
+      },
+      {
+        "name": "CategoriaProducto",
+        "schemaName": "public",
+        "x": 923.44580078125,
+        "y": 2276
+      },
+      {
+        "name": "Producto",
+        "schemaName": "public",
+        "x": 2684.3203125,
+        "y": 1251
+      },
+      {
+        "name": "Existencia",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 1426
+      },
+      {
+        "name": "MovimientoInventario",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 1664
+      },
+      {
+        "name": "Equipo",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 2062
+      },
+      {
+        "name": "ProductoEquipo",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 1401
+      },
+      {
+        "name": "ListaPrecios",
+        "schemaName": "public",
+        "x": 2684.3203125,
+        "y": 2162
+      },
+      {
+        "name": "ListaPreciosSucursal",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 2599
+      },
+      {
+        "name": "ReglaPrecio",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 4230
+      },
+      {
+        "name": "ProgramaDescuento",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 2773
+      },
+      {
+        "name": "Cupon",
+        "schemaName": "public",
+        "x": 8391.26123046875,
+        "y": 347
+      },
+      {
+        "name": "SaldoLealtad",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 1575
+      },
+      {
+        "name": "Cotizacion",
+        "schemaName": "public",
+        "x": 6293.23388671875,
+        "y": 469
+      },
+      {
+        "name": "CotizacionPartida",
+        "schemaName": "public",
+        "x": 7023.02001953125,
+        "y": 200
+      },
+      {
+        "name": "CotizacionLinea",
+        "schemaName": "public",
+        "x": 7734.85302734375,
+        "y": 158
+      },
+      {
+        "name": "Pedido",
+        "schemaName": "public",
+        "x": 7734.85302734375,
+        "y": 492
+      },
+      {
+        "name": "PedidoLinea",
+        "schemaName": "public",
+        "x": 8391.26123046875,
+        "y": 12
+      },
+      {
+        "name": "Remision",
+        "schemaName": "public",
+        "x": 8391.26123046875,
+        "y": 809
+      },
+      {
+        "name": "PosicionGps",
+        "schemaName": "public",
+        "x": 8933.96044921875,
+        "y": 12
+      },
+      {
+        "name": "MuestraLaboratorio",
+        "schemaName": "public",
+        "x": 8933.96044921875,
+        "y": 282
+      },
+      {
+        "name": "CuentaContable",
+        "schemaName": "public",
+        "x": 2684.3203125,
+        "y": 2802
+      },
+      {
+        "name": "Diario",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 4895
+      },
+      {
+        "name": "PeriodoContable",
+        "schemaName": "public",
+        "x": 2684.3203125,
+        "y": 3360
+      },
+      {
+        "name": "Poliza",
+        "schemaName": "public",
+        "x": 5134.7958984375,
+        "y": 4044
+      },
+      {
+        "name": "PolizaLinea",
+        "schemaName": "public",
+        "x": 6293.23388671875,
+        "y": 1799
+      },
+      {
+        "name": "Impuesto",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 5462
+      },
+      {
+        "name": "Factura",
+        "schemaName": "public",
+        "x": 6293.23388671875,
+        "y": 2197
+      },
+      {
+        "name": "FacturaLinea",
+        "schemaName": "public",
+        "x": 8391.26123046875,
+        "y": 1463
+      },
+      {
+        "name": "NotaCredito",
+        "schemaName": "public",
+        "x": 7023.02001953125,
+        "y": 1111
+      },
+      {
+        "name": "CuentaBancaria",
+        "schemaName": "public",
+        "x": 3802.52490234375,
+        "y": 5956
+      },
+      {
+        "name": "Pago",
+        "schemaName": "public",
+        "x": 6293.23388671875,
+        "y": 3235
+      },
+      {
+        "name": "PagoAplicacion",
+        "schemaName": "public",
+        "x": 7023.02001953125,
+        "y": 1765
+      }
+    ],
+    "tableGroupCollapseStates": [],
+    "stickyNoteLayouts": [],
+    "referencePaths": [
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "LogoArchivoId"
+        ],
+        "secondTableName": "Organizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Empresa",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "Empresa",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "LogoArchivoId"
+        ],
+        "secondTableName": "Empresa",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CsdCerArchivoId"
+        ],
+        "secondTableName": "Empresa",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CsdKeyArchivoId"
+        ],
+        "secondTableName": "Empresa",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Sucursal",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "FotoArchivoId"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Rol",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Rol",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "RolId"
+        ],
+        "secondTableName": "RolPermiso",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "UsuarioAcceso",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "UsuarioAcceso",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "UsuarioAcceso",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Rol",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "RolId"
+        ],
+        "secondTableName": "UsuarioAcceso",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "Sesion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Sesion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "PreferenciaUsuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "ApiKey",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Rol",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "RolId"
+        ],
+        "secondTableName": "ApiKey",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Secuencia",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "Secuencia",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Archivo",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SubidoPorId"
+        ],
+        "secondTableName": "Archivo",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Evento",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "AutorId"
+        ],
+        "secondTableName": "Evento",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sesion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SesionId"
+        ],
+        "secondTableName": "Evento",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Evento",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EventoId"
+        ],
+        "secondTableName": "EventoCambio",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "Seguidor",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Actividad",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "AsignadaAId"
+        ],
+        "secondTableName": "Actividad",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Conversacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Conversacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Conversacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ConversacionId"
+        ],
+        "secondTableName": "ConversacionParticipante",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "ConversacionParticipante",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Conversacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ConversacionId"
+        ],
+        "secondTableName": "Mensaje",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "AutorId"
+        ],
+        "secondTableName": "Mensaje",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ArchivoId"
+        ],
+        "secondTableName": "Mensaje",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "Notificacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "TipoCambio",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Cliente",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaRestringidaId"
+        ],
+        "secondTableName": "Cliente",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "VendedorId"
+        ],
+        "secondTableName": "Cliente",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "ListaPrecios",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ListaPreciosId"
+        ],
+        "secondTableName": "Cliente",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "ClienteContacto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "ClienteContacto",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "ClienteDatoFiscal",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Obra",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ResponsableFotoArchivoId"
+        ],
+        "secondTableName": "Obra",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Prospecto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Prospecto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "VendedorId"
+        ],
+        "secondTableName": "Prospecto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Prospecto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "CategoriaProducto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "Producto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaRestringidaId"
+        ],
+        "secondTableName": "Producto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CategoriaProducto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CategoriaId"
+        ],
+        "secondTableName": "Producto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "UnidadMedida",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UnidadId"
+        ],
+        "secondTableName": "Producto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "Producto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "Existencia",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "Existencia",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "MovimientoInventario",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "MovimientoInventario",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsuarioId"
+        ],
+        "secondTableName": "MovimientoInventario",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "Equipo",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "ProductoEquipo",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Equipo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EquipoId"
+        ],
+        "secondTableName": "ProductoEquipo",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "ListaPrecios",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaRestringidaId"
+        ],
+        "secondTableName": "ListaPrecios",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "ListaPrecios",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "ListaPrecios",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ListaPreciosId"
+        ],
+        "secondTableName": "ListaPreciosSucursal",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "ListaPreciosSucursal",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "ListaPrecios",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ListaPreciosId"
+        ],
+        "secondTableName": "ReglaPrecio",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "ReglaPrecio",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CategoriaProducto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CategoriaId"
+        ],
+        "secondTableName": "ReglaPrecio",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OrganizacionId"
+        ],
+        "secondTableName": "ProgramaDescuento",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaRestringidaId"
+        ],
+        "secondTableName": "ProgramaDescuento",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "ProgramaDescuento",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CategoriaProducto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CategoriaId"
+        ],
+        "secondTableName": "ProgramaDescuento",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "ProgramaDescuento",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProgramaId"
+        ],
+        "secondTableName": "Cupon",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Cupon",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Pedido",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "GanadoEnPedidoId"
+        ],
+        "secondTableName": "Cupon",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Pedido",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "UsadoEnPedidoId"
+        ],
+        "secondTableName": "Cupon",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "ProgramaDescuento",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProgramaId"
+        ],
+        "secondTableName": "SaldoLealtad",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "SaldoLealtad",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Obra",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ObraId"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "VendedorId"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cotizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "BaseId"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "ListaPrecios",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ListaPreciosId"
+        ],
+        "secondTableName": "Cotizacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cotizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CotizacionId"
+        ],
+        "secondTableName": "CotizacionPartida",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "CotizacionPartida",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CotizacionPartida",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PartidaId"
+        ],
+        "secondTableName": "CotizacionLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "CotizacionLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Pedido",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "Pedido",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Pedido",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Obra",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ObraId"
+        ],
+        "secondTableName": "Pedido",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cotizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CotizacionId"
+        ],
+        "secondTableName": "Pedido",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CotizacionPartida",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PartidaId"
+        ],
+        "secondTableName": "Pedido",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "VendedorId"
+        ],
+        "secondTableName": "Pedido",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Pedido",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PedidoId"
+        ],
+        "secondTableName": "PedidoLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "PedidoLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Pedido",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PedidoId"
+        ],
+        "secondTableName": "Remision",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Equipo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EquipoId"
+        ],
+        "secondTableName": "Remision",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OperadorId"
+        ],
+        "secondTableName": "Remision",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "FirmaArchivoId"
+        ],
+        "secondTableName": "Remision",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Equipo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EquipoId"
+        ],
+        "secondTableName": "PosicionGps",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Remision",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "RemisionId"
+        ],
+        "secondTableName": "PosicionGps",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Remision",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "RemisionId"
+        ],
+        "secondTableName": "MuestraLaboratorio",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "CuentaContable",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CuentaContable",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PadreId"
+        ],
+        "secondTableName": "CuentaContable",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "CuentaContable",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Diario",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CuentaContable",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CuentaPredeterminadaId"
+        ],
+        "secondTableName": "Diario",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "PeriodoContable",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CerradoPorId"
+        ],
+        "secondTableName": "PeriodoContable",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Poliza",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Diario",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "DiarioId"
+        ],
+        "secondTableName": "Poliza",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "PeriodoContable",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PeriodoId"
+        ],
+        "secondTableName": "Poliza",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Poliza",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PolizaId"
+        ],
+        "secondTableName": "PolizaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CuentaContable",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CuentaId"
+        ],
+        "secondTableName": "PolizaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "PolizaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "PolizaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "PolizaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Impuesto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CuentaContable",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CuentaContableId"
+        ],
+        "secondTableName": "Impuesto",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SucursalId"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "ClienteDatoFiscal",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteDatoFiscalId"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "XmlArchivoId"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PdfArchivoId"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Poliza",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PolizaId"
+        ],
+        "secondTableName": "Factura",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Factura",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "FacturaId"
+        ],
+        "secondTableName": "FacturaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Pedido",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PedidoId"
+        ],
+        "secondTableName": "FacturaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ProductoId"
+        ],
+        "secondTableName": "FacturaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Impuesto",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ImpuestoId"
+        ],
+        "secondTableName": "FacturaLinea",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "NotaCredito",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Factura",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "FacturaId"
+        ],
+        "secondTableName": "NotaCredito",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "XmlArchivoId"
+        ],
+        "secondTableName": "NotaCredito",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PdfArchivoId"
+        ],
+        "secondTableName": "NotaCredito",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Poliza",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PolizaId"
+        ],
+        "secondTableName": "NotaCredito",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "CuentaBancaria",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "CuentaBancaria",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CuentaContable",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CuentaContableId"
+        ],
+        "secondTableName": "CuentaBancaria",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EmpresaId"
+        ],
+        "secondTableName": "Pago",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ClienteId"
+        ],
+        "secondTableName": "Pago",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "CuentaBancaria",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CuentaBancariaId"
+        ],
+        "secondTableName": "Pago",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Codigo"
+        ],
+        "firstTableName": "Moneda",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "MonedaCodigo"
+        ],
+        "secondTableName": "Pago",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "XmlArchivoId"
+        ],
+        "secondTableName": "Pago",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Poliza",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PolizaId"
+        ],
+        "secondTableName": "Pago",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Pago",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PagoId"
+        ],
+        "secondTableName": "PagoAplicacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "Id"
+        ],
+        "firstTableName": "Factura",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "FacturaId"
+        ],
+        "secondTableName": "PagoAplicacion",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Organizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Empresa",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Sucursal",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Usuario",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Rol",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Rol",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "ApiKey",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "ApiKey",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Archivo",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Actividad",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Actividad",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Conversacion",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Conversacion",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Cliente",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "ClienteContacto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "ClienteContacto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "ClienteDatoFiscal",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "ClienteDatoFiscal",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Obra",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Obra",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Prospecto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Prospecto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "CategoriaProducto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "CategoriaProducto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Producto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Equipo",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Equipo",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "ListaPrecios",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "ListaPrecios",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "ReglaPrecio",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "ReglaPrecio",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "ProgramaDescuento",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "ProgramaDescuento",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Cupon",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Cupon",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Cotizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Cotizacion",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "CotizacionPartida",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "CotizacionPartida",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Pedido",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Pedido",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Remision",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Remision",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "MuestraLaboratorio",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "MuestraLaboratorio",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "CuentaContable",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "CuentaContable",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Diario",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Diario",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Poliza",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Poliza",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Impuesto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Impuesto",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Factura",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Factura",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "NotaCredito",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "NotaCredito",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "CuentaBancaria",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "CuentaBancaria",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "CreatedById"
+        ],
+        "firstTableName": "Pago",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "UpdatedById"
+        ],
+        "firstTableName": "Pago",
+        "firstSchemaName": "public",
+        "firstRelation": "*",
+        "secondFieldNames": [
+          "Id"
+        ],
+        "secondTableName": "Usuario",
+        "secondSchemaName": "public",
+        "secondRelation": "1",
+        "checkPoints": []
+      }
+    ]
+  },
+  "views": {}
+}
