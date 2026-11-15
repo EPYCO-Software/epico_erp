@@ -200,7 +200,8 @@ const O = new Intl.ListFormat('es', { type: 'disjunction' });
 })
 export default class Cotizaciones {
   private readonly plantas = inject(PlantasService);
-  private readonly correo = inject(AuthService).sesion()?.usuario.correo ?? null;
+  // El vendedor es el usuario: con API, su id; en la demo, su correo.
+  private readonly correo = ((u) => u?.id ?? u?.correo ?? null)(inject(AuthService).sesion()?.usuario);
 
   protected readonly estados = ESTADOS_COTIZACION;
   protected readonly iconos = { buscar: Search, filtro: ListFilter, quitar: X, oculta: EyeOff };

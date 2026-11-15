@@ -1,4 +1,4 @@
-import { Component, ElementRef, Injector, afterNextRender, computed, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { FormField, form, required, submit } from '@angular/forms/signals';
 import { ArrowRight } from 'lucide';
 import { DEFAULT_TIMEZONE, FechaZonaPipe, FieldError, Icon } from 'ui';
@@ -140,6 +140,14 @@ export class Historial {
 
   /** Clave del registro: "cotizacion:…", "pedido:…", "cliente:…". */
   readonly registro = input.required<string>();
+
+  constructor() {
+    // Con API, el hilo del registro se trae del backend al abrirlo
+    effect(() => {
+      const registro = this.registro();
+      untracked(() => void this.historial.cargar(registro));
+    });
+  }
 
   protected readonly titulo = tituloActividad;
   protected readonly iconos = ICONOS_ACTIVIDAD;

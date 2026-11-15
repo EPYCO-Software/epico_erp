@@ -1,5 +1,8 @@
-import { Service, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
 import {
+  AUTH_API_URL,
+  AuthService,
   Cliente,
   Cotizacion,
   CotizacionVista,
@@ -39,7 +42,8 @@ import {
 } from 'ui';
 import { Cambio, EventoHistorial, HistorialService } from '../../core/historial';
 import { normalizar } from '../../core/modulos';
-import { RAZONES_SOCIALES } from '../../core/plantas';
+import { PlantasService, RAZONES_SOCIALES } from '../../core/plantas';
+import { Contexto, VentasApi, aCliente, aEvento, pedidoApi } from './ventas-api';
 
 /** En el orden del panel de filtros. Tinte + texto oscurecido (AA en texto pequeño), como los estados del dashboard. */
 export const ESTADOS_COTIZACION: Record<EstadoCotizacion, { nombre: string; clase: string }> = {
@@ -394,18 +398,20 @@ const PLANTAS = RAZONES_SOCIALES.flatMap((r) => r.plantas);
 interface Catalogo {
   clientes: Cliente[];
   obras: Obra[];
+  /** Con API: id → nombre de usuarios (vendedores). */
+  nombres?: Map<string, string>;
 }
 const EJEMPLO: Catalogo = { clientes: CLIENTES, obras: OBRAS };
 
 function vista(c: Cotizacion, cat: Catalogo = EJEMPLO): CotizacionVista {
-  const planta = PLANTAS.find((p) => p.id === c.plantaId)!;
-  const obras = [...new Set(c.partidas.map((p) => p.obraId))].map((id) => cat.obras.find((o) => o.id === id)!.nombre);
+  const planta = PLANTAS.find((p) => p.id === c.plantaId) ?? { nombre: c.plantaId, zonaHoraria: 'America/Mexico_City' };
+  const obras = [...new Set(c.partidas.map((p) => p.obraId))].map((id) => cat.obras.find((o) => o.id === id)?.nombre ?? '').filter(Boolean);
   return {
     ...c,
     plantaNombre: planta.nombre,
     zonaHoraria: planta.zonaHoraria,
-    clienteNombre: cat.clientes.find((x) => x.id === c.clienteId)!.nombre,
-    vendedorNombre: VENDEDORES[c.vendedorId],
+    clienteNombre: cat.clientes.find((x) => x.id === c.clienteId)?.nombre ?? 'Sin cliente',
+    vendedorNombre: VENDEDORES[c.vendedorId] ?? cat.nombres?.get(c.vendedorId) ?? '',
     obrasNombre: obras.join(', '),
     total: totalesCotizacion(c).neto,
   };
@@ -547,9 +553,8 @@ export const modificable = (c: Cotizacion) => c.estado === 'recibida' || c.estad
 /** Las plantas de la concretera (ESC, XPJ, CZM, CUN) con su zona horaria. */
 export const PLANTAS_ERP = RAZONES_SOCIALES.flatMap((r) => r.plantas);
 
-/** La planta que atiende un municipio (la del portal, más Cancún, que solo opera el ERP); null si ninguna. */
+/** La planta que atiende un municipio (la misma del portal: plantaPara de ui); null si ninguna. */
 export function plantaDeMunicipio(municipio: string): string | null {
-  if (/canc[uú]n/i.test(municipio)) return 'CUN';
   const clave = plantaPara({ municipio }).clave;
   return PLANTAS_ERP.some((p) => p.id === clave) ? clave : null;
 }
@@ -598,13 +603,13 @@ export const TRASLADO_POR_OMISION = { incluidosKm: 20, precioKm: 12 };
 
 /** Pedido con los nombres resueltos (cliente, obra y planta) y la zona de su planta. */
 function vistaPedido(p: Pedido, cat: Catalogo): PedidoVista {
-  const planta = PLANTAS.find((x) => x.id === p.plantaId)!;
+  const planta = PLANTAS.find((x) => x.id === p.plantaId) ?? { nombre: p.plantaId, zonaHoraria: 'America/Mexico_City' };
   return {
     metodoPago: 'sin_metodo',
     estatusPlanta: 'no_enviado',
     ...p,
-    clienteNombre: cat.clientes.find((x) => x.id === p.clienteId)!.nombre,
-    obraNombre: cat.obras.find((o) => o.id === p.obraId)!.nombre,
+    clienteNombre: cat.clientes.find((x) => x.id === p.clienteId)?.nombre ?? '',
+    obraNombre: cat.obras.find((o) => o.id === p.obraId)?.nombre ?? '',
     plantaNombre: planta.nombre,
     zonaHoraria: planta.zonaHoraria,
   };
@@ -880,11 +885,26 @@ function historialDemo(): EventoHistorial[] {
   return eventos;
 }
 
-/** Las cotizaciones y los pedidos que generan: la lista, la vista previa y las vistas completas leen de aquí. */
+/** El mensaje que ve el usuario cuando falla una llamada a la API (el detail del ProblemDetails). */
+export function mensajeDe(e: unknown): string {
+  if (e instanceof HttpErrorResponse) {
+    if (e.status === 0) return 'No hay conexión con el servidor. Intenta de nuevo en un momento.';
+    const detalle = (e.error as { detail?: string } | null)?.detail;
+    if (detalle) return detalle;
+    if (e.status === 403) return 'No tienes permiso para hacer esto.';
+  }
+  return 'No se pudo completar. Intenta de nuevo.';
+}
+
+const porFecha = (a: { fecha: string }, b: { fecha: string }) => Date.parse(b.fecha) - Date.parse(a.fecha);
+
+/**
+ * Las cotizaciones y los pedidos que generan: la lista, la vista previa y las vistas completas leen de aquí.
+ * Con API (el ERP provee AUTH_API_URL) todo se lee del backend al entrar y cada acción se guarda allá (ventas-api.ts);
+ * el historial lo genera el backend. Sin ella (pruebas, demo) todo vive en memoria con los datos de ejemplo.
+ */
 @Service()
 export class VentasService {
-  // shortcut: en memoria (se pierde al recargar) y el envío solo cambia el estado; con backend, guardar, enviar y
-  // confirmar por HTTP (que el cliente vea la cotización y sus pedidos en el portal) sin cambiar esta API.
   readonly cotizaciones = signal<CotizacionVista[]>(COTIZACIONES);
   /** El más reciente primero. */
   readonly pedidos = signal<PedidoVista[]>(PEDIDOS);
@@ -893,30 +913,95 @@ export class VentasService {
   readonly productos = signal<ProductoTarifa[]>(PRODUCTOS);
   /** Las obras de los clientes; crece con los lugares de entrega que se dan de alta al cotizar. */
   readonly obras = signal<Obra[]>(OBRAS);
+  /** Con API: cargando lo de Ventas y el error de la última carga (para avisar en pantalla). */
+  readonly cargando = signal(false);
+  readonly errorCarga = signal('');
   private consecutivo = 150 + PEDIDOS.length;
   /** Cada acción queda en el historial de su registro, con lo que cambió. */
   private readonly historial = inject(HistorialService);
+  private readonly auth = inject(AuthService);
+  private readonly plantas = inject(PlantasService);
+  private readonly api = inject(AUTH_API_URL, { optional: true }) ? inject(VentasApi) : null;
+  private ctx: Contexto | null = null;
+  private nombres = new Map<string, string>();
+  private publicoGeneralId: string | null = null;
 
   constructor() {
-    this.historial.agregar(historialDemo());
+    if (!this.api) {
+      this.historial.agregar(historialDemo());
+      return;
+    }
+    this.cotizaciones.set([]);
+    this.pedidos.set([]);
+    this.clientes.set([]);
+    this.productos.set([]);
+    this.obras.set([]);
+    this.historial.remoto = { cargar: (r) => this.historialDe(r), nota: (r, t) => this.notaEn(r, t) };
+    // Al entrar, o al cambiar de usuario o de empresa, se trae todo de nuevo (no al renovar el token)
+    const quien = computed(() => {
+      const s = this.auth.sesion();
+      return s ? `${s.usuario.id ?? s.usuario.correo}|${s.empresaId ?? ''}` : '';
+    });
+    effect(() => {
+      if (quien()) untracked(() => void this.recargar());
+    });
+  }
+
+  /** Con API: todo lo de Ventas desde el backend. */
+  async recargar(): Promise<void> {
+    if (!this.api) return;
+    this.cargando.set(true);
+    this.errorCarga.set('');
+    try {
+      const d = await this.api.cargar();
+      this.ctx = d.ctx;
+      this.nombres = d.nombres;
+      this.publicoGeneralId = d.publicoGeneralId;
+      this.clientes.set(d.clientes);
+      this.obras.set(d.obras);
+      this.productos.set(d.productos);
+      const cat = this.catalogo();
+      this.cotizaciones.set(d.cotizaciones.map((c) => vista(c, cat)).sort(porFecha));
+      this.pedidos.set(d.pedidos.map((p) => vistaPedido(p, cat)).sort((a, b) => b.folio.localeCompare(a.folio)));
+    } catch (e) {
+      this.errorCarga.set(mensajeDe(e));
+    } finally {
+      this.cargando.set(false);
+    }
   }
 
   /**
    * Precios especiales, productos, servicios y descuento. Si ya estaba enviada, el cliente tiene la anterior: como
    * en el portal, se vuelve la revisión siguiente de su serie (-R1, -R2…) y queda en borrador hasta reenviarla.
+   * Devuelve la que quedó (con API, la revisión es otra cotización).
    */
-  guardar(id: string, cambios: Pick<Cotizacion, 'partidas' | 'descuento'>): void {
+  async guardar(id: string, cambios: Pick<Cotizacion, 'partidas' | 'descuento'>): Promise<CotizacionVista> {
     const antes = this.buscar(id)!;
+    if (this.api) {
+      const n: NuevaCotizacion = { clienteId: antes.clienteId, plantaId: antes.plantaId, partidas: cambios.partidas, descuento: cambios.descuento };
+      const c =
+        antes.estado === 'enviada'
+          ? await this.api.crearCotizacion(n, this.contexto(), this.unidadDe, { revisionDeId: id })
+          : await this.api.guardarCotizacion(id, n, new Set(antes.partidas.map((p) => p.id)), this.contexto(), this.unidadDe);
+      return this.ponerCotizacion(c);
+    }
     this.cambiar(id, (c) =>
       c.estado === 'enviada'
         ? { ...c, ...cambios, revision: c.revision + 1, folio: `${c.serie}-R${c.revision + 1}`, estado: 'borrador', envio: undefined }
         : { ...c, ...cambios },
     );
     this.historial.registrar(registro.cotizacion(id), { texto: 'Cambios guardados', ...cambiosEntre(antes, this.buscar(id)!) });
+    return this.buscar(id)!;
   }
 
   /** A la cuenta del portal si el cliente está conectado; si no, al correo que se indicó. */
-  enviar(id: string, correo: string, portal: boolean): void {
+  async enviar(id: string, correo: string, portal: boolean): Promise<void> {
+    if (this.api) {
+      // shortcut: el backend aún no manda el correo ni publica en el portal; solo cambia el estado a enviada.
+      await this.api.enviar(id);
+      this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      return;
+    }
     const antes = this.buscar(id)!;
     // Lo que se envía, el cliente lo ve.
     this.cambiar(id, (c) => ({ ...c, estado: 'enviada', ocultaAlCliente: undefined, envio: { correo, portal, fecha: new Date().toISOString() } }));
@@ -930,7 +1015,13 @@ export class VentasService {
    * Como "Confirmar" en Odoo: la cotización pasa a pedido y genera un pedido por partida (cada entrega es una orden de
    * venta, como al aceptarla en el portal). Devuelve los pedidos nuevos; si ya no se podía confirmar, ninguno.
    */
-  confirmar(id: string, metodoPago: MetodoPago = 'sin_metodo'): PedidoVista[] {
+  async confirmar(id: string, metodoPago: MetodoPago = 'sin_metodo'): Promise<PedidoVista[]> {
+    if (this.api) {
+      const nuevos = await this.api.confirmar(id, this.contexto());
+      const con = metodoPago === 'sin_metodo' ? nuevos : await Promise.all(nuevos.map((p) => this.api!.accionPedido(p.id, 'metodo-pago', { valor: metodoPago }, this.contexto())));
+      this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      return con.map((p) => this.ponerPedido(p));
+    }
     const c = this.buscar(id);
     if (!c || !modificable(c)) return [];
     const nuevos = pedidosDe(c, this.consecutivo + 1, this.catalogo(), metodoPago);
@@ -949,10 +1040,17 @@ export class VentasService {
     return nuevos;
   }
 
-  private readonly catalogo = (): Catalogo => ({ clientes: this.clientes(), obras: this.obras() });
+  private readonly catalogo = (): Catalogo => ({ clientes: this.clientes(), obras: this.obras(), nombres: this.nombres });
 
   /** Alta rápida al cotizar: queda sin cuenta del portal y sin datos fiscales, y así lo dice su historial. */
-  crearCliente(d: ClienteExpress): Cliente {
+  async crearCliente(d: ClienteExpress): Promise<Cliente> {
+    if (this.api) {
+      const { cliente, contacto } = await this.api.crearCliente(d);
+      const nuevo = aCliente(cliente, [contacto], []);
+      this.clientes.update((lista) => [...lista, nuevo]);
+      this.nombres.set(nuevo.id, nuevo.nombre);
+      return nuevo;
+    }
     const telefono = d.telefono.replace(/\D/g, '');
     const correo = d.correo.trim();
     const nuevo: Cliente = {
@@ -982,7 +1080,14 @@ export class VentasService {
   }
 
   /** El lugar de entrega como obra del cliente, con quien recibe como responsable y contacto. */
-  crearObra(clienteId: string, d: LugarEntrega): Obra {
+  async crearObra(clienteId: string, d: LugarEntrega): Promise<Obra> {
+    if (this.api) {
+      // Con el id del front ("público en general" es uno solo en la API pero el cotizador lo distingue)
+      const obra = { ...(await this.api.crearObra(await this.clienteApi(clienteId), d)), clienteId };
+      this.obras.update((lista) => [...lista, obra]);
+      this.nombres.set(obra.id, obra.nombre);
+      return obra;
+    }
     const contacto = d.contacto.trim();
     const referencias = d.referencias.trim();
     const obra: Obra = {
@@ -1008,15 +1113,17 @@ export class VentasService {
    * Contacto, empresa y datos de facturación (lo mismo que el cliente captura en el portal), ya limpios. Si cambia su
    * nombre, cambia también en sus cotizaciones y pedidos. Queda en su historial con lo que cambió.
    */
-  guardarCliente(id: string, cambios: CambiosCliente): void {
+  async guardarCliente(id: string, cambios: CambiosCliente): Promise<void> {
     const antes = this.cliente(id);
     if (!antes) return;
-    const despues: Cliente = { ...antes, ...limpiarCliente(cambios) };
+    const despues: Cliente = this.api ? await this.api.guardarCliente(id, limpiarCliente(cambios)) : { ...antes, ...limpiarCliente(cambios) };
     this.clientes.update((lista) => lista.map((c) => (c.id === id ? despues : c)));
     if (antes.nombre !== despues.nombre) {
+      this.nombres.set(id, despues.nombre);
       this.cotizaciones.update((l) => l.map((q) => (q.clienteId === id ? { ...q, clienteNombre: despues.nombre } : q)));
       this.pedidos.update((l) => l.map((p) => (p.clienteId === id ? { ...p, clienteNombre: despues.nombre } : p)));
     }
+    if (this.api) return void this.historial.cargar(registro.cliente(id));
     const diferencias = cambiosCliente(antes, despues);
     if (diferencias.cambios.length || diferencias.detalles.length) {
       this.historial.registrar(registro.cliente(id), { texto: 'Datos del cliente actualizados', ...diferencias });
@@ -1031,7 +1138,12 @@ export class VentasService {
    * Nueva cotización hecha en el ERP: en borrador, con el siguiente folio de su planta, la fecha en la hora de la
    * planta y quien la hizo como vendedor. Queda en su historial. Devuelve la cotización creada.
    */
-  crear(n: NuevaCotizacion, vendedorId: string): CotizacionVista {
+  async crear(n: NuevaCotizacion, vendedorId: string): Promise<CotizacionVista> {
+    if (this.api) {
+      // El vendedor lo pone el backend: quien está en sesión
+      const c = await this.api.crearCotizacion({ ...n, clienteId: await this.clienteApi(n.clienteId) }, this.contexto(), this.unidadDe);
+      return this.ponerCotizacion(c);
+    }
     const planta = PLANTAS_ERP.find((p) => p.id === n.plantaId)!;
     const fecha = isoEnZona(planta.zonaHoraria);
     const folio = siguienteFolio(
@@ -1060,7 +1172,12 @@ export class VentasService {
   }
 
   /** Que el cliente la vea o no en el portal (no cambia su estado). */
-  cambiarVisibilidad(id: string, visible: boolean): void {
+  async cambiarVisibilidad(id: string, visible: boolean): Promise<void> {
+    if (this.api) {
+      await this.api.ocultar(id, !visible);
+      this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      return;
+    }
     this.cambiar(id, (c) => ({ ...c, ocultaAlCliente: visible ? undefined : true }));
     this.historial.registrar(registro.cotizacion(id), {
       texto: visible ? 'Visible otra vez para el cliente en el portal' : 'Oculta al cliente: ya no la ve en el portal',
@@ -1071,8 +1188,16 @@ export class VentasService {
    * Orden de venta directa, sin pasar por cotización: una por producto, como al confirmar. Con `conCotizacion`, además
    * queda su cotización (creada y confirmada) como respaldo; sin ella, cada orden guarda su partida. Devuelve las órdenes.
    */
-  crearOrdenes(n: NuevaCotizacion, vendedorId: string, conCotizacion: boolean, metodoPago: MetodoPago = 'sin_metodo'): PedidoVista[] {
-    if (conCotizacion) return this.confirmar(this.crear(n, vendedorId).id, metodoPago);
+  async crearOrdenes(n: NuevaCotizacion, vendedorId: string, conCotizacion: boolean, metodoPago: MetodoPago = 'sin_metodo'): Promise<PedidoVista[]> {
+    if (conCotizacion) return this.confirmar((await this.crear(n, vendedorId)).id, metodoPago);
+    if (this.api) {
+      const clienteId = await this.clienteApi(n.clienteId);
+      const nuevos = [];
+      for (const p of n.partidas) {
+        nuevos.push(await this.api.crearPedido(pedidoApi({ ...n, clienteId }, p, metodoPago, this.contexto(), this.unidadDe), this.contexto()));
+      }
+      return nuevos.map((p) => this.ponerPedido(p));
+    }
     const nuevos = n.partidas.map((p, i) => {
       const folio = folioPedido(this.consecutivo + 1 + i);
       return vistaPedido(
@@ -1103,7 +1228,14 @@ export class VentasService {
   }
 
   /** Alta de un producto: concreto, servicio o producto general (con sus existencias). Queda en su historial. */
-  crearProducto(n: NuevoProducto): ProductoTarifa {
+  async crearProducto(n: NuevoProducto): Promise<ProductoTarifa> {
+    if (this.api) {
+      const [categorias, unidades] = await this.api.catalogosProducto();
+      const id = await this.api.guardarProducto(null, n, { categorias, unidades });
+      if (n.tipo === 'general' && n.existencias) await this.api.moverExistencias(id, this.sucursalActual(), 'entrada', n.existencias);
+      await this.recargar();
+      return this.productos().find((p) => p.id === id)!;
+    }
     const categoria = n.tipo;
     const general = n.tipo === 'general';
     const producto: ProductoTarifa = {
@@ -1135,10 +1267,18 @@ export class VentasService {
    * (lo arma el formulario), configuración, unidad y precio; de los generales, el mínimo de existencias. Queda en su
    * historial con lo que cambió (si nada cambió, no se anota).
    */
-  editarProducto(id: string, c: CambiosProducto): void {
+  async editarProducto(id: string, c: CambiosProducto): Promise<void> {
     const antes = this.productos().find((p) => p.id === id);
     if (!antes) return;
     const fijo = delTarifario(antes);
+    if (this.api) {
+      const [categorias, unidades] = await this.api.catalogosProducto();
+      // Del tarifario el precio, la unidad y el código no cambian (los usa el cotizador)
+      const datos = fijo ? { ...c, codigo: antes.codigo, unidad: antes.unidad, precio: antes.precio } : c;
+      await this.api.guardarProducto(this.productoApi(id), datos, { categorias, unidades });
+      await this.recargar();
+      return void this.historial.cargar(registro.producto(id));
+    }
     const { equipo: _equipo, ...resto } = antes;
     const despues: ProductoTarifa = {
       ...resto,
@@ -1165,9 +1305,15 @@ export class VentasService {
   }
 
   /** Entrada (compra, devolución) o salida (venta, merma) de un producto general; la nota dice por qué. */
-  moverExistencias(id: string, movimiento: 'entrada' | 'salida', cantidad: number, nota: string): void {
+  async moverExistencias(id: string, movimiento: 'entrada' | 'salida', cantidad: number, nota: string): Promise<void> {
     const antes = this.productos().find((p) => p.id === id);
     if (!antes || antes.existencias == null) return;
+    if (this.api) {
+      // shortcut: la API no guarda la nota del movimiento; con API, en la planta en sesión.
+      await this.api.moverExistencias(this.productoApi(id), this.sucursalActual(), movimiento, cantidad);
+      await this.recargar();
+      return void this.historial.cargar(registro.producto(id));
+    }
     const despues = antes.existencias + (movimiento === 'entrada' ? cantidad : -cantidad);
     this.productos.update((lista) => lista.map((p) => (p.id === id ? { ...p, existencias: despues } : p)));
     this.historial.registrar(registro.producto(id), {
@@ -1207,11 +1353,17 @@ export class VentasService {
    * cambia) y recalcula el importe. Si ya estaba con planta y cambia la entrega o el volumen, se reenvía a planta para
    * que lo confirme. Queda en su historial con lo que cambió.
    */
-  editarPedido(id: string, c: CambiosPedido): void {
+  async editarPedido(id: string, c: CambiosPedido): Promise<void> {
     const antes = this.pedidos().find((p) => p.id === id);
     if (!antes || !pedidoEditable(antes)) return;
     const { partida: base, descuento } = this.partidaDe(antes);
     const partida = base ? { ...base, volumenM3: c.volumenM3, entrega: c.fechaHoraEntrega, precioM3: c.precioM3 } : undefined;
+    if (this.api) {
+      // La partida editada se queda en la orden (la API guarda sus líneas; la cotización no cambia)
+      const p = await this.api.editarPedido(id, c, this.contexto());
+      this.ponerPedido({ ...p, ...(partida ? { partida } : {}) });
+      return;
+    }
     const importe = partida ? totales(lineasPartida(partida), descuento).neto : antes.importe;
     const cambiaEntrega = c.fechaHoraEntrega !== antes.fechaHoraEntrega || c.volumenM3 !== antes.volumenM3;
     const conPlanta = antes.estatusPlanta === 'enviado' || antes.estatusPlanta === 'confirmado' || antes.estatusPlanta === 'actualizacion';
@@ -1243,9 +1395,10 @@ export class VentasService {
   }
 
   /** Cobro de una orden (Por cobrar → Pagado, Crédito…); queda en su historial. */
-  cambiarCobro(id: string, cobro: EstadoCobro): void {
+  async cambiarCobro(id: string, cobro: EstadoCobro): Promise<void> {
     const antes = this.pedidos().find((p) => p.id === id);
     if (!antes || antes.cobro === cobro) return;
+    if (this.api) return void this.ponerPedido(await this.api.accionPedido(id, 'cobro', { valor: cobro }, this.contexto()));
     this.cambiarPedido(id, { cobro });
     this.historial.registrar(registro.pedido(antes.folio), {
       texto: 'Cobro actualizado',
@@ -1253,9 +1406,10 @@ export class VentasService {
     });
   }
 
-  cambiarMetodoPago(id: string, metodoPago: MetodoPago): void {
+  async cambiarMetodoPago(id: string, metodoPago: MetodoPago): Promise<void> {
     const antes = this.pedidos().find((p) => p.id === id);
     if (!antes || antes.metodoPago === metodoPago) return;
+    if (this.api) return void this.ponerPedido(await this.api.accionPedido(id, 'metodo-pago', { valor: metodoPago }, this.contexto()));
     this.cambiarPedido(id, { metodoPago });
     this.historial.registrar(registro.pedido(antes.folio), {
       texto: 'Método de pago actualizado',
@@ -1267,9 +1421,21 @@ export class VentasService {
    * El requerimiento a la planta y su respuesta: enviar (o reenviar), confirmar, pedir actualización (nueva fecha de
    * entrega, ISO con offset, y nota) o rechazar (motivo). Aceptar la actualización cambia la entrega y la confirma.
    */
-  estatusPlanta(id: string, estatus: EstatusPlanta, solicitud?: { fecha?: string; nota: string }): void {
+  async estatusPlanta(id: string, estatus: EstatusPlanta, solicitud?: { fecha?: string; nota: string }): Promise<void> {
     const antes = this.pedidos().find((p) => p.id === id);
     if (!antes) return;
+    if (this.api) {
+      const accion = {
+        no_enviado: null,
+        enviado: 'enviar',
+        confirmado: antes.estatusPlanta === 'actualizacion' && antes.solicitudPlanta?.fecha ? 'aceptar_actualizacion' : 'confirmar',
+        actualizacion: 'actualizacion',
+        rechazada: 'rechazar',
+      }[estatus];
+      if (!accion) throw new Error('No se puede retirar un requerimiento enviado a planta.');
+      const cuerpo = { accion, ...(solicitud?.fecha ? { fecha: new Date(solicitud.fecha).toISOString() } : {}), ...(solicitud?.nota ? { nota: solicitud.nota } : {}) };
+      return void this.ponerPedido(await this.api.accionPedido(id, 'planta', cuerpo, this.contexto()));
+    }
     const cambios: Cambio[] = [{ campo: 'Estatus planta', antes: ESTATUS_PLANTA[antes.estatusPlanta ?? 'no_enviado'], despues: ESTATUS_PLANTA[estatus] }];
     const aceptaFecha = estatus === 'confirmado' && antes.estatusPlanta === 'actualizacion' && antes.solicitudPlanta?.fecha;
     if (aceptaFecha) cambios.push({ campo: 'Entrega', antes: fechaHoraCorta(antes.fechaHoraEntrega), despues: fechaHoraCorta(aceptaFecha) });
@@ -1301,5 +1467,88 @@ export class VentasService {
 
   private cambiar(id: string, cambio: (c: CotizacionVista) => Cotizacion): void {
     this.cotizaciones.update((lista) => lista.map((c) => (c.id === id ? vista(cambio(c), this.catalogo()) : c)));
+  }
+
+  // ---------- Con API ----------
+
+  private contexto(): Contexto {
+    if (!this.ctx) throw new Error('Ventas aún no termina de cargar.');
+    return this.ctx;
+  }
+
+  private readonly unidadDe = (frontId: string) => this.productos().find((p) => p.id === frontId)?.unidad ?? '';
+
+  private productoApi(frontId: string): string {
+    return this.ctx?.productoApi.get(frontId) ?? frontId;
+  }
+
+  /** La planta en sesión como sucursal de la API (para existencias). */
+  private sucursalActual(): string {
+    const codigo = this.plantas.actualId();
+    return [...this.contexto().plantas].find(([, p]) => p.codigo === codigo)?.[0] ?? codigo;
+  }
+
+  /** "Público en general" del front → el cliente de mostrador de la API (se crea la primera vez). */
+  private async clienteApi(clienteId: string): Promise<string> {
+    if (clienteId !== PUBLICO_GENERAL || !this.api) return clienteId;
+    this.publicoGeneralId ??= (await this.api.crearPublicoGeneral()).id;
+    return this.publicoGeneralId;
+  }
+
+  /** Pone (o reemplaza) la cotización en la lista y trae su historial. */
+  private ponerCotizacion(c: Cotizacion): CotizacionVista {
+    const v = vista(c, this.catalogo());
+    this.cotizaciones.update((lista) => (lista.some((x) => x.id === v.id) ? lista.map((x) => (x.id === v.id ? v : x)) : [v, ...lista]));
+    void this.historial.cargar(registro.cotizacion(v.id));
+    return v;
+  }
+
+  private ponerPedido(p: Pedido): PedidoVista {
+    const v = vistaPedido(p, this.catalogo());
+    this.pedidos.update((lista) => (lista.some((x) => x.id === v.id) ? lista.map((x) => (x.id === v.id ? v : x)) : [v, ...lista]));
+    void this.historial.cargar(registro.pedido(v.folio));
+    return v;
+  }
+
+  /** La clave del historial del front ("pedido:PED-ESC-26-001") → el registro en la API. */
+  private registroApi(clave: string): { tipo: string; id: string } | null {
+    const i = clave.indexOf(':');
+    const [tipo, id] = [clave.slice(0, i), clave.slice(i + 1)];
+    switch (tipo) {
+      case 'cotizacion':
+        return { tipo: 'Cotizacion', id };
+      case 'pedido': {
+        const p = this.pedidos().find((x) => x.folio === id);
+        return p ? { tipo: 'Pedido', id: p.id } : null;
+      }
+      case 'cliente':
+        return { tipo: 'Cliente', id: id === PUBLICO_GENERAL ? (this.publicoGeneralId ?? id) : id };
+      case 'producto':
+        return { tipo: 'Producto', id: this.productoApi(id) };
+      default:
+        return null;
+    }
+  }
+
+  private async historialDe(clave: string): Promise<EventoHistorial[] | null> {
+    const r = this.registroApi(clave);
+    if (!r || !this.api) return null;
+    // Ids (cliente, obra, usuario…) y claves de enums (borrador, por_cobrar…) como se leen en pantalla
+    const nombre = (id: string) =>
+      this.nombres.get(id) ??
+      this.cotizaciones().find((c) => c.id === id)?.folio ??
+      ESTADOS_COTIZACION[id as EstadoCotizacion]?.nombre ??
+      (ESTADO_PEDIDO as Record<string, string>)[id] ??
+      (ESTADO_COBRO as Record<string, string>)[id] ??
+      (ESTATUS_PLANTA as Record<string, string>)[id] ??
+      (METODO_PAGO as Record<string, string>)[id];
+    return (await this.api.historial(r.tipo, r.id)).map((e) => aEvento(e, clave, nombre));
+  }
+
+  private async notaEn(clave: string, texto: string): Promise<boolean> {
+    const r = this.registroApi(clave);
+    if (!r || !this.api) return false;
+    await this.api.nota(r.tipo, r.id, texto);
+    return true;
   }
 }

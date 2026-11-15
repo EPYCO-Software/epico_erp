@@ -14,7 +14,7 @@ import { RouterLink } from '@angular/router';
 import { Mail, MapPin, Maximize2, MonitorCheck, PencilLine, Phone, X } from 'lucide';
 import { Cliente, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, pesos } from 'ui';
 import { HistorialService } from '../../core/historial';
-import { CambiosCliente, ESTADOS_COTIZACION, VentasService, registro, telefono } from './datos';
+import { CambiosCliente, ESTADOS_COTIZACION, VentasService, mensajeDe, registro, telefono } from './datos';
 import { EditorCliente } from './editor-cliente';
 
 /**
@@ -297,9 +297,13 @@ export class DetalleCliente {
     this.editando.set(true);
   }
 
-  protected guardar(cambios: CambiosCliente): void {
-    this.ventas.guardarCliente(this.c().id, cambios);
-    this.terminar('Cambios guardados.');
+  protected async guardar(cambios: CambiosCliente): Promise<void> {
+    try {
+      await this.ventas.guardarCliente(this.c().id, cambios);
+      this.terminar('Cambios guardados.');
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
   }
 
   /** Al salir de la edición el foco vuelve a "Editar". */

@@ -2,7 +2,7 @@ import { Component, ElementRef, computed, effect, inject, input, model, output, 
 import { FormField, email, form, required, submit } from '@angular/forms/signals';
 import { MonitorCheck, Send, X } from 'lucide';
 import { CotizacionVista, FieldError, Icon } from 'ui';
-import { VentasService } from './datos';
+import { VentasService, mensajeDe } from './datos';
 
 /**
  * "Enviar" una cotización, como el de Odoo. Si su cliente ya está conectado al portal, se envía a esa misma cuenta
@@ -115,15 +115,19 @@ export class EnviarCotizacion {
     const { portal, contacto: { correo } } = this.cliente();
     if (portal && correo) return this.listo(correo, true);
     await submit(this.f, async () => {
-      this.listo(this.f.correo().value().trim(), false);
+      await this.listo(this.f.correo().value().trim(), false);
       return undefined;
     });
     if (this.f.correo().invalid()) document.getElementById('enviar-correo')?.focus();
   }
 
-  private listo(correo: string, portal: boolean): void {
-    this.ventas.enviar(this.c().id, correo, portal);
-    this.enviada.emit(portal ? `Enviada al portal de ${this.c().clienteNombre} (${correo}).` : `Enviada por correo a ${correo}.`);
+  private async listo(correo: string, portal: boolean): Promise<void> {
+    try {
+      await this.ventas.enviar(this.c().id, correo, portal);
+      this.enviada.emit(portal ? `Enviada al portal de ${this.c().clienteNombre} (${correo}).` : `Enviada por correo a ${correo}.`);
+    } catch (e) {
+      this.enviada.emit(mensajeDe(e));
+    }
     this.abierto.set(false);
   }
 }

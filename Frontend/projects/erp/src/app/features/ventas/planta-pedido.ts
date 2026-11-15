@@ -1,7 +1,7 @@
 import { Component, Injector, afterNextRender, computed, inject, input, output, signal } from '@angular/core';
 import { FormField, form, required, submit } from '@angular/forms/signals';
 import { EstatusPlantaEtiqueta, FechaZonaPipe, FieldError, PedidoVista } from 'ui';
-import { VentasService, offsetEn } from './datos';
+import { VentasService, mensajeDe, offsetEn } from './datos';
 
 type Respuesta = 'actualizacion' | 'rechazada';
 
@@ -128,9 +128,13 @@ export class PlantaPedido {
     required(m.motivo, { message: 'Escribe por qué se rechaza.' });
   });
 
-  protected cambiar(estatus: 'enviado' | 'confirmado'): void {
+  protected async cambiar(estatus: 'enviado' | 'confirmado'): Promise<void> {
     const antes = this.estatus();
-    this.ventas.estatusPlanta(this.p().id, estatus);
+    try {
+      await this.ventas.estatusPlanta(this.p().id, estatus);
+    } catch (e) {
+      return this.aviso.set(mensajeDe(e));
+    }
     this.aviso.set(
       estatus === 'confirmado'
         ? antes === 'actualizacion'
@@ -160,15 +164,23 @@ export class PlantaPedido {
         const { fecha, nota } = this.actualizacion().value();
         // La fecha se captura en la hora de la planta (la que se muestra en toda la orden).
         const iso = `${fecha}:00${offsetEn(this.p().zonaHoraria, new Date())}`;
-        this.ventas.estatusPlanta(this.p().id, 'actualizacion', { fecha: iso, nota: nota.trim() });
-        this.terminar('Se pidió la actualización a ventas.');
+        try {
+          await this.ventas.estatusPlanta(this.p().id, 'actualizacion', { fecha: iso, nota: nota.trim() });
+          this.terminar('Se pidió la actualización a ventas.');
+        } catch (e) {
+          this.aviso.set(mensajeDe(e));
+        }
         return undefined;
       });
       if (!ok) document.getElementById('planta-fecha')?.focus();
     } else if (r === 'rechazada') {
       const ok = await submit(this.rechazo, async () => {
-        this.ventas.estatusPlanta(this.p().id, 'rechazada', { nota: this.rechazo().value().motivo.trim() });
-        this.terminar('Pedido rechazado por planta.');
+        try {
+          await this.ventas.estatusPlanta(this.p().id, 'rechazada', { nota: this.rechazo().value().motivo.trim() });
+          this.terminar('Pedido rechazado por planta.');
+        } catch (e) {
+          this.aviso.set(mensajeDe(e));
+        }
         return undefined;
       });
       if (!ok) document.getElementById('planta-motivo')?.focus();
@@ -219,8 +231,12 @@ export class PlantaFila {
 
   protected readonly estatus = computed(() => this.p().estatusPlanta ?? 'no_enviado');
 
-  protected enviar(): void {
-    this.ventas.estatusPlanta(this.p().id, 'enviado');
-    this.enviado.emit(`${this.p().folio}: requerimiento enviado a ${this.p().plantaNombre}.`);
+  protected async enviar(): Promise<void> {
+    try {
+      await this.ventas.estatusPlanta(this.p().id, 'enviado');
+      this.enviado.emit(`${this.p().folio}: requerimiento enviado a ${this.p().plantaNombre}.`);
+    } catch (e) {
+      this.enviado.emit(`${this.p().folio}: ${mensajeDe(e)}`);
+    }
   }
 }

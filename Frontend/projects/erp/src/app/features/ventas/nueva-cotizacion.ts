@@ -39,7 +39,7 @@ import { COLUMNA } from '../../layout/panel-lateral';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
 import { FuenteDistancia, distanciaDeManejo } from './distancia';
 import { ElegirUbicacion, UbicacionElegida } from './elegir-ubicacion';
-import { PLANTAS_ERP, PUBLICO_GENERAL, TRASLADO_POR_OMISION, VentasService, isoEnZona, offsetEn, plantaDeMunicipio, siguienteFolio } from './datos';
+import { PLANTAS_ERP, PUBLICO_GENERAL, TRASLADO_POR_OMISION, VentasService, isoEnZona, mensajeDe, offsetEn, plantaDeMunicipio, siguienteFolio } from './datos';
 
 type Accion = 'guardar' | 'guardar-descargar' | 'descargar' | 'orden' | 'orden-cotizacion';
 
@@ -1019,7 +1019,13 @@ export default class NuevaCotizacionPagina implements OnInit {
   /** Lo crea, lo elige y, como aún no tiene obras, sigue con su lugar de entrega. */
   protected async crearCliente(): Promise<void> {
     const valido = await submit(this.express, async () => {
-      const c = this.ventas.crearCliente(this.express().value());
+      let c;
+      try {
+        c = await this.ventas.crearCliente(this.express().value());
+      } catch (e) {
+        this.aviso.set(mensajeDe(e));
+        return undefined;
+      }
       this.modelo.update((m) => ({ ...m, clienteId: c.id }));
       this.clienteElegido(c.id);
       this.express().reset({ nombre: '', contacto: '', telefono: '', correo: '' });
@@ -1040,7 +1046,13 @@ export default class NuevaCotizacionPagina implements OnInit {
   protected async crearLugar(): Promise<void> {
     const valido = await submit(this.lugar, async () => {
       const datos = { ...this.lugar().value(), ubicacion: this.ubicacionLugar() ?? undefined };
-      const obra = this.ventas.crearObra(this.modelo().clienteId, datos);
+      let obra;
+      try {
+        obra = await this.ventas.crearObra(this.modelo().clienteId, datos);
+      } catch (e) {
+        this.aviso.set(mensajeDe(e));
+        return undefined;
+      }
       this.ubicacionLugar.set(null);
       this.creadas.update((l) => [...l, obra.id]);
       const plantaId = plantaDeMunicipio(obra.municipio);
@@ -1167,7 +1179,7 @@ export default class NuevaCotizacionPagina implements OnInit {
           baseId: this.cotizacionBase()?.id,
         };
         if (accion === 'orden' || accion === 'orden-cotizacion') {
-          const ordenes = this.ventas.crearOrdenes(datos, this.usuario?.correo ?? '', accion === 'orden-cotizacion', m.metodoPago || 'sin_metodo');
+          const ordenes = await this.ventas.crearOrdenes(datos, this.usuario?.id ?? this.usuario?.correo ?? '', accion === 'orden-cotizacion', m.metodoPago || 'sin_metodo');
           this.guardada = true;
           await this.router.navigate(['/ventas/ordenes', ordenes[0].folio]);
           return undefined;
@@ -1179,12 +1191,13 @@ export default class NuevaCotizacionPagina implements OnInit {
           this.avisoAccion.set(`Descargaste ${folio}.pdf. La cotización aún no está guardada.`);
           return undefined;
         }
-        const c = this.ventas.crear(datos, this.usuario?.correo ?? '');
+        const c = await this.ventas.crear(datos, this.usuario?.id ?? this.usuario?.correo ?? '');
         this.guardada = true;
         if (accion === 'guardar-descargar') await this.pdf({ ...datos, folio: c.folio, fecha: new Date(c.fecha) });
         await this.router.navigate(['/ventas/cotizaciones', c.id]);
-      } catch {
-        this.error.set('No pudimos generar el PDF. La cotización sí se guardó si elegiste guardarla.');
+      } catch (e) {
+        // Si ya se guardó, lo que falló fue el PDF; si no, el mensaje del servidor
+        this.error.set(this.guardada ? 'No pudimos generar el PDF. La cotización sí se guardó.' : mensajeDe(e));
       } finally {
         this.ocupado.set(false);
       }

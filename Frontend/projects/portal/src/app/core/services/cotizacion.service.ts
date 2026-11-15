@@ -4,6 +4,7 @@ import {
   CotizacionGuardada,
   DisenoGuardado,
   EspecificacionConcreto,
+  EstadoCotizacion,
   ModoEdicion,
   PartidaCotizacion,
 } from 'ui';
@@ -31,7 +32,7 @@ const DISENOS_DEMO: DisenoGuardado[] = [
 // PED-26-0141 (PedidosService).
 const COTIZACIONES_DEMO: CotizacionGuardada[] = [
   {
-    id: 'c-demo-2', folio: 'EPI-WEB-CZM-26002', serie: 'EPI-WEB-CZM-26002', revision: 0, fecha: '2026-10-30T09:45:00-05:00',
+    id: 'c-demo-2', folio: 'EPI-WEB-CZM-26002', serie: 'EPI-WEB-CZM-26002', revision: 0, fecha: '2026-10-30T09:45:00-05:00', estado: 'pedido',
     partidas: [
       {
         id: 'p-demo-3', nombre: 'Pavimento', solucionId: 'pavimento', volumenM3: 35, obraId: 'o1',
@@ -44,7 +45,7 @@ const COTIZACIONES_DEMO: CotizacionGuardada[] = [
     ],
   },
   {
-    id: 'c-demo-1', folio: 'EPI-WEB-ESC-26001', serie: 'EPI-WEB-ESC-26001', revision: 0, fecha: '2026-10-28T11:20:00-06:00',
+    id: 'c-demo-1', folio: 'EPI-WEB-ESC-26001', serie: 'EPI-WEB-ESC-26001', revision: 0, fecha: '2026-10-28T11:20:00-06:00', estado: 'enviada',
     partidas: [
       {
         id: 'p-demo-1', nombre: 'Losa y estructura', solucionId: 'losa', volumenM3: 20, obraId: 'o2',
@@ -67,6 +68,18 @@ const COTIZACIONES_DEMO: CotizacionGuardada[] = [
   },
 ];
 
+/** El estado de la cotización en el ERP, dicho para el cliente. */
+export const ESTADO_PARA_CLIENTE: Record<EstadoCotizacion, string> = {
+  recibida: 'En revisión',
+  borrador: 'En revisión',
+  enviada: 'Respondida',
+  pedido: 'Aceptada',
+  cancelada: 'Cancelada',
+};
+
+/** El cliente no ve las que la concretera ocultó ni sus borradores (una revisión que aún no le envía). */
+export const visibleAlCliente = (c: CotizacionGuardada) => !c.ocultaAlCliente && c.estado !== 'borrador';
+
 let siguiente = 1;
 const nuevoId = (prefijo: string) => `${prefijo}-${Date.now().toString(36)}-${siguiente++}`;
 
@@ -82,8 +95,8 @@ export class CotizacionService {
   /** Favoritos primero; dentro de cada grupo, el más reciente arriba. */
   readonly disenos = computed(() => [...this._disenos()].sort((a, b) => Number(b.favorito) - Number(a.favorito)));
   readonly partidas = this._partidas.asReadonly();
-  /** Más reciente primero. */
-  readonly cotizaciones = this._cotizaciones.asReadonly();
+  /** Las que ve el cliente (visibleAlCliente), más reciente primero. */
+  readonly cotizaciones = computed(() => this._cotizaciones().filter(visibleAlCliente));
   /** Cotización guardada que se está modificando (o usando de base) en el catálogo; null si es nueva. */
   readonly edicion = this._edicion.asReadonly();
   readonly volumenTotal = computed(() => this._partidas().reduce((t, p) => t + p.volumenM3, 0));
@@ -91,7 +104,7 @@ export class CotizacionService {
   /** Una entrada por serie: la versión más reciente y, debajo, las anteriores (de la más nueva a la original). */
   readonly series = computed(() => {
     const series = new Map<string, CotizacionGuardada[]>();
-    for (const c of this._cotizaciones()) series.set(c.serie, [...(series.get(c.serie) ?? []), c]);
+    for (const c of this.cotizaciones()) series.set(c.serie, [...(series.get(c.serie) ?? []), c]);
     return [...series.values()].map((v) => {
       const [actual, ...anteriores] = v.sort((a, b) => b.revision - a.revision);
       return { actual, anteriores };
@@ -160,11 +173,18 @@ export class CotizacionService {
       serie: revision ? e.origen.serie : folio,
       revision: revision ? this.siguienteRevision(e.origen.serie) : 0,
       baseId: e?.origen.id,
+      // Le llega al ERP como "recibida" (Ventas → Cotizaciones recibidas)
+      estado: 'recibida',
     };
     this._cotizaciones.update((c) => [cot, ...c]);
     this._partidas.set([]);
     this._edicion.set(null);
     return cot;
+  }
+
+  /** El cliente la aceptó: en el ERP pasa a "pedido", como al confirmarla allá. */
+  aceptada(id: string): void {
+    this._cotizaciones.update((l) => l.map((c) => (c.id === id ? { ...c, estado: 'pedido' } : c)));
   }
 
   /** Cómo se relaciona con su serie u origen ("Revisión 1 de EPI-WEB-ESC-26001", "Basada en EPI-…"); null si es original. */

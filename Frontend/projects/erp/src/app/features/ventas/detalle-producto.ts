@@ -4,7 +4,7 @@ import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Maximize2, PencilLine, X } from 'lucide';
 import { CATEGORIAS_PRODUCTO, EstadoPedidoEtiqueta, FechaZonaPipe, FieldError, Icon, ProductoTarifa, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, pesos } from 'ui';
-import { ESTADOS_COTIZACION, NuevoProducto, VentasService, delTarifario, existenciasBajas, textoEquipo } from './datos';
+import { ESTADOS_COTIZACION, NuevoProducto, VentasService, delTarifario, existenciasBajas, mensajeDe, textoEquipo } from './datos';
 import { FormProducto } from './form-producto';
 
 /**
@@ -209,9 +209,13 @@ export class DetalleProducto {
     this.editando.set(true);
   }
 
-  protected guardar(cambios: NuevoProducto): void {
-    this.ventas.editarProducto(this.p().id, cambios);
-    this.terminar('Cambios guardados.');
+  protected async guardar(cambios: NuevoProducto): Promise<void> {
+    try {
+      await this.ventas.editarProducto(this.p().id, cambios);
+      this.terminar('Cambios guardados.');
+    } catch (e) {
+      this.avisoEdicion.set(mensajeDe(e));
+    }
   }
 
   /** Al salir de la edición el foco vuelve a "Editar". */
@@ -239,7 +243,12 @@ export class DetalleProducto {
     e.preventDefault();
     const valido = await submit(this.movimiento, async () => {
       const { tipo, cantidad, nota } = this.modeloMovimiento();
-      this.ventas.moverExistencias(this.p().id, tipo, cantidad!, nota);
+      try {
+        await this.ventas.moverExistencias(this.p().id, tipo, cantidad!, nota);
+      } catch (e) {
+        this.aviso.set(mensajeDe(e));
+        return undefined;
+      }
       // Del servicio: el producto de la entrada se actualiza hasta el siguiente ciclo.
       const quedan = this.ventas.productos().find((x) => x.id === this.p().id)?.existencias;
       this.aviso.set(`${tipo === 'entrada' ? 'Entrada' : 'Salida'} de ${cantidad} registrada: quedan ${quedan}.`);

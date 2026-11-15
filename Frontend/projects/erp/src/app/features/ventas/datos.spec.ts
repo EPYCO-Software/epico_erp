@@ -34,29 +34,29 @@ describe('filtrarCotizaciones', () => {
   const todas: FiltroCotizaciones = { plantas: ['ESC', 'XPJ', 'CZM', 'CUN'], vendedorId: null, estados: [], texto: '' };
   const folios = (f: Partial<FiltroCotizaciones>) => filtrarCotizaciones(COTIZACIONES, { ...todas, ...f }).map((c) => c.folio);
 
-  it('sin filtros devuelve todas, de la más reciente a la más antigua', () => {
+  it('sin filtros devuelve todas, de la más reciente a la más antigua', async () => {
     const fechas = COTIZACIONES.map((c) => Date.parse(c.fecha));
     expect(folios({})).toHaveLength(14);
     expect(fechas).toEqual([...fechas].sort((a, b) => b - a));
   });
 
-  it('las recibidas (del portal) se filtran por su estado y se pueden modificar', () => {
+  it('las recibidas (del portal) se filtran por su estado y se pueden modificar', async () => {
     expect(folios({ estados: ['recibida'] })).toEqual(['EPI-WEB-CZM-26003', 'EPI-WEB-ESC-26004']);
     expect(COTIZACIONES.filter((c) => c.estado === 'recibida').every((c) => c.origen === 'portal' && modificable(c))).toBe(true);
   });
 
-  it('solo muestra las de las plantas elegidas', () => {
+  it('solo muestra las de las plantas elegidas', async () => {
     expect(folios({ plantas: ['XPJ'] })).toEqual(['EPI-PRES-XPJ-26014']);
   });
 
-  it('"Mis cotizaciones", estados (se suman) y planta se combinan', () => {
+  it('"Mis cotizaciones", estados (se suman) y planta se combinan', async () => {
     expect(folios({ plantas: ['ESC'], vendedorId: 'operaciones@epicoconcretos.mx', estados: ['borrador', 'enviada'] })).toEqual([
       'EPI-PRES-ESC-26092',
       'EPI-PRES-ESC-26091',
     ]);
   });
 
-  it('busca por folio, cliente u obra sin importar acentos ni el orden de las palabras', () => {
+  it('busca por folio, cliente u obra sin importar acentos ni el orden de las palabras', async () => {
     expect(folios({ texto: 'escarcega bodega' })).toEqual(['EPI-PRES-ESC-26088']);
     expect(folios({ texto: '26117' })).toEqual(['EPI-PRES-CUN-26117']);
     expect(folios({ texto: 'infraestructura' })).toHaveLength(2);
@@ -64,13 +64,13 @@ describe('filtrarCotizaciones', () => {
     expect(folios({ texto: 'no existe' })).toEqual([]);
   });
 
-  it('el total no cuenta las canceladas', () => {
+  it('el total no cuenta las canceladas', async () => {
     const sol = filtrarCotizaciones(COTIZACIONES, { ...todas, texto: 'edificaciones sol' });
     expect(sol.map((c) => c.estado)).toEqual(['pedido', 'cancelada']);
     expect(totalVigente(sol)).toBe(sol[0].total);
   });
 
-  it('el neto sale del mismo tarifario que el portal (ui): 6 m³ de f´c 200 a $3,700 + IVA', () => {
+  it('el neto sale del mismo tarifario que el portal (ui): 6 m³ de f´c 200 a $3,700 + IVA', async () => {
     expect(COTIZACIONES.find((c) => c.folio === 'EPI-PRES-ESC-26090')!.total).toBe(25752);
   });
 });
@@ -78,25 +78,25 @@ describe('filtrarCotizaciones', () => {
 describe('VentasService', () => {
   const buscar = (s: VentasService, id: string) => s.cotizaciones().find((c) => c.id === id)!;
 
-  it('guardar una ya enviada la vuelve la revisión R1 en borrador y recalcula el neto con precio especial y descuento', () => {
+  it('guardar una ya enviada la vuelve la revisión R1 en borrador y recalcula el neto con precio especial y descuento', async () => {
     const s = TestBed.inject(VentasService);
     const antes = buscar(s, 'EPI-PRES-ESC-26090');
-    s.guardar(antes.id, { partidas: antes.partidas.map((p) => ({ ...p, precioM3: 3500 })), descuento: 10 });
+    await s.guardar(antes.id, { partidas: antes.partidas.map((p) => ({ ...p, precioM3: 3500 })), descuento: 10 });
     const c = buscar(s, antes.id);
     expect([c.folio, c.revision, c.estado]).toEqual(['EPI-PRES-ESC-26090-R1', 1, 'borrador']);
     // 6 m³ × $3,500 = $21,000 − 10 % = $18,900 + IVA 16 % = $21,924
     expect(c.total).toBe(21924);
   });
 
-  it('guardar un borrador no crea revisión', () => {
+  it('guardar un borrador no crea revisión', async () => {
     const s = TestBed.inject(VentasService);
-    s.guardar('EPI-PRES-ESC-26092', { partidas: buscar(s, 'EPI-PRES-ESC-26092').partidas, descuento: 5 });
+    await s.guardar('EPI-PRES-ESC-26092', { partidas: buscar(s, 'EPI-PRES-ESC-26092').partidas, descuento: 5 });
     expect(buscar(s, 'EPI-PRES-ESC-26092')).toMatchObject({ folio: 'EPI-PRES-ESC-26092', revision: 0, estado: 'borrador', descuento: 5 });
   });
 
-  it('enviar la marca como enviada y guarda a dónde se mandó', () => {
+  it('enviar la marca como enviada y guarda a dónde se mandó', async () => {
     const s = TestBed.inject(VentasService);
-    s.enviar('EPI-PRES-ESC-26092', 'compras@constructoramaya.mx', false);
+    await s.enviar('EPI-PRES-ESC-26092', 'compras@constructoramaya.mx', false);
     expect(buscar(s, 'EPI-PRES-ESC-26092')).toMatchObject({
       estado: 'enviada',
       envio: { correo: 'compras@constructoramaya.mx', portal: false },
@@ -105,87 +105,87 @@ describe('VentasService', () => {
 });
 
 describe('nueva cotización', () => {
-  it('siguienteFolio sigue la serie de la planta en el año y empieza en 001', () => {
+  it('siguienteFolio sigue la serie de la planta en el año y empieza en 001', async () => {
     const folios = ['EPI-PRES-ESC-26092', 'EPI-PRES-ESC-26090', 'EPI-PRES-CZM-26041', 'EPI-PRES-ESC-25310'];
     expect(siguienteFolio(folios, 'ESC', '2026-11-05T10:00:00-06:00')).toBe('EPI-PRES-ESC-26093');
     expect(siguienteFolio(folios, 'CUN', '2026-11-05T10:00:00-05:00')).toBe('EPI-PRES-CUN-26001');
     expect(siguienteFolio(folios, 'ESC', '2027-01-02T10:00:00-06:00')).toBe('EPI-PRES-ESC-27001');
   });
 
-  it('isoEnZona da la hora de la planta con su offset', () => {
+  it('isoEnZona da la hora de la planta con su offset', async () => {
     const utc = new Date('2026-11-05T16:30:00Z');
     expect(isoEnZona('America/Merida', utc)).toBe('2026-11-05T10:30:00-06:00');
     expect(isoEnZona('America/Cancun', utc)).toBe('2026-11-05T11:30:00-05:00');
   });
 
-  it('plantaDeMunicipio elige la planta que atiende (Cancún solo en el ERP)', () => {
+  it('plantaDeMunicipio elige la planta que atiende (la misma regla del portal, plantaPara de ui)', async () => {
     expect(plantaDeMunicipio('Escárcega, Camp.')).toBe('ESC');
     expect(plantaDeMunicipio('Cozumel, Q. Roo')).toBe('CZM');
     expect(plantaDeMunicipio('Cancún, Q. Roo')).toBe('CUN');
     expect(plantaDeMunicipio('Mérida, Yuc.')).toBeNull();
   });
 
-  it('alta rápida de cliente y su lugar de entrega: se pueden cotizar y se ven en Ventas', () => {
+  it('alta rápida de cliente y su lugar de entrega: se pueden cotizar y se ven en Ventas', async () => {
     const s = TestBed.inject(VentasService);
-    const c = s.crearCliente({ nombre: ' Obras Kin ', contacto: 'Pedro Kin', telefono: '981 123 4567', correo: '' });
+    const c = await s.crearCliente({ nombre: ' Obras Kin ', contacto: 'Pedro Kin', telefono: '981 123 4567', correo: '' });
     expect(c).toMatchObject({ nombre: 'Obras Kin', portal: false, facturacion: [], contacto: { telefono: '9811234567' } });
     expect(s.cliente(c.id)).toBe(c);
-    const o = s.crearObra(c.id, { nombre: '', direccion: 'Calle 20 #5', municipio: 'Escárcega, Camp.', referencias: '', contacto: 'Pedro Kin', telefono: '9811234567' });
+    const o = await s.crearObra(c.id, { nombre: '', direccion: 'Calle 20 #5', municipio: 'Escárcega, Camp.', referencias: '', contacto: 'Pedro Kin', telefono: '9811234567' });
     expect(o).toMatchObject({ nombre: 'Entrega a domicilio', clienteId: c.id, contactos: [{ numero: '9811234567' }] });
     const base = s.cotizaciones().find((x) => x.id === 'EPI-PRES-ESC-26090')!;
-    const q = s.crear({ clienteId: c.id, plantaId: 'ESC', partidas: base.partidas.map((p) => ({ ...p, obraId: o.id })), descuento: undefined }, 'operaciones@epicoconcretos.mx');
+    const q = await s.crear({ clienteId: c.id, plantaId: 'ESC', partidas: base.partidas.map((p) => ({ ...p, obraId: o.id })), descuento: undefined }, 'operaciones@epicoconcretos.mx');
     expect([q.clienteNombre, q.obrasNombre]).toEqual(['Obras Kin', 'Entrega a domicilio']);
   });
 
-  it('orden directa: una por producto; sin cotización guarda su partida, con ella la deja confirmada', () => {
+  it('orden directa: una por producto; sin cotización guarda su partida, con ella la deja confirmada', async () => {
     const s = TestBed.inject(VentasService);
     const base = s.cotizaciones().find((x) => x.id === 'EPI-PRES-ESC-26092')!;
     const nueva = { clienteId: 'c-maya', plantaId: 'ESC', partidas: base.partidas, descuento: 5 };
     const cotizacionesAntes = s.cotizaciones().length;
-    const sin = s.crearOrdenes(nueva, 'operaciones@epicoconcretos.mx', false);
+    const sin = await s.crearOrdenes(nueva, 'operaciones@epicoconcretos.mx', false);
     expect(sin).toHaveLength(2);
     expect(sin[0]).toMatchObject({ estado: 'programado', partida: base.partidas[0], descuento: 5, clienteNombre: 'Constructora Maya' });
     expect(sin[0].cotizacionId).toBeUndefined();
     expect(s.cotizaciones()).toHaveLength(cotizacionesAntes);
-    const con = s.crearOrdenes(nueva, 'operaciones@epicoconcretos.mx', true);
+    const con = await s.crearOrdenes(nueva, 'operaciones@epicoconcretos.mx', true);
     const c = s.cotizaciones()[0];
     expect(c.estado).toBe('pedido');
     expect(con.map((p) => p.cotizacionId)).toEqual([c.id, c.id]);
     expect(con[0].folio).not.toBe(sin[0].folio);
   });
 
-  it('nueva basada en otra: queda ligada y las dos lo anotan; ocultar al cliente y enviar la vuelve visible', () => {
+  it('nueva basada en otra: queda ligada y las dos lo anotan; ocultar al cliente y enviar la vuelve visible', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
     const base = s.cotizaciones().find((x) => x.id === 'EPI-PRES-ESC-26091')!;
-    const c = s.crear({ clienteId: base.clienteId, plantaId: 'ESC', partidas: base.partidas.map((p) => ({ ...p, precioM3: 3000 })), descuento: undefined, baseId: base.id }, 'operaciones@epicoconcretos.mx');
+    const c = await s.crear({ clienteId: base.clienteId, plantaId: 'ESC', partidas: base.partidas.map((p) => ({ ...p, precioM3: 3000 })), descuento: undefined, baseId: base.id }, 'operaciones@epicoconcretos.mx');
     expect(c.baseId).toBe(base.id);
     expect(c.total).toBeLessThan(base.total);
     expect(h.de(registro.cotizacion(c.id))[0].texto).toBe(`Cotización creada a partir de ${base.folio}`);
     expect(h.de(registro.cotizacion(base.id))[0].texto).toBe(`Se creó ${c.folio} a partir de esta`);
-    s.cambiarVisibilidad(base.id, false);
+    await s.cambiarVisibilidad(base.id, false);
     expect(s.cotizaciones().find((x) => x.id === base.id)!.ocultaAlCliente).toBe(true);
-    s.enviar(base.id, 'compras@grupohabita.mx', true);
+    await s.enviar(base.id, 'compras@grupohabita.mx', true);
     expect(s.cotizaciones().find((x) => x.id === base.id)!.ocultaAlCliente).toBeUndefined();
   });
 
-  it('las órdenes nacen por cobrar, con su método de pago y sin enviar a planta; el cobro cambia y se anota', () => {
+  it('las órdenes nacen por cobrar, con su método de pago y sin enviar a planta; el cobro cambia y se anota', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
     expect(s.pedidos().every((p) => p.cobro === 'por_cobrar')).toBe(true);
     const base = s.cotizaciones().find((x) => x.id === 'EPI-PRES-ESC-26092')!;
-    const [o] = s.crearOrdenes({ clienteId: 'c-maya', plantaId: 'ESC', partidas: base.partidas, descuento: undefined }, 'operaciones@epicoconcretos.mx', false, 'transferencia');
+    const [o] = await s.crearOrdenes({ clienteId: 'c-maya', plantaId: 'ESC', partidas: base.partidas, descuento: undefined }, 'operaciones@epicoconcretos.mx', false, 'transferencia');
     expect(o).toMatchObject({ cobro: 'por_cobrar', metodoPago: 'transferencia', estatusPlanta: 'no_enviado' });
-    s.cambiarCobro(o.id, 'credito');
+    await s.cambiarCobro(o.id, 'credito');
     expect(s.pedidos().find((p) => p.id === o.id)!.cobro).toBe('credito');
     expect(h.de(registro.pedido(o.folio))[0].cambios).toEqual([{ campo: 'Cobro', antes: 'Por cobrar', despues: 'Crédito' }]);
   });
 
-  it('editar una orden recalcula su importe con su propia partida, la cotización no cambia y vuelve a planta', () => {
+  it('editar una orden recalcula su importe con su propia partida, la cotización no cambia y vuelve a planta', async () => {
     const s = TestBed.inject(VentasService);
     const o = s.pedidos().find((p) => p.cotizacionId === 'EPI-PRES-ESC-26089')!; // 180 m³, ya enviado a planta
     const cot = s.cotizaciones().find((c) => c.id === o.cotizacionId)!;
-    s.editarPedido(o.id, { fechaHoraEntrega: '2026-11-10T08:00:00-06:00', volumenM3: 90, metodoPago: 'transferencia' });
+    await s.editarPedido(o.id, { fechaHoraEntrega: '2026-11-10T08:00:00-06:00', volumenM3: 90, metodoPago: 'transferencia' });
     const e = s.pedidos().find((p) => p.id === o.id)!;
     expect(e).toMatchObject({ volumenM3: 90, metodoPago: 'transferencia', estatusPlanta: 'enviado', fechaHoraEntrega: '2026-11-10T08:00:00-06:00' });
     expect(e.importe).toBeLessThan(o.importe);
@@ -193,29 +193,29 @@ describe('nueva cotización', () => {
     expect(s.cotizaciones().find((c) => c.id === cot.id)!.partidas[0].volumenM3).toBe(180);
     // Entregada: ya no se edita
     const entregada = s.pedidos().find((p) => p.estado === 'entregado')!;
-    s.editarPedido(entregada.id, { fechaHoraEntrega: entregada.fechaHoraEntrega, volumenM3: 1, metodoPago: 'sin_metodo' });
+    await s.editarPedido(entregada.id, { fechaHoraEntrega: entregada.fechaHoraEntrega, volumenM3: 1, metodoPago: 'sin_metodo' });
     expect(s.pedidos().find((p) => p.id === entregada.id)!.volumenM3).toBe(entregada.volumenM3);
   });
 
-  it('planta: enviar, pedir actualización (aceptarla cambia la entrega y confirma), rechazar y reenviar', () => {
+  it('planta: enviar, pedir actualización (aceptarla cambia la entrega y confirma), rechazar y reenviar', async () => {
     const s = TestBed.inject(VentasService);
     const o = s.pedidos().find((p) => p.estatusPlanta === 'no_enviado')!;
     const p = () => s.pedidos().find((x) => x.id === o.id)!;
-    s.estatusPlanta(o.id, 'enviado');
-    s.estatusPlanta(o.id, 'actualizacion', { fecha: '2026-12-01T09:00:00-06:00', nota: 'Sin ollas ese día' });
+    await s.estatusPlanta(o.id, 'enviado');
+    await s.estatusPlanta(o.id, 'actualizacion', { fecha: '2026-12-01T09:00:00-06:00', nota: 'Sin ollas ese día' });
     expect(p()).toMatchObject({ estatusPlanta: 'actualizacion', solicitudPlanta: { nota: 'Sin ollas ese día' } });
-    s.estatusPlanta(o.id, 'confirmado');
+    await s.estatusPlanta(o.id, 'confirmado');
     expect(p()).toMatchObject({ estatusPlanta: 'confirmado', fechaHoraEntrega: '2026-12-01T09:00:00-06:00' });
     expect(p().solicitudPlanta).toBeUndefined();
-    s.estatusPlanta(o.id, 'rechazada', { nota: 'Planta en mantenimiento' });
-    s.estatusPlanta(o.id, 'enviado');
+    await s.estatusPlanta(o.id, 'rechazada', { nota: 'Planta en mantenimiento' });
+    await s.estatusPlanta(o.id, 'enviado');
     expect(p()).toMatchObject({ estatusPlanta: 'enviado' });
   });
 
-  it('crear la deja en borrador, primera de la lista, con folio, vendedor y neto', () => {
+  it('crear la deja en borrador, primera de la lista, con folio, vendedor y neto', async () => {
     const s = TestBed.inject(VentasService);
     const base = s.cotizaciones().find((c) => c.id === 'EPI-PRES-ESC-26090')!;
-    const c = s.crear({ clienteId: 'c-maya', plantaId: 'ESC', partidas: base.partidas, descuento: undefined }, 'operaciones@epicoconcretos.mx');
+    const c = await s.crear({ clienteId: 'c-maya', plantaId: 'ESC', partidas: base.partidas, descuento: undefined }, 'operaciones@epicoconcretos.mx');
     expect(c).toMatchObject({ folio: 'EPI-PRES-ESC-26093', estado: 'borrador', revision: 0, clienteNombre: 'Constructora Maya', vendedorNombre: 'Operaciones' });
     expect(c.total).toBe(base.total);
     expect(s.cotizaciones()[0].id).toBe(c.id);
@@ -223,7 +223,7 @@ describe('nueva cotización', () => {
 });
 
 describe('productos', () => {
-  it('se buscan por código, nombre o categoría y se sabe dónde se usan', () => {
+  it('se buscan por código, nombre o categoría y se sabe dónde se usan', async () => {
     expect(filtrarProductos(PRODUCTOS, 'servicio bomba').map((p) => p.id)).toEqual(['servicio-bomba-estacionaria', 'servicio-bomba-pluma']);
     expect(filtrarProductos(PRODUCTOS, 'CON-MR').every((p) => p.categoria === 'concreto-mr')).toBe(true);
     const s = TestBed.inject(VentasService);
@@ -235,28 +235,28 @@ describe('productos', () => {
     expect(s.usoDe('maquinaria-aplanadora').cotizaciones).toEqual([]);
   });
 
-  it('alta de un producto general con su código sugerido y control de existencias', () => {
+  it('alta de un producto general con su código sugerido y control de existencias', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
     const usados = s.productos().map((p) => p.codigo);
     expect(codigoSugerido('general', 'Saco de cemento 50 kg', usados)).toBe('GEN-SACO-DE-CEMENTO-50-KG');
     expect(codigoSugerido('servicio', 'Bomba estacionaria', ['SRV-BOMBA-ESTACIONARIA'])).toBe('SRV-BOMBA-ESTACIONARIA-2');
-    const saco = s.crearProducto({ tipo: 'general', codigo: 'gen-saco', nombre: 'Saco de cemento 50 kg', unidad: 'Saco', precio: 245, descripcion: '', existencias: 40, minimoExistencias: 10 });
+    const saco = await s.crearProducto({ tipo: 'general', codigo: 'gen-saco', nombre: 'Saco de cemento 50 kg', unidad: 'Saco', precio: 245, descripcion: '', existencias: 40, minimoExistencias: 10 });
     expect(saco).toMatchObject({ codigo: 'GEN-SACO', categoria: 'general', existencias: 40, minimoExistencias: 10 });
     expect(s.productos().at(-1)).toBe(saco);
-    s.moverExistencias(saco.id, 'salida', 32, 'Venta de mostrador');
+    await s.moverExistencias(saco.id, 'salida', 32, 'Venta de mostrador');
     const despues = s.productos().find((p) => p.id === saco.id)!;
     expect(despues.existencias).toBe(8);
     expect(existenciasBajas(despues)).toBe(true);
     expect(h.de(registro.producto(saco.id))[0]).toMatchObject({ texto: 'Salida de 32 saco', cambios: [{ campo: 'Existencias', antes: '40', despues: '8' }] });
-    const flete = s.crearProducto({ tipo: 'servicio', codigo: 'SRV-FLETE', nombre: 'Flete', unidad: 'Viaje', precio: 900, descripcion: '' });
+    const flete = await s.crearProducto({ tipo: 'servicio', codigo: 'SRV-FLETE', nombre: 'Flete', unidad: 'Viaje', precio: 900, descripcion: '' });
     expect(flete.existencias).toBeUndefined();
   });
 
-  it('servicio de renta de equipo: conectado a sus unidades, editable aun del tarifario; su código no cambia', () => {
+  it('servicio de renta de equipo: conectado a sus unidades, editable aun del tarifario; su código no cambia', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
-    const renta = s.crearProducto({
+    const renta = await s.crearProducto({
       tipo: 'servicio',
       codigo: 'SRV-RENTA-OLLA',
       nombre: 'Renta de olla',
@@ -266,19 +266,19 @@ describe('productos', () => {
       equipo: { tipo: 'revolvedor', unidades: ['eco-09', 'eco-11'] },
     });
     expect(textoEquipo(renta.equipo!)).toBe('Camión revolvedor · ECO-09, ECO-11');
-    s.editarProducto(renta.id, { ...renta, equipo: { tipo: 'revolvedor', unidades: [] } });
+    await s.editarProducto(renta.id, { ...renta, equipo: { tipo: 'revolvedor', unidades: [] } });
     expect(h.de(registro.producto(renta.id))[0].cambios).toEqual([
       { campo: 'Renta de equipo', antes: 'Camión revolvedor · ECO-09, ECO-11', despues: 'Camión revolvedor · sin conectar' },
     ]);
-    s.editarProducto(renta.id, { ...renta, equipo: undefined });
+    await s.editarProducto(renta.id, { ...renta, equipo: undefined });
     expect(s.productos().find((p) => p.id === renta.id)!.equipo).toBeUndefined();
     // Del tarifario: el equipo sí, el código no
     const aplanadora = s.productos().find((p) => p.id === 'maquinaria-aplanadora')!;
-    s.editarProducto(aplanadora.id, { ...aplanadora, codigo: 'OTRO', equipo: { tipo: 'aplanadora', unidades: ['ap-01'] } });
+    await s.editarProducto(aplanadora.id, { ...aplanadora, codigo: 'OTRO', equipo: { tipo: 'aplanadora', unidades: ['ap-01'] } });
     expect(s.productos().find((p) => p.id === aplanadora.id)).toMatchObject({ codigo: 'REN-APLANADORA', equipo: { tipo: 'aplanadora', unidades: ['ap-01'] } });
   });
 
-  it('concreto: código interno como en la lista de planta, variante y nombre', () => {
+  it('concreto: código interno como en la lista de planta, variante y nombre', async () => {
     const c = { fc: '200', edad: '28', rev: '14', suministro: 'BP' };
     expect(codigoConcreto(c)).toBe('200 - N28 - 14 - BP');
     expect(codigoConcreto({ fc: 'mr45', edad: '7', rev: '16', suministro: 'TD' })).toBe('MR45 - RR7 - 16 - TD');
@@ -288,27 +288,27 @@ describe('productos', () => {
     expect(nombreConcreto({ fc: 'MR48', edad: '14', rev: '18', suministro: 'BA' })).toBe('Concreto MR 48 kg/cm² · RR 14 días · rev. 18 cm · BA');
   });
 
-  it('editar un producto: lo del tarifario conserva precio y unidad; queda en el historial', () => {
+  it('editar un producto: lo del tarifario conserva precio y unidad; queda en el historial', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
     const fc = s.productos().find((p) => p.id === 'fc-300')!;
-    s.editarProducto(fc.id, { ...fc, nombre: 'Concreto f´c 300 especial', precio: 1 });
+    await s.editarProducto(fc.id, { ...fc, nombre: 'Concreto f´c 300 especial', precio: 1 });
     expect(s.productos().find((p) => p.id === fc.id)).toMatchObject({ nombre: 'Concreto f´c 300 especial', precio: fc.precio, unidad: fc.unidad });
     expect(h.de(registro.producto(fc.id))[0].cambios).toEqual([{ campo: 'Nombre', antes: fc.nombre, despues: 'Concreto f´c 300 especial' }]);
-    const saco = s.crearProducto({ tipo: 'general', codigo: 'GEN-SACO', nombre: 'Saco', unidad: 'Saco', precio: 245, descripcion: '', existencias: 40, minimoExistencias: 10 });
-    s.editarProducto(saco.id, { codigo: 'gen-saco-50', nombre: 'Saco', unidad: 'Saco', precio: 260, descripcion: '', minimoExistencias: 5 });
+    const saco = await s.crearProducto({ tipo: 'general', codigo: 'GEN-SACO', nombre: 'Saco', unidad: 'Saco', precio: 245, descripcion: '', existencias: 40, minimoExistencias: 10 });
+    await s.editarProducto(saco.id, { codigo: 'gen-saco-50', nombre: 'Saco', unidad: 'Saco', precio: 260, descripcion: '', minimoExistencias: 5 });
     expect(s.productos().find((p) => p.id === saco.id)).toMatchObject({ codigo: 'GEN-SACO-50', precio: 260, existencias: 40, minimoExistencias: 5 });
     const antes = h.de(registro.producto(saco.id)).length;
-    s.editarProducto(saco.id, { codigo: 'GEN-SACO-50', nombre: 'Saco', unidad: 'Saco', precio: 260, descripcion: '', minimoExistencias: 5 });
+    await s.editarProducto(saco.id, { codigo: 'GEN-SACO-50', nombre: 'Saco', unidad: 'Saco', precio: 260, descripcion: '', minimoExistencias: 5 });
     expect(h.de(registro.producto(saco.id))).toHaveLength(antes);
   });
 });
 
 describe('VentasService: de cotización a pedido', () => {
-  it('confirmar genera un pedido por partida, ligado a ella, y la cotización pasa a pedido', () => {
+  it('confirmar genera un pedido por partida, ligado a ella, y la cotización pasa a pedido', async () => {
     const s = TestBed.inject(VentasService);
     const c = s.cotizaciones().find((x) => x.id === 'EPI-PRES-ESC-26092')!;
-    const nuevos = s.confirmar(c.id);
+    const nuevos = await s.confirmar(c.id);
     expect(nuevos.map((p) => [p.folio, p.partidaId, p.obraNombre, p.estado])).toEqual([
       ['PED-26-0155', '1a', 'Torre Norte', 'programado'],
       ['PED-26-0156', '1b', 'Torre Norte', 'programado'],
@@ -317,10 +317,10 @@ describe('VentasService: de cotización a pedido', () => {
     expect(nuevos.reduce((t, p) => t + p.importe, 0)).toBe(c.total);
     expect(s.cotizaciones().find((x) => x.id === c.id)!.estado).toBe('pedido');
     expect(s.pedidosDe(c.id)).toHaveLength(2);
-    expect(s.confirmar(c.id)).toEqual([]);
+    expect(await s.confirmar(c.id)).toEqual([]);
   });
 
-  it('las cotizaciones demo que ya son pedido tienen los suyos; los de entregas pasadas, entregados', () => {
+  it('las cotizaciones demo que ya son pedido tienen los suyos; los de entregas pasadas, entregados', async () => {
     const s = TestBed.inject(VentasService);
     for (const c of s.cotizaciones().filter((x) => x.estado === 'pedido')) expect(s.pedidosDe(c.id)).toHaveLength(c.partidas.length);
     expect(s.pedidosDe('EPI-PRES-ESC-26086')[0]).toMatchObject({ folio: 'PED-26-0151', estado: 'entregado', cobro: 'por_cobrar', estatusPlanta: 'confirmado' });
@@ -329,7 +329,7 @@ describe('VentasService: de cotización a pedido', () => {
 });
 
 describe('búsquedas de órdenes y clientes', () => {
-  it('órdenes: solo las de las plantas elegidas, por folio, cliente, obra o la cotización de la que salieron', () => {
+  it('órdenes: solo las de las plantas elegidas, por folio, cliente, obra o la cotización de la que salieron', async () => {
     const s = TestBed.inject(VentasService);
     const folios = (plantas: string[], texto: string) => filtrarPedidos(s.pedidos(), plantas, texto).map((p) => p.folio);
     expect(folios(['ESC'], '')).toEqual(['PED-26-0153', 'PED-26-0152', 'PED-26-0151']);
@@ -337,7 +337,7 @@ describe('búsquedas de órdenes y clientes', () => {
     expect(folios(['ESC'], 'EPI-PRES-ESC-26086')).toEqual(['PED-26-0151']);
   });
 
-  it('clientes: por nombre, razón social, RFC o contacto, sin importar acentos', () => {
+  it('clientes: por nombre, razón social, RFC o contacto, sin importar acentos', async () => {
     const ids = (texto: string) => filtrarClientes(CLIENTES, texto).map((c) => c.id);
     expect(ids('')).toHaveLength(6);
     expect(ids('caribe')).toEqual(['c-delta', 'c-sol']);
@@ -345,7 +345,7 @@ describe('búsquedas de órdenes y clientes', () => {
     expect(ids('canche')).toEqual(['c-habita']);
   });
 
-  it('teléfonos legibles, con lada si la tienen', () => {
+  it('teléfonos legibles, con lada si la tienen', async () => {
     expect(telefono('9811234567')).toBe('981 123 4567');
     expect(telefono('3055550142', '+1')).toBe('+1 305 555 0142');
     expect(telefono('')).toBe('');
@@ -353,12 +353,12 @@ describe('búsquedas de órdenes y clientes', () => {
 });
 
 describe('historial de ventas', () => {
-  it('guardar registra lo que cambió: precio del concreto, descuento y total, y los productos y servicios', () => {
+  it('guardar registra lo que cambió: precio del concreto, descuento y total, y los productos y servicios', async () => {
     const s = TestBed.inject(VentasService);
     const antes = s.cotizaciones().find((c) => c.id === 'EPI-PRES-ESC-26092')!;
     const [losas, columnas] = antes.partidas;
     const nueva = { ...columnas, id: 'n1', nombre: 'Concreto MR 45 kg/cm²', volumenM3: 12, especificacion: especificacionBase('mr', 45) };
-    s.guardar(antes.id, { partidas: [{ ...losas, precioM3: 3800, servicios: [] }, nueva], descuento: 5 });
+    await s.guardar(antes.id, { partidas: [{ ...losas, precioM3: 3800, servicios: [] }, nueva], descuento: 5 });
     const [e] = TestBed.inject(HistorialService).de(registro.cotizacion(antes.id));
     expect(e.texto).toBe('Cambios guardados');
     expect(e.cambios).toEqual([
@@ -374,10 +374,10 @@ describe('historial de ventas', () => {
     ]);
   });
 
-  it('confirmar queda en la cotización (estado y pedidos) y en cada pedido nuevo', () => {
+  it('confirmar queda en la cotización (estado y pedidos) y en cada pedido nuevo', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
-    s.confirmar('EPI-PRES-ESC-26092');
+    await s.confirmar('EPI-PRES-ESC-26092');
     expect(h.de(registro.cotizacion('EPI-PRES-ESC-26092'))[0]).toMatchObject({
       texto: 'Cotización confirmada',
       cambios: [{ campo: 'Estado', antes: 'Borrador', despues: 'Pedido' }],
@@ -386,7 +386,7 @@ describe('historial de ventas', () => {
     expect(h.de(registro.pedido('PED-26-0156'))[0].texto).toBe('Orden de venta creada desde la cotización EPI-PRES-ESC-26092');
   });
 
-  it('los registros de ejemplo traen su historial, lo más reciente arriba', () => {
+  it('los registros de ejemplo traen su historial, lo más reciente arriba', async () => {
     TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
     expect(h.de(registro.cotizacion('EPI-PRES-ESC-26086')).map((e) => e.texto)).toEqual([
@@ -403,11 +403,11 @@ describe('historial de ventas', () => {
 });
 
 describe('editar un cliente', () => {
-  it('guarda los datos limpios, registra lo que cambió y su nombre cambia también en cotizaciones y pedidos', () => {
+  it('guarda los datos limpios, registra lo que cambió y su nombre cambia también en cotizaciones y pedidos', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
     const antes = s.cliente('c-delta')!;
-    s.guardarCliente('c-delta', {
+    await s.guardarCliente('c-delta', {
       ...antes,
       nombre: 'Delta Constructora',
       empresa: { ...antes.empresa, rfc: ' cdc260101aa1 ' },
@@ -431,15 +431,15 @@ describe('editar un cliente', () => {
     ]);
   });
 
-  it('agregar y quitar datos de facturación queda anotado; sin cambios no se registra nada', () => {
+  it('agregar y quitar datos de facturación queda anotado; sin cambios no se registra nada', async () => {
     const s = TestBed.inject(VentasService);
     const h = TestBed.inject(HistorialService);
     const antes = s.cliente('c-maya')!;
     const cuantos = h.de(registro.cliente('c-maya')).length;
-    s.guardarCliente('c-maya', antes);
+    await s.guardarCliente('c-maya', antes);
     expect(h.de(registro.cliente('c-maya'))).toHaveLength(cuantos);
     const nuevo = { ...antes.facturacion[0], id: 'f-nuevo', alias: 'Obra Norte', predeterminado: true };
-    s.guardarCliente('c-maya', { ...antes, facturacion: [{ ...antes.facturacion[0], predeterminado: false }, nuevo] });
+    await s.guardarCliente('c-maya', { ...antes, facturacion: [{ ...antes.facturacion[0], predeterminado: false }, nuevo] });
     const [e] = h.de(registro.cliente('c-maya'));
     expect(e.detalles).toEqual(['Se agregaron los datos de facturación Obra Norte']);
     expect(e.cambios).toEqual([{ campo: 'Facturación predeterminada', antes: 'Constructora Maya', despues: 'Obra Norte' }]);

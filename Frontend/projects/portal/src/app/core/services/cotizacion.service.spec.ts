@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { EspecificacionConcreto } from 'ui';
-import { CotizacionService } from './cotizacion.service';
+import { CotizacionService, visibleAlCliente } from './cotizacion.service';
 
 const esp: EspecificacionConcreto = {
   tipoResistencia: 'fc', resistenciaKgCm2: 200, edadDias: 28, revenimientoCm: 10, tmaMm: 19,
@@ -41,7 +41,9 @@ describe('CotizacionService', () => {
     const c = s.guardarCotizacion('EPI-WEB-ESC-26003', fecha);
     expect(c.partidas).toHaveLength(1);
     expect(s.partidas()).toEqual([]);
-    expect(s.cotizaciones()[0]).toMatchObject({ folio: 'EPI-WEB-ESC-26003', serie: 'EPI-WEB-ESC-26003', revision: 0 });
+    expect(s.cotizaciones()[0]).toMatchObject({ folio: 'EPI-WEB-ESC-26003', serie: 'EPI-WEB-ESC-26003', revision: 0, estado: 'recibida' });
+    s.aceptada(c.id);
+    expect(s.buscarCotizacion(c.id)?.estado).toBe('pedido');
     expect(s.nuevoFolio('CZM', fecha)).toBe('EPI-WEB-CZM-26004');
   });
 
@@ -73,5 +75,13 @@ describe('CotizacionService', () => {
     s.cancelarEdicion();
     expect(s.partidas()).toEqual([]);
     expect(s.edicion()).toBeNull();
+  });
+
+  it('el cliente no ve las que el ERP ocultó ni sus borradores', () => {
+    const c = TestBed.inject(CotizacionService).buscarCotizacion('c-demo-1')!;
+    expect(visibleAlCliente(c)).toBe(true);
+    expect(visibleAlCliente({ ...c, ocultaAlCliente: true })).toBe(false);
+    expect(visibleAlCliente({ ...c, estado: 'borrador' })).toBe(false);
+    expect(visibleAlCliente({ ...c, estado: undefined })).toBe(true);
   });
 });

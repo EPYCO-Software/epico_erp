@@ -33,12 +33,13 @@ projects/
       styles.css           importa tailwind, overlay del CDK, ../../ui/styles/{base,glass,forms}.css y entrada-login.css
       public/img/          planta-login.webp (sin uso desde el login nuevo)
       app/
-        core/              interceptors, modulos.ts (catálogo de módulos = la navegación; búsqueda sin acentos
+        core/              interceptors (api.interceptor: token en /api; con 401, un refresh y reintento; si no,
+                           al login), modulos.ts (catálogo de módulos = la navegación; búsqueda sin acentos
                            (`normalizar`), favoritos, `menu` del encabezado de cada módulo (menús desplegables con enlaces y secciones con título, como Odoo; `enlacesDelMenu`), `activo` (por ahora solo CRM, Ventas y pedidos), `filtros`
                            de la pantalla de inicio (se suman: activados por defecto + favoritos; "todos" va solo) y moduloActivoGuard: canActivateChild del shell, cada ruta indica `data.modulo`), plantas.ts
                            (razones sociales con sus plantas y la selección: una principal + otras opcionales, nunca
                            vacía), mensajeria.ts (notificaciones, chats, canales y ventanas de chat abiertas; demo en
-                           memoria), empresas.ts (concreteras del login) e historial.ts (HistorialService: el historial
+                           memoria) e historial.ts (HistorialService: el historial
                            de cada registro, como el chatter de Odoo sin mensajes: lo que hacen las pantallas con sus
                            campos antes → después, notas internas y actividades programadas; clave "tipo:id";
                            `ultimaEdicion`: lo último que no sea nota ni actividad)
@@ -152,6 +153,15 @@ projects/
                            (`coincide`, filtrar*) y VentasService (en memoria: cotizaciones y pedidos; guardar, enviar y
                            confirmar; clientes editables con guardarCliente, limpiarCliente y cambiosCliente; con
                            pruebas). Las demo que ya son pedido traen los suyos (PED-26-0151…).
+                           Con backend (el ERP provee AUTH_API_URL): VentasService lee todo de /api/v1 al entrar (o al
+                           cambiar de usuario o empresa) y cada acción se guarda allá; sus métodos de escritura son async
+                           (los que llaman muestran mensajeDe(e) si falla). ventas-api.ts traduce entre la forma de la API
+                           (la del dbml) y ui/models: plantas por código (ESC ↔ id de sucursal, de la sesión), productos
+                           del tarifario por código (CON-FC-300 ↔ fc-300, de lo que depende formato.ts), servicios y
+                           maquinaria como líneas (SRV-…, REN-…), fechas UTC ↔ ISO con offset de la planta, descuento %
+                           ↔ importe. El historial de cotizaciones, órdenes, clientes y productos viene del backend
+                           (HistorialService.remoto; notas a /historial/…/notas). Sin API (pruebas, portal) sigue la demo
+                           en memoria. shortcut: carga todo y el detalle de cada cotización (N peticiones) al entrar.
                            Historial: cotizaciones, órdenes y clientes llevan el suyo en la vista completa (claves en
                            `registro`). Guardar cambios registra precio del concreto, descuento y total antes → después y
                            los productos y servicios agregados o quitados (`cambiosEntre`); enviar y confirmar registran
@@ -300,6 +310,10 @@ projects/
                            el mismo de la vista previa del ERP), Ver PDF (pestaña nueva),
                            Descargar, Modificar (CotizacionService.editar 'revision' → folio …-R1, -R2; la original
                            no cambia) y Usar como base ('base' → serie nueva con baseId). Hay dos cotizaciones demo.
+                           Estado del ERP (CotizacionGuardada.estado) con palabras del cliente (ESTADO_PARA_CLIENTE:
+                           En revisión, Respondida, Aceptada, Cancelada); guardar = "recibida" y aceptar = "pedido",
+                           como los ve Ventas. No se listan las ocultas ni los borradores del ERP (visibleAlCliente);
+                           una cancelada no se acepta.
                            cotizacion.ts (/cotizaciones/:folio): detalle con flujo y "Aceptar y generar pedido".
         features/obras/    Mis obras y obra.ts (/obras/:id). obra-form: alta y edición (lo usa también el cotizador) con
                            responsable (nombre + foto opcional) y contactos (lada +52 por defecto, extranjeros 6–14
@@ -307,7 +321,8 @@ projects/
                            (PedidosService.obraConPedidoEnCurso).
         features/pedidos/  Mis pedidos: totales (total, pagado, pendiente), tabla con hover; clic = vista previa a la
                            derecha (pedido-previa), doble clic o el folio = abre el pedido, la obra enlaza a /obras/:id.
-                           Pedido.cobro: por_facturar | en_facturacion | facturado | pagado (+ importe y facturaFolio).
+                           Pedido.cobro: EstadoCobro de ui, el mismo del ERP (pagado y finalizado cuentan como
+                           pagados en los totales) + importe y facturaFolio.
                            Seguimiento de camiones (seguimiento.ts con pruebas, seguimiento-entrega,
                            SeguimientoService): un pedido en planta/en ruta/en obra muestra sus camiones (ViajeCamion,
                            uno o varios) en `ui-mapa-seguimiento` (Leaflet + OpenStreetMap, sin API key; CSS
@@ -326,7 +341,10 @@ projects/
     styles/forms.css       @utility campo / casilla / boton-primario (controles nativos)
     src/public-api.ts      todo lo exportado
     src/lib/
-      auth/                AuthService, authGuard, guestGuard, destinoSeguro, AUTH_STORAGE_KEY
+      auth/                AuthService, authGuard, guestGuard, destinoSeguro, AUTH_STORAGE_KEY, AUTH_API_URL, ErrorAuth.
+                           Con AUTH_API_URL (el ERP: /api/v1) el login, refresh y logout van al backend; sin ella (el
+                           portal, mientras el backend no tenga usuarios de portal) el login es de demostración.
+                           En dev, /api pasa por projects/erp/proxy.conf.json a http://localhost:5157.
       components/          ui-icon, ui-drawer, ui-user-menu, ui-field-error, ui-mapa, ui-glass-card, ui-kpi-card, ui-pipeline,
                            ui-page-header, ui-resumen-cotizacion, ui-estado-pedido y ui-estado-cobro (estado de entrega y
                            de cobro de un pedido: tinte + icono + texto, iguales en portal y ERP)
@@ -337,7 +355,8 @@ projects/
                            (partidas por obra, líneas y totales). Cambiar el formato aquí lo cambia en las dos apps
                            (también el PDF y los pedidos del portal). `pedidoDePartida`: lo que lleva el pedido de cada
                            partida al aceptar (portal) o confirmar (ERP) una cotización.
-                           plantas.ts: `plantaPara` (planta por municipio de la obra, con su contacto) y `fechaLarga`.
+                           plantas.ts: `plantaPara` (planta por municipio de la obra, con su contacto: ESC, XPJ, CZM y
+                           CUN, las del ERP; otro municipio → GEN) y `fechaLarga`.
                            catalogo.ts (soluciones con su especificación y servicios sugeridos, OPCIONES de
                            resistencia, edad, revenimiento, TMA y cemento), reglas.ts (recomendaciones técnicas y
                            bombeo ↔ servicios) y entrega.ts (fecha de entrega: mín. 24 h y máx. 6 meses en el portal;

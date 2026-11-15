@@ -27,7 +27,7 @@ import {
   pesos,
 } from 'ui';
 import { BarraEstados } from '../../layout/vista-completa';
-import { ESTADOS_COTIZACION, VentasService, modificable } from './datos';
+import { ESTADOS_COTIZACION, VentasService, mensajeDe, modificable } from './datos';
 import { CambiosCotizacion, EditorCotizacion } from './editor-cotizacion';
 import { EnviarCotizacion } from './enviar-cotizacion';
 
@@ -308,10 +308,14 @@ export class DetalleCotizacion {
     void this.router.navigate(['/ventas/cotizaciones/nueva'], { queryParams: { base: this.c().id } });
   }
 
-  protected cambiarVisibilidad(): void {
+  protected async cambiarVisibilidad(): Promise<void> {
     const visible = !!this.c().ocultaAlCliente;
-    this.ventas.cambiarVisibilidad(this.c().id, visible);
-    this.aviso.set(visible ? 'El cliente vuelve a verla en el portal.' : 'Oculta: el cliente ya no la ve en el portal.');
+    try {
+      await this.ventas.cambiarVisibilidad(this.c().id, visible);
+      this.aviso.set(visible ? 'El cliente vuelve a verla en el portal.' : 'Oculta: el cliente ya no la ve en el portal.');
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
   }
   protected readonly botonPrimario = 'boton-primario h-9 w-auto gap-2 px-3.5 text-sm';
   protected readonly botonIcono =
@@ -373,8 +377,13 @@ export class DetalleCotizacion {
   readonly sinGuardar = computed(() => this.editor()?.sinGuardar() ?? false);
 
   /** Pasa a pedido (sus pedidos aparecen arriba) y el foco va al primero: es a donde se va después. */
-  protected confirmar(): void {
-    const nuevos = this.ventas.confirmar(this.c().id);
+  protected async confirmar(): Promise<void> {
+    let nuevos;
+    try {
+      nuevos = await this.ventas.confirmar(this.c().id);
+    } catch (e) {
+      return this.aviso.set(mensajeDe(e));
+    }
     const folios = LISTA.format(nuevos.map((p) => p.folio));
     this.aviso.set(
       nuevos.length === 1 ? `Se generó el pedido ${folios}.` : `Se generaron ${nuevos.length} pedidos, uno por entrega: ${folios}.`,
@@ -387,14 +396,21 @@ export class DetalleCotizacion {
     this.editando.set(true);
   }
 
-  protected guardar(cambios: CambiosCotizacion): void {
+  protected async guardar(cambios: CambiosCotizacion): Promise<void> {
     const antes = this.c();
-    this.ventas.guardar(antes.id, cambios);
+    let despues;
+    try {
+      despues = await this.ventas.guardar(antes.id, cambios);
+    } catch (e) {
+      return this.aviso.set(mensajeDe(e));
+    }
     this.terminar(
       antes.estado === 'enviada'
-        ? `Cambios guardados como revisión R${antes.revision + 1}. Envíala para que el cliente la vea.`
+        ? `Cambios guardados como revisión ${despues.folio}. Envíala para que el cliente la vea.`
         : 'Cambios guardados.',
     );
+    // Con API la revisión es otra cotización: la vista completa pasa a ella
+    if (despues.id !== antes.id && this.completa()) void this.router.navigate(['/ventas/cotizaciones', despues.id]);
   }
 
   /** Al salir de la edición el foco vuelve a "Editar" (el botón con el que se entró). */

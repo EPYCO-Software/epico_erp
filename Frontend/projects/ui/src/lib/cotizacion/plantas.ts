@@ -17,7 +17,8 @@ const TELEFONOS = 'Cel. 987 8739361, Tel. 987 1170185';
 const PLANTAS: (PlantaContacto & { coincide: RegExp })[] = [
   { clave: 'ESC', nombre: 'PLANTA ESCARCEGA', coincide: /esc[aá]rcega/i, zonaHoraria: 'America/Merida', ubicacion: { lat: 18.6101, lng: -90.7352 }, telefonos: TELEFONOS, correos: 'epico.concretos@gmail.com, ventas.escarcega@epiconconcretos.com' },
   { clave: 'CZM', nombre: 'PLANTA COZUMEL', coincide: /cozumel/i, zonaHoraria: 'America/Cancun', ubicacion: { lat: 20.4878, lng: -86.9422 }, telefonos: TELEFONOS, correos: 'epico.concretos@gmail.com' },
-  { clave: 'XPJ', nombre: 'PLANTA XPUJIL', coincide: /xpujil/i, zonaHoraria: 'America/Merida', telefonos: TELEFONOS, correos: 'epico.concretos@gmail.com' },
+  { clave: 'XPJ', nombre: 'PLANTA XPUJIL', coincide: /xpujil/i, zonaHoraria: 'America/Merida', ubicacion: { lat: 18.5097, lng: -89.3946 }, telefonos: TELEFONOS, correos: 'epico.concretos@gmail.com' },
+  { clave: 'CUN', nombre: 'PLANTA CANCUN', coincide: /canc[uú]n/i, zonaHoraria: 'America/Cancun', ubicacion: { lat: 21.1619, lng: -86.8515 }, telefonos: TELEFONOS, correos: 'epico.concretos@gmail.com' },
 ];
 const GENERAL: PlantaContacto = { clave: 'GEN', nombre: 'EPICO CONCRETOS', zonaHoraria: 'America/Merida', telefonos: TELEFONOS, correos: 'epico.concretos@gmail.com' };
 

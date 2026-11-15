@@ -18,7 +18,7 @@ import {
 } from 'ui';
 import { BarraEstados, BotonRelacion } from '../../layout/vista-completa';
 import { CambiarCobro } from './cambiar-cobro';
-import { CambiosPedido, VentasService, pedidoEditable } from './datos';
+import { CambiosPedido, VentasService, mensajeDe, pedidoEditable } from './datos';
 import { EditorPedido } from './editor-pedido';
 import { PlantaPedido } from './planta-pedido';
 
@@ -178,9 +178,13 @@ export class DetallePedido {
   protected readonly metodos = (Object.keys(METODO_PAGO) as MetodoPago[]).map((id) => ({ id, nombre: METODO_PAGO[id] }));
   protected readonly aviso = linkedSignal({ source: computed(() => this.p().id), computation: () => '' });
 
-  protected cambiarMetodo(metodo: MetodoPago): void {
-    this.ventas.cambiarMetodoPago(this.p().id, metodo);
-    this.aviso.set(`Método de pago: ${METODO_PAGO[metodo]}.`);
+  protected async cambiarMetodo(metodo: MetodoPago): Promise<void> {
+    try {
+      await this.ventas.cambiarMetodoPago(this.p().id, metodo);
+      this.aviso.set(`Método de pago: ${METODO_PAGO[metodo]}.`);
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
   }
   protected readonly botonIcono =
     'flex size-9 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-carbon/5 hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico';
@@ -211,9 +215,13 @@ export class DetallePedido {
     this.editando.set(true);
   }
 
-  protected guardar(cambios: CambiosPedido): void {
+  protected async guardar(cambios: CambiosPedido): Promise<void> {
     const antes = this.p().estatusPlanta;
-    this.ventas.editarPedido(this.p().id, cambios);
+    try {
+      await this.ventas.editarPedido(this.p().id, cambios);
+    } catch (e) {
+      return this.aviso.set(mensajeDe(e));
+    }
     const reenviada = antes !== this.ventas.pedidos().find((x) => x.id === this.p().id)?.estatusPlanta;
     this.terminar(reenviada ? `Orden actualizada; se reenvió a ${this.p().plantaNombre} para confirmar.` : 'Orden actualizada.');
   }

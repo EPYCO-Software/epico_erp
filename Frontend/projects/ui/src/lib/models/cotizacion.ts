@@ -100,6 +100,10 @@ export interface CotizacionGuardada {
   baseId?: string;
   /** Descuento sobre el subtotal, en %, que da la concretera (ERP). Se aplica antes del IVA. */
   descuento?: number;
+  /** En qué va con la concretera (lo cambia el ERP); el portal lo muestra con sus palabras. Sin dato: "recibida". */
+  estado?: EstadoCotizacion;
+  /** El cliente no la ve en el portal (p. ej. una versión que se reemplazó por otra con mejor precio). */
+  ocultaAlCliente?: boolean;
 }
 
 /** Cómo se guardará la cotización que se está editando a partir de una guardada. */
@@ -121,8 +125,6 @@ export interface Cotizacion extends CotizacionGuardada {
   envio?: { correo: string; portal: boolean; /** ISO 8601 */ fecha: string };
   /** La pidió el cliente desde el portal (llega como "recibida"). */
   origen?: 'portal';
-  /** El cliente no la ve en el portal (p. ej. una versión que se reemplazó por otra con mejor precio). */
-  ocultaAlCliente?: boolean;
 }
 
 export interface CotizacionVista extends Cotizacion {

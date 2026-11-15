@@ -34,6 +34,10 @@ import { CotizacionFila } from './cotizacion-fila';
             <a [routerLink]="['/cotizaciones', s.folio]" class="font-semibold text-[#2B5F75] underline underline-offset-4">{{ s.folio }}</a>.
           </span>
         </p>
+      } @else if (c.estado === 'cancelada') {
+        <p class="mb-4 rounded-xl bg-white/80 px-4 py-3 text-sm shadow-sm">
+          La concretera canceló esta cotización. Puedes usarla como base para pedir una nueva.
+        </p>
       } @else if (!pedidos().length) {
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/80 px-4 py-3 shadow-sm">
           <p class="text-sm"><span class="font-semibold">¿Todo listo?</span> Al aceptar se genera un pedido por producto, ligado a esta cotización.</p>
@@ -77,6 +81,7 @@ export default class Cotizacion {
 
   protected aceptar(): void {
     const nuevos = this.pedidosService.generarDesdeCotizacion(this.cot()!);
+    this.cotizaciones.aceptada(this.cot()!.id);
     this.aviso.set(`Cotización aceptada. ${nuevos.length === 1 ? 'Se generó el pedido' : 'Se generaron los pedidos'} ${nuevos.map((p) => p.folio).join(', ')}.`);
   }
 }

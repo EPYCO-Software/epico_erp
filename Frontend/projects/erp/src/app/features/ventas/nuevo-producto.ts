@@ -2,7 +2,7 @@ import { Component, inject, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
-import { NuevoProducto, VentasService } from './datos';
+import { NuevoProducto, VentasService, mensajeDe } from './datos';
 import { FormProducto } from './form-producto';
 
 /**
@@ -39,9 +39,13 @@ export default class NuevoProductoPagina {
   protected readonly botonSecundario =
     'inline-flex h-9 items-center rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
 
-  protected crear(n: NuevoProducto): void {
-    const p = this.ventas.crearProducto(n);
-    void this.router.navigate(['/ventas/productos', p.id]);
+  protected async crear(n: NuevoProducto): Promise<void> {
+    try {
+      const p = await this.ventas.crearProducto(n);
+      void this.router.navigate(['/ventas/productos', p.id]);
+    } catch (e) {
+      alert(mensajeDe(e));
+    }
   }
 
   protected descartar(): void {

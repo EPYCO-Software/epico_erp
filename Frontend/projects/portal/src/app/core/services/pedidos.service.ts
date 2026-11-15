@@ -60,7 +60,8 @@ export class PedidosService {
   readonly resumen = computed(() => {
     const vigentes = this._pedidos().filter((p) => p.estado !== 'cancelado');
     const suma = (l: Pedido[]) => l.reduce((t, p) => t + p.importe, 0);
-    const pagado = suma(vigentes.filter((p) => p.cobro === 'pagado'));
+    // "finalizado" (ERP) también ya se pagó
+    const pagado = suma(vigentes.filter((p) => p.cobro === 'pagado' || p.cobro === 'finalizado'));
     return { total: suma(vigentes), pagado, pendiente: suma(vigentes) - pagado };
   });
 

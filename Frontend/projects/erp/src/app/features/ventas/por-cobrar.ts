@@ -6,7 +6,7 @@ import { FechaZonaPipe, Icon, METODO_PAGO, PedidoVista } from 'ui';
 import { PlantasService } from '../../core/plantas';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
-import { VentasService, filtrarPedidos } from './datos';
+import { VentasService, filtrarPedidos, mensajeDe } from './datos';
 import { DetallePedido } from './detalle-pedido';
 import { PlantaFila } from './planta-pedido';
 
@@ -181,9 +181,13 @@ export default class PorCobrar {
   protected readonly botonEnviar =
     'inline-flex h-9 items-center rounded-[0.625rem] border border-epico bg-white px-3 text-sm font-semibold text-epico-oscuro transition-colors hover:bg-epico/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
 
-  protected enviarMarcadas(): void {
+  protected async enviarMarcadas(): Promise<void> {
     const lista = this.porEnviar();
-    for (const p of lista) this.ventas.estatusPlanta(p.id, 'enviado');
+    try {
+      await Promise.all(lista.map((p) => this.ventas.estatusPlanta(p.id, 'enviado')));
+    } catch (e) {
+      return this.aviso.set(mensajeDe(e));
+    }
     this.aviso.set(lista.length === 1 ? `${lista[0].folio}: requerimiento enviado a planta.` : `${lista.length} requerimientos enviados a planta.`);
   }
   protected readonly conteo = computed(() => {

@@ -56,6 +56,7 @@ describe('presupuesto', () => {
     expect(pesos(97440)).toBe('97,440.00');
     expect(plantaPara({ municipio: 'Escárcega, Camp.' }).clave).toBe('ESC');
     expect(plantaPara({ municipio: 'Cozumel, Q. Roo' }).nombre).toBe('PLANTA COZUMEL');
+    expect(plantaPara({ municipio: 'Cancún, Q. Roo' })).toMatchObject({ clave: 'CUN', zonaHoraria: 'America/Cancun' });
     expect(plantaPara({ municipio: 'Mérida, Yuc.' }).clave).toBe('GEN');
     expect(plantaPara(null).clave).toBe('GEN');
   });

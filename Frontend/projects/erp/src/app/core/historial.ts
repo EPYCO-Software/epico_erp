@@ -76,6 +76,22 @@ export class HistorialService {
     return nombre.charAt(0).toUpperCase() + nombre.slice(1);
   });
 
+  /**
+   * Con API: el hilo de los registros de Ventas vive en el backend (lo genera al guardar); VentasService lo conecta.
+   * Sin ella (pruebas, demo), todo queda en memoria.
+   */
+  remoto: { cargar(registro: string): Promise<EventoHistorial[] | null>; nota(registro: string, texto: string): Promise<boolean> } | null = null;
+  /** Los eventos que vinieron del backend (se reemplazan al recargar; los locales, como actividades, se quedan). */
+  private readonly delServidor = new Set<string>();
+
+  /** Trae del backend el hilo de un registro (si es de los que tiene); sin API no hace nada. */
+  async cargar(registro: string): Promise<void> {
+    const eventos = await this.remoto?.cargar(registro).catch(() => null);
+    if (!eventos) return;
+    this.eventos.update((lista) => [...lista.filter((e) => !(e.registro === registro && this.delServidor.has(e.id))), ...eventos]);
+    for (const e of eventos) this.delServidor.add(e.id);
+  }
+
   /** Del más reciente al más antiguo; en el mismo instante, el último que llegó arriba. */
   de(registro: string): EventoHistorial[] {
     return this.eventos()
@@ -108,7 +124,12 @@ export class HistorialService {
   }
 
   nota(registro: string, texto: string): void {
-    this.registrar(registro, { texto, nota: true });
+    if (!this.remoto) return this.registrar(registro, { texto, nota: true });
+    // En el backend si el registro es suyo; si no (o falla), aquí
+    void this.remoto
+      .nota(registro, texto)
+      .then((ok) => (ok ? this.cargar(registro) : this.registrar(registro, { texto, nota: true })))
+      .catch(() => this.registrar(registro, { texto, nota: true }));
   }
 
   programar(a: NuevaActividad): void {

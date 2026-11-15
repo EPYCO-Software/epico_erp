@@ -16,7 +16,7 @@ import {
   pesos,
   totalesCotizacion,
 } from 'ui';
-import { CotizacionService } from '../../core/services/cotizacion.service';
+import { CotizacionService, ESTADO_PARA_CLIENTE } from '../../core/services/cotizacion.service';
 import { ObrasService } from '../../core/services/obras.service';
 import { PedidosService } from '../../core/services/pedidos.service';
 
@@ -36,6 +36,7 @@ import { PedidosService } from '../../core/services/pedidos.service';
           } @else {
             {{ c().folio }}
           }
+          <span class="rounded-md bg-carbon/6 px-2 py-0.5 text-xs font-semibold text-carbon">{{ estado() }}</span>
           @if (vigente()) {
             <span class="rounded-md bg-[#E5F0EA] px-2 py-0.5 text-xs font-semibold text-[#2E5E4A]">Vigente</span>
           } @else if (anidada()) {
@@ -146,6 +147,7 @@ export class CotizacionFila {
   protected readonly volumen = computed(() => this.c().partidas.reduce((t, p) => t + p.volumenM3, 0));
   protected readonly total = computed(() => totalesCotizacion(this.c()));
   protected readonly referencia = computed(() => this.cotizacion.referencia(this.c()));
+  protected readonly estado = computed(() => ESTADO_PARA_CLIENTE[this.c().estado ?? 'recibida']);
 
   protected async verPdf(modo: 'abrir' | 'descargar'): Promise<void> {
     const c = this.c();

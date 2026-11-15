@@ -2,7 +2,7 @@ import { Component, computed, inject, input, output } from '@angular/core';
 import { CdkMenu, CdkMenuItem, CdkMenuTrigger } from '@angular/cdk/menu';
 import { ChevronDown } from 'lucide';
 import { ESTADO_COBRO, EstadoCobro, EstadoCobroEtiqueta, Icon, PedidoVista } from 'ui';
-import { VentasService } from './datos';
+import { VentasService, mensajeDe } from './datos';
 
 /**
  * Cambiar el cobro de una orden (Por cobrar → Pagado, Crédito…): botón con menú de cobros y, al elegir, una segunda
@@ -50,10 +50,14 @@ export class CambiarCobro {
   protected readonly actual = computed(() => ESTADO_COBRO[this.p().cobro]);
   protected readonly opciones = computed(() => (Object.keys(ESTADO_COBRO) as EstadoCobro[]).filter((c) => c !== this.p().cobro));
 
-  protected elegir(cobro: EstadoCobro): void {
+  protected async elegir(cobro: EstadoCobro): Promise<void> {
     const p = this.p();
     if (!confirm(`¿Cambiar el cobro de ${p.folio} de "${ESTADO_COBRO[p.cobro]}" a "${ESTADO_COBRO[cobro]}"?`)) return;
-    this.ventas.cambiarCobro(p.id, cobro);
-    this.cambiado.emit(`${p.folio}: el cobro pasó a "${ESTADO_COBRO[cobro]}".`);
+    try {
+      await this.ventas.cambiarCobro(p.id, cobro);
+      this.cambiado.emit(`${p.folio}: el cobro pasó a "${ESTADO_COBRO[cobro]}".`);
+    } catch (e) {
+      this.cambiado.emit(`${p.folio}: ${mensajeDe(e)}`);
+    }
   }
 }

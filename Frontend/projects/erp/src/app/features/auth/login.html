@@ -130,39 +130,6 @@
             </div>
             <ui-field-error [campo]="f.password" errorId="password-error" />
           </div>
-
-          <div class="entrada-subir [animation-delay:700ms]">
-            <label for="empresa" class="mb-[clamp(0.25rem,1dvh,0.625rem)] block font-medium text-carbon lg:mb-2 lg:text-[max(14px,calc(var(--u)*17))]">
-              Empresa
-            </label>
-            <div class="relative">
-              <ui-icon
-                [icono]="iconos.empresa"
-                [tamano]="22"
-                [grosor]="1.6"
-                class="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-texto-suave lg:left-5.5 lg:[&_svg]:size-5.5"
-              />
-              <select
-                id="empresa"
-                class="campo bg-white/75! h-(--campo) appearance-none pr-12 pl-13 text-[1.0625rem] lg:pl-15.5 lg:text-[max(14px,calc(var(--u)*17))]"
-                [formField]="f.empresaId"
-                [attr.aria-invalid]="f.empresaId().touched() && f.empresaId().invalid()"
-                aria-describedby="empresa-error"
-              >
-                <option value="" disabled>Selecciona tu empresa</option>
-                @for (e of empresas; track e.id) {
-                  <option [value]="e.id">{{ e.nombre }}</option>
-                }
-              </select>
-              <ui-icon
-                [icono]="iconos.abajo"
-                [tamano]="22"
-                [grosor]="1.6"
-                class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-texto-suave lg:right-5.5 lg:[&_svg]:size-5.5"
-              />
-            </div>
-            <ui-field-error [campo]="f.empresaId" errorId="empresa-error" />
-          </div>
         </div>
 
         <div class="entrada-subir mt-(--hueco) flex items-center justify-between [animation-delay:770ms] gap-x-2 text-[0.78rem] whitespace-nowrap min-[400px]:text-sm sm:text-base lg:mt-6.5">
