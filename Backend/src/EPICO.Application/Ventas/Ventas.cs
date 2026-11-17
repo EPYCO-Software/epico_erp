@@ -29,7 +29,7 @@ public static class Calculo
             : 0;
 
     public static decimal SubtotalPartida(CotizacionPartida p) =>
-        Importe(p.PrecioM3, p.VolumenM3) + Importe(TrasladoM3(p), p.VolumenM3) + p.Lineas.Sum(l => l.Importe);
+        Importe(p.PrecioM3 ?? 0, p.VolumenM3) + Importe(TrasladoM3(p), p.VolumenM3) + p.Lineas.Sum(l => l.Importe);
 
     public static void Totalizar(Cotizacion c, decimal descuentoPct, decimal tasaIva)
     {
@@ -62,16 +62,18 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             .Include(c => c.Partidas.OrderBy(p => p.Orden)).ThenInclude(p => p.Lineas)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
 
-    public async Task<Cotizacion> CrearCotizacion(CotizacionRequest r, CancellationToken ct)
+    /// <summary>portal = la pide un cliente: entra como "recibida" con origen portal y sin vendedor si su cliente no tiene.</summary>
+    public async Task<Cotizacion> CrearCotizacion(CotizacionRequest r, CancellationToken ct, bool portal = false)
     {
         var suc = await Sucursal(r.SucursalId, ct);
         var c = new Cotizacion
         {
             EmpresaId = suc.EmpresaId,
             SucursalId = suc.Id,
-            Estado = EstadoCotizacion.Borrador,
+            Estado = portal ? EstadoCotizacion.Recibida : EstadoCotizacion.Borrador,
+            Origen = portal ? OrigenCotizacion.Portal : OrigenCotizacion.Erp,
             Fecha = DateTime.UtcNow,
-            VendedorId = r.VendedorId ?? yo.Id,
+            VendedorId = r.VendedorId ?? (portal ? null : yo.Id),
         };
         if (r.BaseId is Guid baseId && !await db.Set<Cotizacion>().AnyAsync(x => x.Id == baseId, ct))
             throw new ReglaException("La cotización base no existe.");
@@ -117,6 +119,8 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
     public Task<Cotizacion> Enviar(Guid id, CancellationToken ct) => CambiarCotizacion(id, c =>
     {
         if (c.Estado is EstadoCotizacion.Pedido or EstadoCotizacion.Cancelada) throw Ya(c.Estado);
+        ValidarLugar(c, obligatorio: true);
+        Cotizadas(c);
         c.Estado = EstadoCotizacion.Enviada;
         c.OcultaAlCliente = false;
     }, ct);
@@ -135,14 +139,16 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
     {
         var c = await Cotizacion(id, ct, editar: true) ?? throw new ReglaException("La cotización no existe.", 404);
         if (c.Estado is EstadoCotizacion.Pedido or EstadoCotizacion.Cancelada) throw Ya(c.Estado);
-        if (c.ClienteId is not Guid clienteId || c.ObraId is not Guid obraId)
-            throw new ReglaException("Para confirmar hacen falta cliente y obra.");
+        if (c.ClienteId is not Guid clienteId) throw new ReglaException("Para confirmar hace falta el cliente.");
+        ValidarLugar(c, obligatorio: true);
+        Cotizadas(c);
         foreach (var p in c.Partidas)
         {
             if (p.Entrega is null) throw new ReglaException($"Falta la entrega de «{p.Nombre}».");
-            if (p.ProductoId is null) throw new ReglaException($"«{p.Nombre}» no tiene producto de concreto.");
+            if (p.ProductoId is null && !p.Especial) throw new ReglaException($"«{p.Nombre}» no tiene producto de concreto.");
         }
         var traslado = c.Partidas.Any(p => Calculo.TrasladoM3(p) > 0) ? await ProductoTraslado(ct) : null;
+        var especial = c.Partidas.Any(p => p.ProductoId is null) ? await ProductoEspecial(ct) : null;
         var iva = await TasaIva(ct);
         var fraccionDescuento = c.Subtotal == 0 ? 0 : c.Descuento / c.Subtotal;
 
@@ -155,14 +161,14 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
                 EmpresaId = c.EmpresaId,
                 SucursalId = c.SucursalId,
                 ClienteId = clienteId,
-                ObraId = obraId,
                 CotizacionId = c.Id,
                 PartidaId = p.Id,
                 VendedorId = c.VendedorId,
                 FechaHoraEntrega = p.Entrega!.Value,
                 Folio = await db.SiguienteFolioAsync(c.EmpresaId, c.SucursalId, "pedido", ct),
-                Lineas = LineasDePartida(p, traslado),
+                Lineas = LineasDePartida(p, traslado, especial),
             };
+            CopiarLugar(c, pedido);
             Calculo.Totalizar(pedido, pedido.Lineas.Sum(l => l.Importe) * fraccionDescuento, iva);
             db.Set<Pedido>().Add(pedido);
             pedidos.Add(pedido);
@@ -187,7 +193,9 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         if (r.ListaPreciosId is Guid lista && !await db.Set<ListaPrecios>().AnyAsync(x => x.Id == lista, ct))
             throw new ReglaException("La lista de precios no existe.");
         c.ClienteId = r.ClienteId;
-        c.ObraId = r.ObraId;
+        CopiarLugar(new Cotizacion { ObraId = r.ObraId, EntregaDireccion = r.EntregaDireccion, EntregaMunicipio = r.EntregaMunicipio,
+            EntregaReferencias = r.EntregaReferencias, EntregaLat = r.EntregaLat, EntregaLng = r.EntregaLng }, c);
+        ValidarLugar(c, obligatorio: false);
         c.ContactoNombre = r.ContactoNombre;
         c.ContactoTelefono = r.ContactoTelefono;
         c.VendedorId = r.VendedorId ?? c.VendedorId;
@@ -204,9 +212,11 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         var codigos = reqs.SelectMany(CodigosTarifa).ToHashSet();
         var productos = await db.Set<Producto>().Where(x => ids.Contains(x.Id) || codigos.Contains(x.Codigo)).ToListAsync(ct);
         Producto Buscar(Guid id) => productos.FirstOrDefault(x => x.Id == id) ?? throw new ReglaException("Un producto no existe.");
+        var planta = await db.Set<Sucursal>().AsNoTracking().FirstAsync(s => s.Id == c.SucursalId, ct);
 
         foreach (var quitada in c.Partidas.Where(p => reqs.All(r => r.Id != p.Id)).ToList())
         {
+            db.Set<CotizacionLinea>().RemoveRange(quitada.Lineas); // sin esto EF no deja quitar una partida con líneas
             db.Set<CotizacionPartida>().Remove(quitada); // borrado lógico, queda en el historial
             c.Partidas.Remove(quitada);
         }
@@ -232,13 +242,18 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             p.Exposicion = r.Exposicion;
             p.Colocacion = r.Colocacion;
             p.Aditivos = r.Aditivos ?? [];
+            if (p.Aditivos.FirstOrDefault(a => !productos.Any(x => x.Activo && x.Codigo == CodigoAditivo(a))) is { } falta)
+                throw new ReglaException($"El aditivo «{falta}» no está en tus productos.");
             p.VolumenM3 = r.VolumenM3;
+            p.Especial = r.Especial;
             p.PrecioM3 = r.PrecioM3 ?? Tarifa(r, concreto, productos)
-                         ?? throw new ReglaException($"No hay tarifa para «{r.Nombre}» ({CodigoConcreto(r)}): indica el precio por m³.");
+                         ?? (r.Especial ? null : throw new ReglaException($"No hay tarifa para «{r.Nombre}» ({CodigoConcreto(r)}): indica el precio por m³."));
             p.Entrega = r.Entrega;
             p.TrasladoDistanciaKm = r.TrasladoDistanciaKm;
-            p.TrasladoIncluidosKm = r.TrasladoIncluidosKm;
-            p.TrasladoPrecioKm = r.TrasladoPrecioKm;
+            // Con distancia y sin km incluidos o precio por km, se usan los de la planta.
+            var conDistancia = r.TrasladoDistanciaKm is not null;
+            p.TrasladoIncluidosKm = r.TrasladoIncluidosKm ?? (conDistancia ? planta.KmIncluidos : null);
+            p.TrasladoPrecioKm = r.TrasladoPrecioKm ?? (conDistancia ? planta.PrecioKm : null);
 
             var lineas = r.Lineas ?? [];
             foreach (var quitada in p.Lineas.Where(l => lineas.All(x => x.Id != l.Id)).ToList())
@@ -281,12 +296,20 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
                + (r.Aditivos ?? []).Sum(a => Ajuste(CodigoAditivo(a)));
     }
 
-    static List<PedidoLinea> LineasDePartida(CotizacionPartida p, Producto? traslado)
+    static void Cotizadas(Cotizacion c)
+    {
+        if (c.Partidas.Any(p => p.PrecioM3 is null))
+            throw new ReglaException("Hay partidas de pedido especial sin precio: cotízalas antes.");
+    }
+
+    /// <summary>especial = producto genérico para la línea de concreto de una partida sin producto (pedido especial).</summary>
+    static List<PedidoLinea> LineasDePartida(CotizacionPartida p, Producto? traslado, Producto? especial)
     {
         var tipo = p.TipoResistencia == "mr" ? "MR" : "f´c";
         var concreto = $"{p.Nombre}: concreto {tipo} {p.ResistenciaKgCm2} kg/cm² a {p.EdadDias} días, rev. {p.RevenimientoCm} cm, " +
                        $"TMA {p.TmaMm} mm, {p.Cemento}, {p.Colocacion}";
-        var r = new List<PedidoLinea> { Linea(p.ProductoId!.Value, concreto, p.VolumenM3, p.PrecioM3) };
+        if (p.Especial) concreto = $"Pedido especial · {concreto}";
+        var r = new List<PedidoLinea> { Linea(p.ProductoId ?? especial!.Id, concreto, p.VolumenM3, p.PrecioM3!.Value) };
         if (Calculo.TrasladoM3(p) is > 0 and var precio)
             r.Add(Linea(traslado!.Id,
                 $"Traslado adicional: {Calculo.KmExtra(p.TrasladoDistanciaKm!.Value, p.TrasladoIncluidosKm!.Value)} km después de los {p.TrasladoIncluidosKm} km incluidos",
@@ -329,11 +352,11 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             EmpresaId = suc.EmpresaId,
             SucursalId = suc.Id,
             ClienteId = r.ClienteId,
-            ObraId = r.ObraId,
             VendedorId = r.VendedorId ?? yo.Id,
             FechaHoraEntrega = r.FechaHoraEntrega,
             MetodoPago = ReglaException.Opcion<MetodoPago>(r.MetodoPago),
         };
+        LugarDePedido(p, r);
         await LineasPedido(p, r, ct);
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -360,7 +383,7 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             db.Set<PedidoLinea>().Remove(l);
             p.Lineas.Remove(l);
         }
-        p.ObraId = r.ObraId;
+        LugarDePedido(p, r);
         p.VendedorId = r.VendedorId ?? p.VendedorId;
         p.FechaHoraEntrega = r.FechaHoraEntrega;
         p.MetodoPago = ReglaException.Opcion<MetodoPago>(r.MetodoPago);
@@ -473,11 +496,40 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         await db.Set<Sucursal>().FirstOrDefaultAsync(s => s.Id == id, ct)
         ?? throw new ReglaException("La planta no existe o no tienes acceso a ella.");
 
+    static void LugarDePedido(Pedido p, PedidoRequest r)
+    {
+        CopiarLugar(new Pedido { ObraId = r.ObraId, EntregaDireccion = r.EntregaDireccion, EntregaMunicipio = r.EntregaMunicipio,
+            EntregaReferencias = r.EntregaReferencias, EntregaLat = r.EntregaLat, EntregaLng = r.EntregaLng }, p);
+        ValidarLugar(p, obligatorio: true);
+    }
+
+    static void CopiarLugar(ILugarEntrega de, ILugarEntrega a)
+    {
+        static string? Texto(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        a.ObraId = de.ObraId;
+        a.EntregaDireccion = Texto(de.EntregaDireccion);
+        a.EntregaMunicipio = Texto(de.EntregaMunicipio);
+        a.EntregaReferencias = Texto(de.EntregaReferencias);
+        (a.EntregaLat, a.EntregaLng) = (de.EntregaLat, de.EntregaLng);
+    }
+
+    /// <summary>Obra o lugar, no los dos; el lugar pide dirección y municipio. obligatorio = ya no puede faltar (enviar, confirmar, pedido).</summary>
+    public static void ValidarLugar(ILugarEntrega x, bool obligatorio)
+    {
+        var lugar = x.EntregaDireccion is not null || x.EntregaMunicipio is not null || x.EntregaReferencias is not null
+                    || x.EntregaLat is not null || x.EntregaLng is not null;
+        if (x.ObraId is not null && lugar) throw new ReglaException("Elige una obra o captura un lugar de entrega, no los dos.");
+        if (lugar && (x.EntregaDireccion is null || x.EntregaMunicipio is null))
+            throw new ReglaException("Falta la dirección o el municipio de entrega.");
+        if (obligatorio && x.ObraId is null && !lugar)
+            throw new ReglaException(x is Pedido ? "El pedido no tiene obra ni lugar de entrega." : "La cotización no tiene obra ni lugar de entrega.");
+    }
+
     async Task ClienteYObra(Guid? clienteId, Guid? obraId, CancellationToken ct)
     {
         if (clienteId is Guid c && !await db.Set<Cliente>().AnyAsync(x => x.Id == c, ct))
             throw new ReglaException("El cliente no existe.");
-        if (obraId is Guid o && !await db.Set<Obra>().AnyAsync(x => x.Id == o && (clienteId == null || x.ClienteId == clienteId), ct))
+        if (obraId is Guid o && !await db.Set<Obra>().AnyAsync(x => x.Id == o && (clienteId == null || x.ClienteId == null || x.ClienteId == clienteId), ct))
             throw new ReglaException("La obra no existe o no es de ese cliente.");
     }
 
@@ -486,6 +538,12 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             .Where(i => i.EmpresaId == null && i.ImpuestoSat == "002" && i.Tipo == TipoImpuesto.Traslado)
             .Select(i => (decimal?)i.Tasa).FirstOrDefaultAsync(ct)
         ?? throw new ReglaException("Falta el IVA en Impuesto: corre el seed (--migrate).", 500);
+
+    public const string CodigoEspecial = "CON-ESPECIAL";
+
+    async Task<Producto> ProductoEspecial(CancellationToken ct) =>
+        await db.Set<Producto>().FirstOrDefaultAsync(x => x.Codigo == CodigoEspecial, ct)
+        ?? throw new ReglaException($"Falta el producto {CodigoEspecial}: corre el seed (--migrate).", 500);
 
     async Task<Producto> ProductoTraslado(CancellationToken ct) =>
         await db.Set<Producto>().FirstOrDefaultAsync(x => x.Codigo == CodigoTraslado, ct)

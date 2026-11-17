@@ -1,12 +1,9 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { ChevronRight, Lock, MapPin, Phone, Plus, X } from 'lucide';
-import { Icon, PageHeader } from 'ui';
+import { Avatar, Icon, mensajeError, ObraForm, PageHeader, telefonoVisible } from 'ui';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
 import { PedidosService } from '../../core/services/pedidos.service';
-import { Avatar } from './avatar';
-import { ObraForm } from './obra-form';
 import { ObraPanel } from './obra-panel';
-import { telefonoVisible } from './telefono';
 
 @Component({
   selector: 'app-obras',
@@ -28,7 +25,7 @@ import { telefonoVisible } from './telefono';
 
     <p class="sr-only" aria-live="polite">{{ mensaje() }}</p>
     @if (agregando()) {
-      <app-obra-form
+      <ui-obra-form
         id="obra-alta"
         class="mb-5 block"
         prefijo="alta"
@@ -63,7 +60,7 @@ import { telefonoVisible } from './telefono';
               · {{ o.municipio }}
             </span>
             <span class="mt-4 flex items-center gap-3">
-              <app-avatar
+              <ui-avatar-obra
                 class="size-11 text-base"
                 [nombre]="o.responsable.nombre"
                 [foto]="o.responsable.foto"
@@ -142,9 +139,13 @@ export default class Obras {
     if (this.agregando()) setTimeout(() => this.formulario()?.enfocar());
   }
 
-  protected agregar(datos: NuevaObra): void {
-    const obra = this.obrasService.agregar(datos);
-    this.agregando.set(false);
-    this.mensaje.set(`Obra "${obra.nombre}" agregada.`);
+  protected async agregar(datos: NuevaObra): Promise<void> {
+    try {
+      const obra = await this.obrasService.agregar(datos);
+      this.agregando.set(false);
+      this.mensaje.set(`Obra "${obra.nombre}" agregada.`);
+    } catch (e) {
+      this.mensaje.set(mensajeError(e));
+    }
   }
 }

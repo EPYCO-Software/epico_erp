@@ -3,7 +3,7 @@ import { NgOptimizedImage } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormField, email, form, required, submit } from '@angular/forms/signals';
 import { ArrowRight, CircleX, Eye, EyeOff, Info, LoaderCircle, Lock, Mail, MessagesSquare } from 'lucide';
-import { AuthService, FieldError, Icon, destinoSeguro } from 'ui';
+import { AuthService, ErrorAuth, FieldError, Icon, destinoSeguro } from 'ui';
 
 interface LoginPortal {
   correo: string;
@@ -11,8 +11,7 @@ interface LoginPortal {
   recordar: boolean;
 }
 
-// shortcut: mientras el login es estático el formulario viene lleno para entrar con un clic.
-// Al conectar el backend, dejar correo y password vacíos.
+// Sin backend (demo) el formulario viene lleno para entrar con un clic; con él, vacío.
 const DEMO: LoginPortal = { correo: 'compras@constructoradelta.mx', password: 'demo-cliente', recordar: true };
 
 const AVISOS = {
@@ -27,8 +26,8 @@ const AVISOS = {
   templateUrl: './login.html',
 })
 export default class Login {
-  private readonly auth = inject(AuthService);
-  private readonly router = inject(Router);
+  protected readonly auth = inject(AuthService);
+  protected readonly router = inject(Router);
 
   protected readonly iconos = {
     correo: Mail,
@@ -48,7 +47,7 @@ export default class Login {
   protected readonly error = signal('');
   protected readonly aviso = signal('');
 
-  protected readonly modelo = signal<LoginPortal>({ ...DEMO });
+  protected readonly modelo = signal<LoginPortal>(this.auth.conServidor ? { correo: '', password: '', recordar: true } : { ...DEMO });
   protected readonly f = form(this.modelo, (p) => {
     required(p.correo, { message: 'Escribe tu correo electrónico.' });
     email(p.correo, { message: 'Escribe un correo válido, por ejemplo nombre@empresa.com.' });
@@ -62,9 +61,11 @@ export default class Login {
       try {
         await this.auth.login(this.modelo());
         await this.router.navigateByUrl(destinoSeguro(this.route.snapshot.queryParamMap.get('returnUrl'), '/catalogo'));
-      } catch {
-        // Mensaje genérico: no revelar si falló el correo o la contraseña.
-        this.error.set('No pudimos iniciar sesión. Revisa tus datos e intenta de nuevo.');
+      } catch (e) {
+        // Credenciales malas: mensaje genérico (no revelar si falló el correo o la contraseña). Bloqueo, cuenta sin
+        // cliente ligado o sin conexión: el mensaje del backend, que dice qué hacer.
+        const conDetalle = e instanceof ErrorAuth && e.status !== 401 && e.message;
+        this.error.set(conDetalle || 'No pudimos iniciar sesión. Revisa tus datos e intenta de nuevo.');
       }
       return undefined;
     });

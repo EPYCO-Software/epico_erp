@@ -2,6 +2,7 @@ import { Component, Injector, afterNextRender, computed, inject, input, output, 
 import { FormField, form, required, submit } from '@angular/forms/signals';
 import { EstatusPlantaEtiqueta, FechaZonaPipe, FieldError, PedidoVista } from 'ui';
 import { VentasService, mensajeDe, offsetEn } from './datos';
+import { permisosSesion } from '../../core/permisos';
 
 type Respuesta = 'actualizacion' | 'rechazada';
 
@@ -31,15 +32,23 @@ type Respuesta = 'actualizacion' | 'rechazada';
       @switch (estatus()) {
         @case ('no_enviado') {
           <p class="mt-1 text-texto-suave">Aún no se envía a {{ p().plantaNombre }}.</p>
-          <button type="button" [class]="primario + ' mt-2'" (click)="cambiar('enviado')">Enviar requerimiento a planta</button>
+          @if (puede('ventas.pedidos.planta')) {
+            <button type="button" [class]="primario + ' mt-2'" (click)="cambiar('enviado')">Enviar requerimiento a planta</button>
+          }
         }
         @case ('enviado') {
           <p class="mt-1 text-texto-suave">Esperando la respuesta de {{ p().plantaNombre }}.</p>
           @if (!respondiendo()) {
             <div class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Respuesta de planta">
-              <button type="button" [class]="primario" (click)="cambiar('confirmado')">Confirmar pedido</button>
-              <button type="button" [class]="secundario" (click)="responder('actualizacion')">Pedir actualización</button>
-              <button type="button" [class]="secundario" (click)="responder('rechazada')">Rechazar</button>
+              @if (puede('ventas.pedidos.planta')) {
+                <button type="button" [class]="primario" (click)="cambiar('confirmado')">Confirmar pedido</button>
+              }
+              @if (puede('ventas.pedidos.planta')) {
+                <button type="button" [class]="secundario" (click)="responder('actualizacion')">Pedir actualización</button>
+              }
+              @if (puede('ventas.pedidos.planta')) {
+                <button type="button" [class]="secundario" (click)="responder('rechazada')">Rechazar</button>
+              }
             </div>
           }
         }
@@ -47,13 +56,19 @@ type Respuesta = 'actualizacion' | 'rechazada';
           <!-- En una línea: así "fecha: nota" no lleva espacio antes de los dos puntos -->
           <p class="mt-1">{{ p().plantaNombre }} pide cambiar la entrega@if (p().solicitudPlanta?.fecha; as fecha) { a <span class="font-semibold">{{ fecha | fechaZona: p().zonaHoraria }}</span>}@if (p().solicitudPlanta?.nota; as nota) {: {{ nota }}}.</p>
           <div class="mt-2 flex flex-wrap gap-2">
-            <button type="button" [class]="primario" (click)="cambiar('confirmado')">Aceptar la nueva fecha</button>
-            <button type="button" [class]="secundario" (click)="cambiar('enviado')">Reenviar sin cambios</button>
+            @if (puede('ventas.pedidos.planta')) {
+              <button type="button" [class]="primario" (click)="cambiar('confirmado')">Aceptar la nueva fecha</button>
+            }
+            @if (puede('ventas.pedidos.planta')) {
+              <button type="button" [class]="secundario" (click)="cambiar('enviado')">Reenviar sin cambios</button>
+            }
           </div>
         }
         @case ('rechazada') {
           <p class="mt-1">Rechazado{{ p().solicitudPlanta?.nota ? ': ' + p().solicitudPlanta?.nota : '.' }}</p>
-          <button type="button" [class]="secundario + ' mt-2'" (click)="cambiar('enviado')">Reenviar a planta</button>
+          @if (puede('ventas.pedidos.planta')) {
+            <button type="button" [class]="secundario + ' mt-2'" (click)="cambiar('enviado')">Reenviar a planta</button>
+          }
         }
         @case ('confirmado') {
           <p class="mt-1 text-texto-suave">{{ p().plantaNombre }} confirmó el pedido.</p>
@@ -79,7 +94,9 @@ type Respuesta = 'actualizacion' | 'rechazada';
           </div>
           <div class="flex gap-2">
             <button type="submit" [class]="primario">Pedir actualización</button>
-            <button type="button" [class]="secundario" (click)="cancelar()">Cancelar</button>
+            @if (puede('ventas.pedidos.planta')) {
+              <button type="button" [class]="secundario" (click)="cancelar()">Cancelar</button>
+            }
           </div>
         </form>
       }
@@ -98,7 +115,9 @@ type Respuesta = 'actualizacion' | 'rechazada';
           </div>
           <div class="flex gap-2">
             <button type="submit" [class]="primario">Rechazar el pedido</button>
-            <button type="button" [class]="secundario" (click)="cancelar()">Cancelar</button>
+            @if (puede('ventas.pedidos.planta')) {
+              <button type="button" [class]="secundario" (click)="cancelar()">Cancelar</button>
+            }
           </div>
         </form>
       }
@@ -107,6 +126,8 @@ type Respuesta = 'actualizacion' | 'rechazada';
   `,
 })
 export class PlantaPedido {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly ventas = inject(VentasService);
   private readonly injector = inject(Injector);
 

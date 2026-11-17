@@ -1,7 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { Check, Folder, Package, Star } from 'lucide';
-import { DisenoGuardado, Icon, PERSONALIZADO, SOLUCIONES, buscarSolucion, textoResistencia } from 'ui';
+import { ArrowLeft, Check, Folder, Lightbulb, Package, SlidersHorizontal, Star } from 'lucide';
+import { DisenoGuardado, Icon, PERSONALIZADO, buscarSolucion, concretosDisponibles, solucionesDisponibles, textoResistencia } from 'ui';
 import { CotizadorState } from './cotizador.state';
 
 @Component({
@@ -38,10 +38,61 @@ import { CotizadorState } from './cotizador.state';
     @if (s.pestana() === 'soluciones') {
       <div role="tabpanel" id="panel-soluciones" aria-labelledby="tab-soluciones" class="mt-3">
         @if (s.faltaSolucion()) {
-          <p role="alert" class="mt-2 rounded-xl bg-[#F6E3E1] px-4 py-2.5 text-sm font-medium text-[#8E332C]">Elige una solución para continuar.</p>
+          <p role="alert" class="mt-2 rounded-xl bg-[#F6E3E1] px-4 py-2.5 text-sm font-medium text-[#8E332C]">
+            {{ !s.modo() ? 'Elige cómo quieres empezar.' : s.modo() === 'producto' ? 'Elige un producto para continuar.' : 'Elige una solución para continuar.' }}
+          </p>
         }
-        <div role="radiogroup" aria-labelledby="paso-titulo" class="mt-3 grid gap-3 xl:grid-cols-2">
-          @for (sol of opciones; track sol.id) {
+        @if (!s.modo()) {
+          <div role="radiogroup" aria-labelledby="paso-titulo" class="mt-3 grid gap-3 xl:grid-cols-3">
+            @for (m of modos; track m.id) {
+              <label class="{{ tarjeta }}">
+                <input type="radio" name="modo" class="sr-only" [value]="m.id" (change)="s.elegirModo(m.id)" />
+                <span class="flex h-14 w-14 shrink-0 items-center justify-center border-r border-acero/60 pr-3 text-carbon/80">
+                  <ui-icon [icono]="m.icono" [tamano]="32" class="[&_svg]:stroke-[1.5]" />
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="block text-base leading-snug font-bold sm:text-lg">{{ m.nombre }}</span>
+                  <span class="block text-sm text-texto-suave">{{ m.descripcion }}</span>
+                </span>
+              </label>
+            }
+          </div>
+        } @else {
+          <button
+            type="button"
+            class="mt-1 flex min-h-11 items-center gap-1.5 rounded text-sm font-semibold text-epico-oscuro hover:underline focus-visible:outline-2 focus-visible:outline-epico"
+            (click)="s.elegirModo(null)"
+          >
+            <ui-icon [icono]="iconos.atras" [tamano]="16" />
+            {{ s.modo() === 'producto' ? 'Productos' : 'Soluciones' }} · Cambiar cómo empezar
+          </button>
+        }
+        @if (s.modo() === 'producto') {
+          <div role="radiogroup" aria-label="Productos" class="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            @for (c of concretos(); track c.id) {
+              <label class="{{ tarjeta }}">
+                <input
+                  type="radio"
+                  name="producto"
+                  class="sr-only"
+                  [value]="c.id"
+                  [checked]="s.solucionId() && s.especificacion().tipoResistencia === c.tipo && s.especificacion().resistenciaKgCm2 === c.kg"
+                  (change)="s.elegirProducto(c)"
+                />
+                <span class="min-w-0 flex-1">
+                  <span class="block font-bold">Concreto {{ c.tipo === 'fc' ? "f'c" : 'MR' }} {{ c.kg }}</span>
+                  <span class="block text-sm text-texto-suave">{{ c.kg }} kg/cm² · {{ c.tipo === 'fc' ? 'compresión' : 'pavimentos' }}</span>
+                </span>
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-acero-oscuro text-white group-has-checked:border-epico group-has-checked:bg-epico">
+                  <ui-icon [icono]="iconos.check" [tamano]="14" class="hidden group-has-checked:inline-flex [&_svg]:stroke-3" />
+                </span>
+              </label>
+            }
+          </div>
+        }
+        @if (s.modo() === 'solucion') {
+        <div role="radiogroup" aria-label="Soluciones" class="mt-2 grid gap-3 xl:grid-cols-2">
+          @for (sol of opciones(); track sol.id) {
             <label
               class="group flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-transparent bg-white/85 p-3 pr-4 shadow-sm transition-colors hover:border-acero has-checked:border-epico has-checked:bg-[#FDF6F6] has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-epico"
             >
@@ -61,6 +112,7 @@ import { CotizadorState } from './cotizador.state';
             </label>
           }
         </div>
+        }
 
         <div class="mt-6 flex items-center justify-between gap-3">
           <h2 class="text-lg font-bold">Mis diseños guardados</h2>
@@ -129,10 +181,17 @@ import { CotizadorState } from './cotizador.state';
 })
 export class PasoSolucion {
   protected readonly s = inject(CotizadorState);
-  /** "Configurar desde cero" primero: es lo que más se usa. */
-  protected readonly opciones = [PERSONALIZADO, ...SOLUCIONES];
+  /** Solo las soluciones con concretos en el catálogo de la concretera ("desde cero" es Configurar manual). */
+  protected readonly opciones = computed(() => solucionesDisponibles());
+  protected readonly concretos = concretosDisponibles;
+  protected readonly tarjeta = 'group flex cursor-pointer items-center gap-4 rounded-2xl border-2 border-transparent bg-white/85 p-3 pr-4 shadow-sm transition-colors hover:border-acero has-checked:border-epico has-checked:bg-[#FDF6F6] has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-epico';
+  protected readonly modos = [
+    { id: 'producto' as const, nombre: 'Productos', descripcion: 'Elige un concreto de nuestro catálogo', icono: Package },
+    { id: 'solucion' as const, nombre: 'Soluciones', descripcion: 'Te sugerimos el concreto según tu obra', icono: Lightbulb },
+    { id: 'manual' as const, nombre: 'Configurar manual', descripcion: 'Define tus propias especificaciones', icono: SlidersHorizontal },
+  ];
   protected readonly personalizado = PERSONALIZADO.id;
-  protected readonly iconos = { check: Check, estrella: Star };
+  protected readonly iconos = { check: Check, estrella: Star, atras: ArrowLeft };
   protected readonly pestanas = [
     { id: 'soluciones' as const, icono: Package },
     { id: 'disenos' as const, icono: Folder },

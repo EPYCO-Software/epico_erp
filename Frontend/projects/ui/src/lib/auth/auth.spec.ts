@@ -48,16 +48,16 @@ describe('auth', () => {
   });
 
   it('authGuard manda a /login con returnUrl; deja pasar con sesión', async () => {
-    const r = guard(authGuard) as UrlTree;
+    const r = (await guard(authGuard)) as UrlTree;
     expect(TestBed.inject(Router).serializeUrl(r)).toBe('/login?returnUrl=%2Fpedidos');
     await login();
-    expect(guard(authGuard)).toBe(true);
+    expect(await guard(authGuard)).toBe(true);
   });
 
   it('guestGuard saca de /login a quien ya tiene sesión', async () => {
-    expect(guard(guestGuard)).toBe(true);
+    expect(await guard(guestGuard)).toBe(true);
     await login();
-    expect(TestBed.inject(Router).serializeUrl(guard(guestGuard) as UrlTree)).toBe('/');
+    expect(TestBed.inject(Router).serializeUrl((await guard(guestGuard)) as UrlTree)).toBe('/');
   });
 
   it('destinoSeguro solo acepta rutas internas', () => {
@@ -96,7 +96,7 @@ describe('auth con backend (AUTH_API_URL)', () => {
     fetchMock.mockResolvedValueOnce(json(200, respuesta('t1', 'r1')));
     const s = await TestBed.inject(AuthService).login({ correo: 'yumilrf@hotmail.com', password: 'x', recordar: true });
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/auth/login', expect.objectContaining({ method: 'POST' }));
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ correo: 'yumilrf@hotmail.com', password: 'x' });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ correo: 'yumilrf@hotmail.com', password: 'x', app: 'erp' });
     expect(s).toMatchObject({ token: 't1', refreshToken: 'r1', permisos: ['*'] });
     expect(JSON.parse(localStorage.getItem(KEY)!).empresas[0].nombre).toBe('EPICO Concretos del Sureste');
   });
@@ -129,5 +129,49 @@ describe('auth con backend (AUTH_API_URL)', () => {
     expect(await auth.refrescar()).toBeNull();
     expect(auth.autenticado()).toBe(false);
     expect(fetchMock.mock.calls[2][0]).toBe('/api/v1/auth/logout');
+  });
+
+  it('authGuard valida la sesión guardada con el servidor una sola vez antes de entrar', async () => {
+    localStorage.setItem(KEY, JSON.stringify(respuesta('t1', 'r1')));
+    fetchMock.mockResolvedValueOnce(json(200, { ...respuesta('t2', 'r2'), permisos: ['ventas.*'] }));
+    const g = () => TestBed.runInInjectionContext(() => authGuard({} as never, { url: '/ventas' } as never));
+    expect(await Promise.all([g(), g()])).toEqual([true, true]);
+    expect(await g()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/auth/refresh');
+    // Llegan los permisos al día
+    expect(TestBed.inject(AuthService).sesion()?.permisos).toEqual(['ventas.*']);
+  });
+
+  it('authGuard: si el servidor rechaza la sesión guardada, la borra y manda al login', async () => {
+    localStorage.setItem(KEY, JSON.stringify(respuesta('t1', 'r1')));
+    fetchMock.mockResolvedValueOnce(json(401, {})).mockResolvedValue(new Response(null, { status: 204 }));
+    const r = (await TestBed.runInInjectionContext(() => authGuard({} as never, { url: '/ventas' } as never))) as UrlTree;
+    expect(TestBed.inject(Router).serializeUrl(r)).toBe('/login?returnUrl=%2Fventas');
+    expect(TestBed.inject(AuthService).autenticado()).toBe(false);
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('si el servidor no responde (red o 5xx) no borra la sesión ni deja entrar; reintenta en la siguiente', async () => {
+    localStorage.setItem(KEY, JSON.stringify(respuesta('t1', 'r1')));
+    const auth = TestBed.inject(AuthService);
+    fetchMock.mockRejectedValueOnce(new TypeError('red')).mockResolvedValueOnce(json(503, {}));
+    expect(await auth.validar()).toBe(false);
+    expect(await auth.validar()).toBe(false);
+    expect([auth.autenticado(), auth.sinConexion()]).toEqual([true, true]);
+    fetchMock.mockResolvedValueOnce(json(200, respuesta('t2', 'r2')));
+    expect(await auth.validar()).toBe(true);
+    expect([auth.sesion()?.token, auth.sinConexion()]).toEqual(['t2', false]);
+  });
+
+  it('si otra pestaña ya rotó el refresh token, usa el que dejó guardado en vez de cerrar la sesión', async () => {
+    localStorage.setItem(KEY, JSON.stringify(respuesta('t1', 'r1')));
+    const auth = TestBed.inject(AuthService);
+    // La otra pestaña renovó: en localStorage ya está r2 y r1 dejó de servir
+    localStorage.setItem(KEY, JSON.stringify(respuesta('t2', 'r2')));
+    fetchMock.mockResolvedValueOnce(json(401, {}));
+    expect((await auth.refrescar())?.token).toBe('t2');
+    expect(auth.autenticado()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

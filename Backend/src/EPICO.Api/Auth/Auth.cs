@@ -10,7 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace EPICO.Api.Auth;
 
-/// <summary>Usuario de la petición, leído de los claims del JWT (sub, sid, org, emp[], perm[]).</summary>
+/// <summary>Usuario de la petición, leído de los claims del JWT (sub, sid, org, emp[], empp[], suc[], perm[]).</summary>
 public class UsuarioActual(IHttpContextAccessor http) : IUsuarioActual
 {
     ClaimsPrincipal? U => http.HttpContext?.User;
@@ -19,14 +19,18 @@ public class UsuarioActual(IHttpContextAccessor http) : IUsuarioActual
     public Guid? Id => Leer(Tokens.Usuario);
     public Guid? SesionId => Leer(Tokens.Sesion);
     public Guid? OrganizacionId => Leer(Tokens.Organizacion);
-    public IReadOnlyList<Guid> EmpresaIds => U?.FindAll(Tokens.Empresa).Select(c => Guid.Parse(c.Value)).ToList() ?? [];
+    public IReadOnlyList<Guid> EmpresaIds => Guids(Tokens.Empresa);
+    public IReadOnlyList<Guid> EmpresasPorPlanta => Guids(Tokens.EmpresaPorPlanta);
+    public IReadOnlyList<Guid> SucursalIds => Guids(Tokens.Sucursal);
+    List<Guid> Guids(string claim) => U?.FindAll(claim).Select(c => Guid.Parse(c.Value)).ToList() ?? [];
     public bool EsRoot => U?.HasClaim(Tokens.Permiso, "*") == true;
-    public bool Tiene(string permiso) => EsRoot || U?.HasClaim(Tokens.Permiso, permiso) == true;
+    public bool Tiene(string permiso) => U?.FindAll(Tokens.Permiso).Any(c => Permisos.Cubre(c.Value, permiso)) == true;
 }
 
 public class Tokens(IConfiguration cfg)
 {
-    public const string Usuario = "sub", Sesion = "sid", Organizacion = "org", Empresa = "emp", Permiso = "perm";
+    public const string Usuario = "sub", Sesion = "sid", Organizacion = "org", Empresa = "emp", Permiso = "perm", Cliente = "cli",
+        EmpresaPorPlanta = "empp", Sucursal = "suc";
     public const string Emisor = "epico";
     public static readonly TimeSpan DuracionAcceso = TimeSpan.FromMinutes(15);
     public static readonly TimeSpan DuracionSesion = TimeSpan.FromDays(14);
@@ -37,7 +41,8 @@ public class Tokens(IConfiguration cfg)
             : throw new InvalidOperationException("Falta Jwt:Key (variable Jwt__Key) de al menos 32 caracteres.");
 
     public (string Token, DateTime Expira) Acceso(
-        Usuario u, Guid sesionId, Guid? organizacionId, IEnumerable<Guid> empresas, IEnumerable<string> permisos)
+        Usuario u, Guid sesionId, Guid? organizacionId, IEnumerable<Guid> empresas, IEnumerable<string> permisos, Guid? clienteId = null,
+        ILookup<Guid, Guid>? plantasPorEmpresa = null)
     {
         var expira = DateTime.UtcNow.Add(DuracionAcceso);
         var claims = new List<Claim>
@@ -48,8 +53,15 @@ public class Tokens(IConfiguration cfg)
             new("name", u.Nombre),
         };
         if (organizacionId is Guid org) claims.Add(new(Organizacion, org.ToString()));
+        if (clienteId is Guid cli) claims.Add(new(Cliente, cli.ToString())); // usuario del portal
         claims.AddRange(empresas.Select(e => new Claim(Empresa, e.ToString())));
         claims.AddRange(permisos.Select(p => new Claim(Permiso, p)));
+        // Solo las empresas donde se limitó a ciertas plantas: en las demás entra a todas (también a las que se creen después).
+        foreach (var g in plantasPorEmpresa ?? Enumerable.Empty<Guid>().ToLookup(x => x))
+        {
+            claims.Add(new(EmpresaPorPlanta, g.Key.ToString()));
+            claims.AddRange(g.Select(s => new Claim(Sucursal, s.ToString())));
+        }
 
         var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {

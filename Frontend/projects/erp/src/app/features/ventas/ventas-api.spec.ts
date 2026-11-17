@@ -1,4 +1,4 @@
-import { ApiCotizacion, ApiEvento, ApiPedido, ApiProducto, aCotizacion, aEvento, aPedido, contexto, cotizacionApi, idFront } from './ventas-api';
+import { ApiCotizacion, ApiEvento, ApiPedido, ApiProducto, aCotizacion, aEvento, aPedido, claveSat, contexto, cotizacionApi, idFront } from './ventas-api';
 
 // Respuestas reales de la API local (recortadas)
 const ESC = '01a1da03-939d-7c9f-861b-dad30822af34';
@@ -127,6 +127,15 @@ describe('ventas-api: de la API al front', () => {
     const cambio = aEvento(e({ cambios: [{ etiqueta: 'Cliente', tipoDato: 'referencia', valorAnterior: null, valorNuevo: 'cli' }] }), 'cotizacion:c1', (id) => nombres.get(id));
     expect(cambio).toMatchObject({ autor: 'Root', registro: 'cotizacion:c1', cambios: [{ campo: 'Cliente', antes: '—', despues: 'Constructora Maya' }] });
     expect(aEvento(e({ tipo: 'nota', autorId: null }), 'x', () => undefined)).toMatchObject({ nota: true, autor: 'Sistema' });
+    // Eliminado dice qué se quitó; un autor que no es usuario interno es el cliente desde el portal
+    expect(aEvento(e({ tipo: 'eliminado', texto: 'Eliminado', registroTipo: 'ClienteDatoFiscal', autorId: 'p1' }), 'x', () => undefined)).toMatchObject({
+      texto: 'Datos de facturación quitados',
+      autor: 'Cliente (portal)',
+    });
+    // Los detalles llegan como texto JSON
+    const act = aEvento(e({ tipo: 'actividad', texto: 'Actividad programada: Llamada', detalles: '["Fecha límite: 20/11/2026","Asignada a: Root"]' }), 'x', () => undefined);
+    expect(act).toMatchObject({ actividad: true, detalles: ['Fecha límite: 20/11/2026', 'Asignada a: Root'] });
+    expect(aEvento(e({ detalles: 'texto suelto' }), 'x', () => undefined).detalles).toEqual(['texto suelto']);
   });
 });
 
@@ -146,5 +155,11 @@ describe('ventas-api: del front a la API', () => {
     // Una partida nueva (aunque su id del front parezca uuid) va sin id; al crear, ninguna lleva
     expect(cotizacionApi({ clienteId: 'cli', plantaId: 'ESC', partidas: [{ ...front.partidas[0], id: crypto.randomUUID() }] }, ctx, unidadDe, {}, existentes).partidas[0]).not.toHaveProperty('id');
     expect(cotizacionApi({ clienteId: 'cli', plantaId: 'ESC', partidas: front.partidas }, ctx, unidadDe).partidas[0]).not.toHaveProperty('id');
+  });
+
+  it('claveSat deja solo la clave del SAT (el backend acepta máx. 4 caracteres en uso de CFDI)', () => {
+    expect(claveSat('G03 · Gastos en general')).toBe('G03');
+    expect(claveSat('601 · General de Ley Personas Morales')).toBe('601');
+    expect(claveSat('G03')).toBe('G03');
   });
 });

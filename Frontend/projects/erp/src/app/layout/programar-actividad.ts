@@ -103,6 +103,7 @@ export const ICONOS_ACTIVIDAD: Record<TipoActividad, typeof Check> = { pendiente
           </div>
         </div>
 
+        <p role="alert" class="px-6 pb-2 text-sm font-medium text-[#8E332C] empty:hidden">{{ error() }}</p>
         <div class="flex flex-wrap gap-3 border-t border-acero/50 px-6 py-4">
           <button type="submit" class="boton-primario h-11 w-auto px-5">Guardar</button>
           <button type="button" [class]="botonSecundario" (click)="hecha()">Marcar como hecho</button>
@@ -128,7 +129,9 @@ export class ProgramarActividad {
     nombre: TIPOS_ACTIVIDAD[id],
     icono: ICONOS_ACTIVIDAD[id],
   }));
-  protected readonly personas = computed(() => [this.historial.usuario(), ...PERSONAS.map((p) => p.nombre)]);
+  /** Quien está en sesión primero (con API, los usuarios de la organización; sin ella, los de la demo). */
+  protected readonly personas = computed(() => this.historial.personas() ?? [this.historial.usuario(), ...PERSONAS.map((p) => p.nombre)]);
+  protected readonly error = signal('');
   protected readonly botonSecundario =
     'inline-flex h-11 items-center rounded-[0.625rem] border border-acero-oscuro bg-white px-4 font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
 
@@ -156,7 +159,7 @@ export class ProgramarActividad {
             tipo: 'pendiente',
             resumen: TIPOS_ACTIVIDAD.pendiente,
             fechaLimite: new Date(Date.now() + 5 * 86_400_000).toLocaleDateString('en-CA', { timeZone: this.zona }),
-            asignadaA: this.historial.usuario(),
+            asignadaA: this.personas()[0],
             nota: '',
           }),
         );
@@ -174,24 +177,30 @@ export class ProgramarActividad {
 
   protected async guardar(e: Event): Promise<void> {
     e.preventDefault();
-    await this.enviar((a) => {
-      this.historial.programar(a);
+    await this.enviar(async (a) => {
+      await this.historial.programar(a);
       return `Actividad programada para el ${a.fechaLimite.split('-').reverse().join('/')}.`;
     });
   }
 
   protected async hecha(): Promise<void> {
-    await this.enviar((a) => {
-      this.historial.marcarHecha(a);
+    await this.enviar(async (a) => {
+      await this.historial.marcarHecha(a);
       return 'Actividad registrada como hecha.';
     });
   }
 
   /** Al enviar inválido, el foco va al primer campo con error. */
-  private async enviar(accion: (a: NuevaActividad) => string): Promise<void> {
+  private async enviar(accion: (a: NuevaActividad) => Promise<string>): Promise<void> {
+    this.error.set('');
     const valido = await submit(this.f, async () => {
       const m = this.modelo();
-      this.listo.emit(accion({ ...m, resumen: m.resumen.trim(), nota: m.nota.trim(), registro: this.registro() }));
+      try {
+        this.listo.emit(await accion({ ...m, resumen: m.resumen.trim(), nota: m.nota.trim(), registro: this.registro() }));
+      } catch {
+        this.error.set('No se pudo guardar la actividad. Intenta de nuevo.');
+        return undefined;
+      }
       this.abierto.set(false);
       return undefined;
     });

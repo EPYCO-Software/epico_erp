@@ -3,9 +3,11 @@ import { DecimalPipe } from '@angular/common';
 import { CdkMenu, CdkMenuItemRadio, CdkMenuTrigger } from '@angular/cdk/menu';
 import { Router } from '@angular/router';
 import { FormField, applyEach, email, form, max, min, required, submit, validate } from '@angular/forms/signals';
-import { Check, ChevronDown, Download, LoaderCircle, MapPin, Plus, Save, Trash2 } from 'lucide';
+import { Check, ChevronDown, Download, Info, LoaderCircle, MapPin, Plus, Save, Trash2, TriangleAlert } from 'lucide';
 import {
-  ADITIVOS,
+  aditivosDisponibles,
+  type LugarDeEntrega,
+  obraDelLugar,
   Aditivo,
   AuthService,
   EXPOSICIONES,
@@ -16,7 +18,11 @@ import {
   PERSONALIZADO,
   PartidaCotizacion,
   SERVICIOS,
-  SOLUCIONES,
+  concretoExistente,
+  concretosDisponibles,
+  resistenciasDe,
+  solucionesDisponibles,
+  sugeridaDisponible,
   ServicioObra,
   avisos,
   buscarSolucion,
@@ -39,13 +45,15 @@ import { COLUMNA } from '../../layout/panel-lateral';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
 import { FuenteDistancia, distanciaDeManejo } from './distancia';
 import { ElegirUbicacion, UbicacionElegida } from './elegir-ubicacion';
-import { PLANTAS_ERP, PUBLICO_GENERAL, TRASLADO_POR_OMISION, VentasService, isoEnZona, mensajeDe, offsetEn, plantaDeMunicipio, siguienteFolio } from './datos';
+import { PLANTAS_ERP, PUBLICO_GENERAL, VentasService, mensajeDe, offsetEn, plantaDeMunicipio, trasladoDe } from './datos';
 
 type Accion = 'guardar' | 'guardar-descargar' | 'descargar' | 'orden' | 'orden-cotizacion';
 
 /** Un producto mientras se captura. */
 interface Producto {
   id: string;
+  /** Cómo se eligió el concreto: un producto de la lista, una solución o a mano (si no existe, pedido especial). */
+  modo: ModoConcreto;
   solucionId: string;
   nombre: string;
   obraId: string;
@@ -73,7 +81,25 @@ interface Borrador {
   traslado: { incluidosKm: number | null; precioKm: number | null };
   /** Solo al crear una orden: obligatorio (Sin método o Transferencia). */
   metodoPago: MetodoPago | '';
+  /**
+   * Sin obra: a dónde se entrega y quién recibe, solo para esta cotización (no se da de alta una obra). Con él, los
+   * productos no eligen obra: todos van a este lugar (obraId = LUGAR).
+   */
+  lugar: LugarDeEntrega | null;
 }
+
+type ModoConcreto = 'producto' | 'solucion' | 'manual';
+const MODOS: { id: ModoConcreto; texto: string }[] = [
+  { id: 'producto', texto: 'Producto' },
+  { id: 'solucion', texto: 'Solución' },
+  { id: 'manual', texto: 'Configurar manual' },
+];
+/** Configurado a mano y sin producto con esa resistencia: se pide como pedido especial. */
+const esEspecial = (p: Producto) =>
+  p.modo === 'manual' && p.especificacion.resistenciaKgCm2 > 0 && !concretoExistente(p.especificacion.tipoResistencia, p.especificacion.resistenciaKgCm2);
+
+/** El obraId de los productos que van al lugar de entrega de la cotización. */
+const LUGAR = 'lugar';
 
 
 const diezDigitos = ({ value }: { value: () => string }) =>
@@ -103,6 +129,8 @@ function partidaDe(p: Producto, offset: string, t: Borrador['traslado']): Partid
     // Con distancia, se guarda aunque esté dentro del radio (lineasPartida solo cobra lo que pasa de él).
     ...(p.distancia != null ? { traslado: { distanciaKm: p.distancia, incluidosKm: t.incluidosKm ?? 0, precioKm: t.precioKm ?? 0 } } : {}),
   };
+  // Pedido especial: sin precio queda "por confirmar"
+  if (esEspecial(p)) return { ...partida, especial: true, ...(p.precio ? { precioM3: p.precio } : {}) };
   return p.precio && p.precio !== precioConcreto(partida) ? { ...partida, precioM3: p.precio } : partida;
 }
 
@@ -110,6 +138,7 @@ function partidaDe(p: Producto, offset: string, t: Borrador['traslado']): Partid
 function productoDePartida(p: PartidaCotizacion): Producto {
   return {
     id: crypto.randomUUID(),
+    modo: p.especial ? 'manual' : p.solucionId === PERSONALIZADO.id ? 'producto' : 'solucion',
     solucionId: p.solucionId,
     nombre: p.nombre,
     obraId: p.obraId,
@@ -125,16 +154,17 @@ function productoDePartida(p: PartidaCotizacion): Producto {
   };
 }
 
-function productoDe(solucionId: string, obraId: string, entrega: string): Producto {
+function productoDe(solucionId: string, obraId: string, entrega: string, modo: ModoConcreto = 'solucion'): Producto {
   const s = buscarSolucion(solucionId) ?? PERSONALIZADO;
   return {
     id: crypto.randomUUID(),
+    modo,
     solucionId: s.id,
     nombre: s.nombre,
     obraId,
     entrega,
     volumen: null,
-    especificacion: structuredClone(s.sugerida),
+    especificacion: sugeridaDisponible(s),
     servicios: [...s.servicios],
     precio: null,
     distancia: null,
@@ -223,7 +253,7 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
             <div>
               <label for="nueva-planta" [class]="etiqueta">Planta</label>
               <select id="nueva-planta" class="campo mt-1 h-10 px-2" [formField]="f.plantaId">
-                @for (p of plantas; track p.id) {
+                @for (p of plantas(); track p.id) {
                   <option [value]="p.id">{{ p.nombre }}</option>
                 }
               </select>
@@ -275,10 +305,6 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                 {{ explicacionLugar() }} Con el municipio se elige la planta que lo atiende, y de ella salen los precios.
               </p>
               <div class="mt-3 grid gap-3 @2xl:grid-cols-4">
-                <div>
-                  <label for="lugar-nombre" [class]="etiqueta">Obra (opcional)</label>
-                  <input id="lugar-nombre" class="campo mt-1 h-9 px-3 text-sm" placeholder="Entrega a domicilio" [formField]="lugar.nombre" />
-                </div>
                 <div class="@2xl:col-span-2">
                   <label for="lugar-direccion" [class]="etiqueta">Dirección</label>
                   <input id="lugar-direccion" class="campo mt-1 h-9 px-3 text-sm" aria-describedby="lugar-direccion-error" [formField]="lugar.direccion" />
@@ -341,6 +367,21 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                 }
               </div>
             </fieldset>
+          } @else if (modelo().lugar; as l) {
+            <!-- Va a este lugar: los productos no eligen obra -->
+            <section [class]="recuadro" aria-labelledby="lugar-elegido-titulo">
+              <p id="lugar-elegido-titulo" class="flex items-center gap-1.5 font-bold">
+                <ui-icon [icono]="iconos.mapa" [tamano]="16" class="text-epico" />Se entrega en un lugar de entrega
+              </p>
+              <p class="mt-1 text-sm">{{ l.direccion }}, {{ l.municipio }}{{ l.referencias ? ' · ' + l.referencias : '' }}</p>
+              <p class="text-sm text-texto-suave">Recibe {{ l.contacto }} · {{ l.telefono }}{{ l.ubicacion ? ' · con punto en el mapa' : '' }}</p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button type="button" [class]="botonTexto" (click)="abrirLugar()">Cambiar el lugar</button>
+                @if (obras().length) {
+                  <button type="button" [class]="botonTexto" (click)="quitarLugar()">Mejor elegir una obra</button>
+                }
+              </div>
+            </section>
           } @else if (modelo().clienteId) {
             <button type="button" [class]="botonTexto + ' mt-3'" aria-controls="lugar-entrega" [attr.aria-expanded]="false" (click)="abrirLugar()">
               <ui-icon [icono]="iconos.agregar" [tamano]="17" />Nuevo lugar de entrega
@@ -366,7 +407,68 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                     </button>
                   </div>
 
-                  <div class="mt-2 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-[1.1fr_1.3fr_1.2fr_1.2fr_0.7fr]">
+                  <fieldset class="mt-2">
+                    <legend class="sr-only">Cómo eliges el concreto del producto {{ i + 1 }}</legend>
+                    <div class="inline-flex flex-wrap gap-1 rounded-xl bg-carbon/5 p-1">
+                      @for (m of modos; track m.id) {
+                        <label class="segmento min-h-8 px-3">
+                          <input
+                            type="radio"
+                            class="sr-only"
+                            [id]="'p' + i + '-modo-' + m.id"
+                            [name]="'p' + i + '-modo'"
+                            [checked]="p.modo === m.id"
+                            (change)="elegirModo(i, m.id)"
+                          />{{ m.texto }}
+                        </label>
+                      }
+                    </div>
+                  </fieldset>
+
+                  <div class="mt-3 grid gap-3 @md:grid-cols-2 @4xl:grid-cols-[1.1fr_1.3fr_1.2fr_1.2fr_0.7fr]">
+                    @switch (p.modo) {
+                    @case ('producto') {
+                    <div>
+                      <label [for]="'p' + i + '-concreto'" [class]="etiqueta">Producto</label>
+                      <select [id]="'p' + i + '-concreto'" class="campo mt-1 h-9 px-2 text-sm" (change)="elegirResistencia(i, $any($event.target).value)">
+                        @if (!existente(p)) {
+                          <option value="" selected disabled>Elige el concreto</option>
+                        }
+                        @for (c of concretos(); track c.id) {
+                          <option [value]="c.tipo + '-' + c.kg" [selected]="esResistencia(p, c.tipo, c.kg)">Concreto {{ c.tipo === 'fc' ? 'f´c' : 'MR' }} {{ c.kg }} kg/cm²</option>
+                        }
+                      </select>
+                    </div>
+                    }
+                    @case ('manual') {
+                    <div>
+                      <span [id]="'p' + i + '-manual'" [class]="etiqueta">Resistencia</span>
+                      <div class="mt-1 flex gap-1" role="group" [attr.aria-labelledby]="'p' + i + '-manual'">
+                        <select
+                          [id]="'p' + i + '-tipo'"
+                          class="campo h-9 w-20 shrink-0 px-2 text-sm"
+                          aria-label="Tipo de resistencia"
+                          (change)="cambiarEsp(i, { tipoResistencia: $any($event.target).value })"
+                        >
+                          <option value="fc" [selected]="p.especificacion.tipoResistencia === 'fc'">f´c</option>
+                          <option value="mr" [selected]="p.especificacion.tipoResistencia === 'mr'">MR</option>
+                        </select>
+                        <input
+                          type="number"
+                          min="1"
+                          [id]="'p' + i + '-kg'"
+                          class="campo h-9 min-w-0 px-3 text-right text-sm tabular-nums"
+                          aria-label="Resistencia en kg/cm²"
+                          [attr.aria-describedby]="'p' + i + '-resistencia-error p' + i + '-existe'"
+                          [attr.aria-invalid]="f.productos[i].especificacion.resistenciaKgCm2().invalid()"
+                          [value]="p.especificacion.resistenciaKgCm2 || ''"
+                          (input)="cambiarEsp(i, { resistenciaKgCm2: +$any($event.target).value })"
+                        />
+                      </div>
+                      <ui-field-error [campo]="f.productos[i].especificacion.resistenciaKgCm2" [errorId]="'p' + i + '-resistencia-error'" />
+                    </div>
+                    }
+                    @default {
                     <div>
                       <label [for]="'p' + i + '-solucion'" [class]="etiqueta">Solución</label>
                       <select
@@ -374,15 +476,26 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                         class="campo mt-1 h-9 px-2 text-sm"
                         (change)="elegirSolucion(i, $any($event.target).value)"
                       >
-                        @for (s of soluciones; track s.id) {
+                        @if (!ofrecida(p.solucionId)) {
+                          <option [value]="p.solucionId" selected disabled>{{ nombreSolucion(p.solucionId) }} (sin concretos)</option>
+                        }
+                        @for (s of soluciones(); track s.id) {
                           <option [value]="s.id" [selected]="s.id === p.solucionId">{{ s.nombre }}</option>
                         }
                       </select>
                     </div>
+                    }
+                    }
                     <div>
                       <label [for]="'p' + i + '-nombre'" [class]="etiqueta">Descripción</label>
                       <input [id]="'p' + i + '-nombre'" class="campo mt-1 h-9 px-3 text-sm" [formField]="f.productos[i].nombre" />
                     </div>
+                    @if (modelo().lugar; as l) {
+                      <div>
+                        <p [class]="etiqueta">Se entrega en</p>
+                        <p class="mt-1 flex min-h-9 items-center text-sm">Lugar de entrega · {{ l.municipio }}</p>
+                      </div>
+                    } @else {
                     <div>
                       <label [for]="'p' + i + '-obra'" [class]="etiqueta">Obra</label>
                       <select
@@ -391,13 +504,14 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                         [attr.aria-describedby]="'p' + i + '-obra-error'"
                         [formField]="f.productos[i].obraId"
                       >
-                        <option value="" disabled>{{ obras().length ? 'Elige la obra' : modelo().clienteId ? 'Primero el lugar de entrega' : 'Primero el cliente' }}</option>
+                        <option value="" disabled>{{ obras().length ? 'Elige la obra' : modelo().clienteId ? 'Sin obras: captura el lugar de entrega' : 'Primero el cliente' }}</option>
                         @for (o of obras(); track o.id) {
-                          <option [value]="o.id">{{ o.nombre }} · {{ o.municipio }}</option>
+                          <option [value]="o.id">{{ o.nombre }} · {{ o.municipio }}{{ o.clienteId ? '' : ' (general)' }}</option>
                         }
                       </select>
                       <ui-field-error [campo]="f.productos[i].obraId" [errorId]="'p' + i + '-obra-error'" />
                     </div>
+                    }
                     <div>
                       <label [for]="'p' + i + '-entrega'" [class]="etiqueta">Entrega</label>
                       <input
@@ -425,27 +539,62 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                       <ui-field-error [campo]="f.productos[i].volumen" [errorId]="'p' + i + '-volumen-error'" />
                     </div>
                   </div>
+                  <div [id]="'p' + i + '-existe'" role="status">
+                    @if (p.modo === 'manual' && p.especificacion.resistenciaKgCm2 > 0) {
+                      @if (existente(p)) {
+                        <p class="mt-2 flex flex-wrap items-center gap-x-2 rounded-lg bg-info/10 px-3 py-2 text-sm">
+                          <ui-icon [icono]="iconos.info" [tamano]="16" class="shrink-0 text-info" />
+                          Este producto ya existe: concreto {{ p.especificacion.tipoResistencia === 'fc' ? 'f´c' : 'MR' }}
+                          {{ p.especificacion.resistenciaKgCm2 }} kg/cm², \${{ pesos(existente(p)!.precio) }} por m³.
+                          <button type="button" class="font-semibold text-epico-oscuro underline underline-offset-2" (click)="elegirModo(i, 'producto')">
+                            Usar el producto
+                          </button>
+                        </p>
+                      } @else {
+                        <p class="mt-2 flex items-start gap-2 rounded-lg bg-atencion/15 px-3 py-2 text-sm">
+                          <ui-icon [icono]="iconos.especial" [tamano]="16" class="mt-0.5 shrink-0" />
+                          <span>
+                            No está en tus productos: se hará la solicitud como <strong>pedido especial</strong>. Su precio queda por
+                            confirmar; si ya lo tienes, escríbelo en "Precio especial". No se envía ni se confirma sin precio.
+                          </span>
+                        </p>
+                      }
+                    }
+                  </div>
 
                   <div class="mt-3 grid gap-3 @md:grid-cols-3 @4xl:grid-cols-6">
+                    @if (p.modo === 'solucion') {
                     <div>
                       <label [for]="'p' + i + '-resistencia'" [class]="etiqueta">Resistencia</label>
                       <select
                         [id]="'p' + i + '-resistencia'"
                         class="campo mt-1 h-9 px-2 text-sm"
+                        [attr.aria-describedby]="'p' + i + '-resistencia-error'"
+                        [attr.aria-invalid]="f.productos[i].especificacion.resistenciaKgCm2().invalid()"
                         (change)="elegirResistencia(i, $any($event.target).value)"
                       >
-                        <optgroup label="f´c (compresión)">
-                          @for (v of opciones.fc; track v) {
-                            <option [value]="'fc-' + v" [selected]="esResistencia(p, 'fc', v)">f´c {{ v }} kg/cm²</option>
-                          }
-                        </optgroup>
-                        <optgroup label="MR (pavimentos)">
-                          @for (v of opciones.mr; track v) {
-                            <option [value]="'mr-' + v" [selected]="esResistencia(p, 'mr', v)">MR {{ v }} kg/cm²</option>
-                          }
-                        </optgroup>
+                        @let r = resistencias(p.solucionId);
+                        @if (!r[p.especificacion.tipoResistencia].includes(p.especificacion.resistenciaKgCm2)) {
+                          <option value="" selected disabled>{{ p.especificacion.tipoResistencia === 'fc' ? 'f´c' : 'MR' }} {{ p.especificacion.resistenciaKgCm2 }} (no está en tus productos)</option>
+                        }
+                        @if (r.fc.length) {
+                          <optgroup label="f´c (compresión)">
+                            @for (v of r.fc; track v) {
+                              <option [value]="'fc-' + v" [selected]="esResistencia(p, 'fc', v)">f´c {{ v }} kg/cm²</option>
+                            }
+                          </optgroup>
+                        }
+                        @if (r.mr.length) {
+                          <optgroup label="MR (pavimentos)">
+                            @for (v of r.mr; track v) {
+                              <option [value]="'mr-' + v" [selected]="esResistencia(p, 'mr', v)">MR {{ v }} kg/cm²</option>
+                            }
+                          </optgroup>
+                        }
                       </select>
+                      <ui-field-error [campo]="f.productos[i].especificacion.resistenciaKgCm2" [errorId]="'p' + i + '-resistencia-error'" />
                     </div>
+                    }
                     <div>
                       <label [for]="'p' + i + '-edad'" [class]="etiqueta">Edad</label>
                       <select [id]="'p' + i + '-edad'" class="campo mt-1 h-9 px-2 text-sm" (change)="cambiarEsp(i, { edadDias: +$any($event.target).value })">
@@ -492,7 +641,7 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                     <fieldset>
                       <legend [class]="etiqueta">Aditivos</legend>
                       <div class="mt-1 flex flex-wrap gap-x-4">
-                        @for (a of aditivos; track a.id) {
+                        @for (a of aditivos(); track a.id) {
                           <label class="flex min-h-8 cursor-pointer items-center gap-2">
                             <input type="checkbox" class="casilla" [checked]="p.especificacion.aditivos.includes(a.id)" (change)="alternarAditivo(i, a.id)" />{{ a.label }}
                           </label>
@@ -542,12 +691,12 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                           step="0.01"
                           [id]="'p' + i + '-precio'"
                           class="campo h-9 w-32 px-3 text-right tabular-nums"
-                          [placeholder]="pesos(tarifa(i))"
+                          [placeholder]="especial(p) ? 'Por confirmar' : pesos(tarifa(i))"
                           [attr.aria-describedby]="'p' + i + '-precio-error p' + i + '-precio-tarifa'"
                           [formField]="f.productos[i].precio"
                         />
                         por m³
-                        <span [id]="'p' + i + '-precio-tarifa'" class="ml-2 text-texto-suave">Tarifa \${{ pesos(tarifa(i)) }}</span>
+                        <span [id]="'p' + i + '-precio-tarifa'" class="ml-2 text-texto-suave">{{ especial(p) ? 'Pedido especial: sin tarifa' : 'Tarifa $' + pesos(tarifa(i)) }}</span>
                       </span>
                       <ui-field-error [campo]="f.productos[i].precio" [errorId]="'p' + i + '-precio-error'" />
                     </div>
@@ -608,6 +757,9 @@ function productoDe(solucionId: string, obraId: string, entrega: string): Produc
                 <span class="min-w-0">
                   <span class="block truncate font-medium">{{ p.nombre || 'Producto ' + (i + 1) }}</span>
                   <span class="text-texto-suave">{{ p.volumen ? (p.volumen | number: '1.0-1') + ' m³' : 'Falta el volumen' }}</span>
+                  @if (especial(p) && !p.precio) {
+                    <span class="block text-texto-suave">Pedido especial: precio por confirmar</span>
+                  }
                 </span>
                 <span class="shrink-0 tabular-nums">\${{ pesos(importe(i)) }}</span>
               </li>
@@ -759,7 +911,16 @@ export default class NuevaCotizacionPagina implements OnInit {
     cargando: LoaderCircle,
     abrir: ChevronDown,
     elegida: Check,
+    info: Info,
+    especial: TriangleAlert,
   };
+  protected readonly modos = MODOS;
+  protected readonly concretos = concretosDisponibles;
+  protected readonly especial = esEspecial;
+  /** El producto de la lista con la resistencia elegida (null: no existe). */
+  protected existente(p: Producto) {
+    return concretoExistente(p.especificacion.tipoResistencia, p.especificacion.resistenciaKgCm2);
+  }
   // 23.5rem: los 22rem del resumen más el relleno de la columna, que deja ver su sombra.
   protected readonly columnaResumen = COLUMNA + ' block lg:w-[23.5rem] lg:shrink-0';
   /** De la ruta (data.modo): "orden" es Nueva orden de venta, la misma hoja sin pasar por cotización. */
@@ -810,28 +971,40 @@ export default class NuevaCotizacionPagina implements OnInit {
     'flex size-9 shrink-0 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-critico/10 hover:text-critico focus-visible:outline-2 focus-visible:outline-epico disabled:pointer-events-none disabled:opacity-40';
 
   /** Los clientes en orden; "Sin cliente" (público en general) va aparte, al final. */
-  protected readonly clientes = computed(() => this.ventas.clientes().filter((c) => c.id !== PUBLICO_GENERAL));
+  protected readonly clientes = computed(() => this.ventas.clientes().filter((c) => !this.ventas.esPublico(c.id)));
   protected readonly publico = PUBLICO_GENERAL;
   protected readonly recuadro = 'mt-4 rounded-xl border border-acero/60 bg-white/70 p-4';
   protected readonly municipios = ['Escárcega, Camp.', 'Xpujil, Camp.', 'Cozumel, Q. Roo', 'Cancún, Q. Roo'];
   protected readonly plantas = PLANTAS_ERP;
   protected readonly vendedor = this.usuario?.nombre || 'Tú';
-  protected readonly soluciones = [...SOLUCIONES, PERSONALIZADO];
+  /** Solo las soluciones que tienen concretos en Productos (y "Personalizado": cualquiera de ellos). */
+  protected readonly soluciones = computed(() => [...solucionesDisponibles(), PERSONALIZADO]);
+  protected readonly resistencias = resistenciasDe;
+  protected ofrecida(id: string): boolean {
+    return this.soluciones().some((s) => s.id === id);
+  }
+  protected nombreSolucion(id: string): string {
+    return buscarSolucion(id)?.nombre ?? id;
+  }
   protected readonly opciones = OPCIONES;
   protected readonly exposiciones = EXPOSICIONES;
-  protected readonly aditivos = ADITIVOS;
+  /** Los aditivos de Productos (sin backend, los de siempre). */
+  protected readonly aditivos = aditivosDisponibles;
   // La renta de maquinaria lleva días por equipo: como en el editor, no se captura aquí.
   protected readonly servicios = SERVICIOS.filter((s) => s.id !== 'renta-maquinaria');
   protected readonly pesos = pesos;
   protected readonly serviciosDe = serviciosDe;
 
+  private readonly plantaInicial = inject(PlantasService).actualId();
   protected readonly modelo = signal<Borrador>({
     clienteId: '',
-    plantaId: inject(PlantasService).actualId(),
-    productos: [productoDe('losa', '', '')],
+    plantaId: this.plantaInicial,
+    // Losa si hay concretos para losa; si no, la primera solución que sí tenga
+    productos: [productoDe(solucionesDisponibles().some((x) => x.id === 'losa') ? 'losa' : (solucionesDisponibles()[0]?.id ?? PERSONALIZADO.id), '', '')],
     descuento: null,
-    traslado: { ...TRASLADO_POR_OMISION },
+    traslado: trasladoDe(this.plantaInicial),
     metodoPago: '',
+    lugar: null,
   });
   protected readonly f = form(this.modelo, (m) => {
     required(m.clienteId, { message: 'Elige el cliente.' });
@@ -845,6 +1018,20 @@ export default class NuevaCotizacionPagina implements OnInit {
       min(p.volumen, 0.5, { message: 'El mínimo es 0.5 m³.' });
       min(p.precio, 1, { message: 'El precio debe ser mayor a cero.' });
       min(p.distancia, 0, { message: 'La distancia no puede ser negativa.' });
+      // No se cotiza un concreto que no está en los productos (para esa solución)
+      validate(p.especificacion.resistenciaKgCm2, ({ value, valueOf }) => {
+        // A mano vale cualquiera (si no existe, es pedido especial)
+        if (valueOf(p.modo) === 'manual') return value() > 0 ? undefined : { kind: 'required', message: 'Escribe la resistencia en kg/cm².' };
+        return resistenciasDe(valueOf(p.solucionId))[valueOf(p.especificacion.tipoResistencia)].includes(value())
+          ? undefined
+          : { kind: 'sin-producto', message: 'Ese concreto no está en tus productos para esta solución: elige otro.' };
+      });
+      // Una orden no espera cotización: el pedido especial necesita su precio
+      validate(p.precio, ({ value, valueOf }) =>
+        this.orden() && !value() && esEspecial({ modo: valueOf(p.modo), especificacion: valueOf(p.especificacion) } as Producto)
+          ? { kind: 'required', message: 'Escribe el precio del pedido especial para crear la orden.' }
+          : undefined,
+      );
     });
     min(m.descuento, 0, { message: 'El descuento no puede ser negativo.' });
     max(m.descuento, 100, { message: 'El descuento no puede pasar de 100 %.' });
@@ -855,9 +1042,12 @@ export default class NuevaCotizacionPagina implements OnInit {
     min(m.traslado.precioKm, 0, { message: 'No puede ser negativo.' });
   });
 
-  /** Lugares de entrega dados de alta en esta cotización (los de público en general son solo de esta venta). */
-  private readonly creadas = signal<string[]>([]);
   protected readonly obras = computed(() => this.obrasDe(this.modelo().clienteId));
+  /** Las obras más el lugar de entrega (como obra de solo lectura): para la distancia y el PDF. */
+  protected readonly destinos = computed(() => {
+    const m = this.modelo();
+    return m.lugar ? [...this.obras(), obraDelLugar(LUGAR, m.clienteId, m.lugar)] : this.obras();
+  });
   protected readonly aviso = signal('');
 
   // Alta rápida de cliente
@@ -874,7 +1064,11 @@ export default class NuevaCotizacionPagina implements OnInit {
   protected readonly lugarAbierto = signal(false);
   protected readonly eligiendoUbicacion = signal(false);
   protected readonly ubicacionLugar = signal<UbicacionElegida['ubicacion'] | null>(null);
-  protected readonly pideLugar = computed(() => this.lugarAbierto() || (!!this.modelo().clienteId && !this.obras().length));
+  /** Las obras propias del cliente (sin las generales, que siempre se ofrecen): sin ninguna, se pide el lugar. */
+  private readonly sinObrasPropias = computed(() => !this.obras().some((o) => o.clienteId));
+  protected readonly pideLugar = computed(
+    () => this.lugarAbierto() || (!!this.modelo().clienteId && this.sinObrasPropias() && !this.modelo().lugar),
+  );
   protected readonly explicacionLugar = computed(() =>
     this.modelo().clienteId === PUBLICO_GENERAL
       ? 'Sin cliente: ¿a dónde se entrega y quién recibe?'
@@ -883,7 +1077,7 @@ export default class NuevaCotizacionPagina implements OnInit {
         : 'Este cliente aún no tiene obras: ¿a dónde se entrega y quién recibe?',
   );
   protected readonly lugar = form(
-    signal({ nombre: '', direccion: '', municipio: '', referencias: '', contacto: '', telefono: '' }),
+    signal({ direccion: '', municipio: '', referencias: '', contacto: '', telefono: '' }),
     (m) => {
       required(m.direccion, { message: 'Escribe la dirección de entrega.' });
       required(m.municipio, { message: 'Escribe el municipio.' });
@@ -896,12 +1090,12 @@ export default class NuevaCotizacionPagina implements OnInit {
     const m = this.lugar.municipio().value();
     if (!m.trim()) return '';
     const id = plantaDeMunicipio(m);
-    return id ? `Lo atiende ${PLANTAS_ERP.find((p) => p.id === id)!.nombre}.` : 'Fuera de la zona de las plantas: confirma la planta y el traslado.';
+    return id ? `Lo atiende ${PLANTAS_ERP().find((p) => p.id === id)!.nombre}.` : 'Fuera de la zona de las plantas: confirma la planta y el traslado.';
   });
   // shortcut: el offset de la planta de hoy vale para las entregas porque México ya no cambia de horario; si una
   // planta llega a tenerlo, calcularlo con la fecha de cada entrega.
   private readonly offset = computed(() =>
-    offsetEn(PLANTAS_ERP.find((p) => p.id === this.modelo().plantaId)!.zonaHoraria, new Date()),
+    offsetEn(PLANTAS_ERP().find((p) => p.id === this.modelo().plantaId)!.zonaHoraria, new Date()),
   );
   private readonly partidas = computed(() =>
     this.modelo().productos.map((p) => partidaDe(p, this.offset(), this.modelo().traslado)),
@@ -915,8 +1109,8 @@ export default class NuevaCotizacionPagina implements OnInit {
     // calcular si cambia alguna; la que se escribió a mano se respeta.
     effect(() => {
       const m = this.modelo();
-      const planta = PLANTAS_ERP.find((x) => x.id === m.plantaId)?.ubicacion;
-      const obras = this.ventas.obras();
+      const planta = PLANTAS_ERP().find((x) => x.id === m.plantaId)?.ubicacion;
+      const obras = this.destinos();
       for (const p of m.productos) {
         if (p.fuenteDistancia === 'manual') continue;
         const obra = obras.find((o) => o.id === p.obraId);
@@ -968,7 +1162,7 @@ export default class NuevaCotizacionPagina implements OnInit {
     if (!id) return 'Sin elegir';
     return id === PUBLICO_GENERAL ? 'Sin cliente (público en general)' : (this.ventas.cliente(id)?.nombre ?? '');
   });
-  protected readonly nombrePlanta = computed(() => PLANTAS_ERP.find((p) => p.id === this.modelo().plantaId)!.nombre);
+  protected readonly nombrePlanta = computed(() => PLANTAS_ERP().find((p) => p.id === this.modelo().plantaId)!.nombre);
   protected readonly total = computed(() =>
     totalesCotizacion({ partidas: this.partidas(), descuento: this.modelo().descuento ?? undefined }),
   );
@@ -992,18 +1186,22 @@ export default class NuevaCotizacionPagina implements OnInit {
       plantaId: b.plantaId,
       productos: b.partidas.map(productoDePartida),
       descuento: b.descuento ?? null,
-      traslado: conTraslado ? { incluidosKm: conTraslado.incluidosKm, precioKm: conTraslado.precioKm } : { ...TRASLADO_POR_OMISION },
+      traslado: conTraslado ? { incluidosKm: conTraslado.incluidosKm, precioKm: conTraslado.precioKm } : trasladoDe(b.plantaId),
       metodoPago: '',
+      // Si la base iba a un lugar de entrega, esta también (sus productos apuntan a él)
+      lugar: b.lugar ?? null,
     });
+    if (b.lugar) this.modelo.update((m) => ({ ...m, productos: m.productos.map((x) => ({ ...x, obraId: LUGAR })) }));
     this.inicial = JSON.stringify(this.modelo());
   }
   private guardada = false;
 
-  /** Al cambiar de cliente, las obras que ya no son suyas se borran; si tiene una sola, se elige. */
+  /** Las obras del cliente y las generales (sin cliente: sirven para cualquiera). */
   private obrasDe(clienteId: string) {
     return this.ventas
       .obras()
-      .filter((o) => o.clienteId === clienteId && (clienteId !== PUBLICO_GENERAL || this.creadas().includes(o.id)));
+      .filter((o) => !o.clienteId || (o.clienteId === clienteId && clienteId !== PUBLICO_GENERAL))
+      .sort((a, b) => Number(!a.clienteId) - Number(!b.clienteId) || a.nombre.localeCompare(b.nombre));
   }
 
   protected abrirClienteExpress(): void {
@@ -1038,33 +1236,55 @@ export default class NuevaCotizacionPagina implements OnInit {
   }
 
   protected abrirLugar(): void {
+    const l = this.modelo().lugar;
+    // "Cambiar": el formulario parte del lugar que ya tiene
+    if (l) {
+      this.lugar().value.set({ direccion: l.direccion, municipio: l.municipio, referencias: l.referencias ?? '', contacto: l.contacto, telefono: l.telefono });
+      this.ubicacionLugar.set(l.ubicacion ?? null);
+    }
     this.lugarAbierto.set(true);
-    this.enfocar('lugar-nombre');
+    this.enfocar('lugar-direccion');
   }
 
-  /** Lo guarda como obra del cliente, lo pone en los productos sin obra y elige la planta de su municipio. */
+  /** Deja el lugar de entrega y vuelve a elegir obra (si tiene una sola, se elige). */
+  protected quitarLugar(): void {
+    const suyas = this.obras();
+    this.modelo.update((m) => ({
+      ...m,
+      lugar: null,
+      productos: m.productos.map((x) => ({ ...x, obraId: suyas.length === 1 ? suyas[0].id : '' })),
+    }));
+    this.aviso.set('');
+    this.enfocar(suyas.length ? 'p0-obra' : 'nueva-cliente');
+  }
+
+  /**
+   * Usa el lugar para toda la cotización (sin dar de alta una obra): los productos van a él y la planta sale de su
+   * municipio. Es una cosa u otra: con lugar no se elige obra.
+   */
   protected async crearLugar(): Promise<void> {
     const valido = await submit(this.lugar, async () => {
-      const datos = { ...this.lugar().value(), ubicacion: this.ubicacionLugar() ?? undefined };
-      let obra;
-      try {
-        obra = await this.ventas.crearObra(this.modelo().clienteId, datos);
-      } catch (e) {
-        this.aviso.set(mensajeDe(e));
-        return undefined;
-      }
-      this.ubicacionLugar.set(null);
-      this.creadas.update((l) => [...l, obra.id]);
-      const plantaId = plantaDeMunicipio(obra.municipio);
+      const v = this.lugar().value();
+      const lugar: LugarDeEntrega = {
+        direccion: v.direccion.trim(),
+        municipio: v.municipio.trim(),
+        ...(v.referencias.trim() ? { referencias: v.referencias.trim() } : {}),
+        ...(this.ubicacionLugar() ? { ubicacion: this.ubicacionLugar()! } : {}),
+        contacto: v.contacto.trim(),
+        telefono: v.telefono.replace(/\D/g, ''),
+      };
+      const plantaId = plantaDeMunicipio(lugar.municipio);
       this.modelo.update((m) => ({
         ...m,
+        lugar,
         plantaId: plantaId ?? m.plantaId,
-        productos: m.productos.map((p) => (p.obraId ? p : { ...p, obraId: obra.id })),
+        productos: m.productos.map((p) => ({ ...p, obraId: LUGAR })),
       }));
-      this.lugar().reset({ nombre: '', direccion: '', municipio: '', referencias: '', contacto: '', telefono: '' });
+      this.ubicacionLugar.set(null);
+      this.lugar().reset({ direccion: '', municipio: '', referencias: '', contacto: '', telefono: '' });
       this.lugarAbierto.set(false);
-      const planta = PLANTAS_ERP.find((p) => p.id === this.modelo().plantaId)!.nombre;
-      this.aviso.set(`Lugar de entrega "${obra.nombre}" agregado; lo atiende ${planta}.`);
+      const planta = PLANTAS_ERP().find((p) => p.id === this.modelo().plantaId)!.nombre;
+      this.aviso.set(`Se entregará en ${lugar.direccion}, ${lugar.municipio}; lo atiende ${planta}.`);
       this.enfocar('p0-entrega');
       return undefined;
     });
@@ -1098,7 +1318,7 @@ export default class NuevaCotizacionPagina implements OnInit {
       ...m,
       productos: m.productos.map((p) => ({
         ...p,
-        obraId: suyas.some((o) => o.id === p.obraId) ? p.obraId : suyas.length === 1 ? suyas[0].id : '',
+        obraId: m.lugar ? LUGAR : suyas.some((o) => o.id === p.obraId) ? p.obraId : suyas.length === 1 ? suyas[0].id : '',
       })),
     }));
   }
@@ -1110,9 +1330,25 @@ export default class NuevaCotizacionPagina implements OnInit {
       ...p,
       solucionId: s.id,
       nombre: !p.nombre.trim() || p.nombre === buscarSolucion(p.solucionId)?.nombre ? s.nombre : p.nombre,
-      especificacion: structuredClone(s.sugerida),
+      // Su especificación sugerida, con un concreto que sí esté en Productos para esa solución
+      especificacion: sugeridaDisponible(s),
       servicios: [...s.servicios],
     }));
+  }
+
+  /** Producto y manual eligen el concreto sin solución (Personalizado); Solución vuelve a la sugerida de la primera. */
+  protected elegirModo(i: number, modo: ModoConcreto): void {
+    if (modo === 'solucion') {
+      const actual = this.modelo().productos[i].solucionId;
+      this.elegirSolucion(i, actual !== PERSONALIZADO.id && this.ofrecida(actual) ? actual : (solucionesDisponibles()[0]?.id ?? PERSONALIZADO.id));
+    } else {
+      this.cambiar(i, (p) => ({
+        ...p,
+        solucionId: PERSONALIZADO.id,
+        nombre: !p.nombre.trim() || p.nombre === buscarSolucion(p.solucionId)?.nombre ? PERSONALIZADO.nombre : p.nombre,
+      }));
+    }
+    this.cambiar(i, (p) => ({ ...p, modo }));
   }
 
   protected elegirResistencia(i: number, valor: string): void {
@@ -1138,13 +1374,14 @@ export default class NuevaCotizacionPagina implements OnInit {
   /** El siguiente producto parte de la solución, la obra y la entrega del anterior; el foco va a su volumen. */
   protected agregar(): void {
     const ultimo = this.modelo().productos.at(-1)!;
-    this.modelo.update((m) => ({ ...m, productos: [...m.productos, productoDe(ultimo.solucionId, ultimo.obraId, ultimo.entrega)] }));
-    this.enfocar('p' + (this.modelo().productos.length - 1) + '-solucion');
+    this.modelo.update((m) => ({ ...m, productos: [...m.productos, productoDe(ultimo.solucionId, ultimo.obraId, ultimo.entrega, ultimo.modo)] }));
+    this.enfocar('p' + (this.modelo().productos.length - 1) + '-modo-' + ultimo.modo);
   }
 
   protected quitar(i: number): void {
     this.modelo.update((m) => ({ ...m, productos: m.productos.filter((_, j) => j !== i) }));
-    this.enfocar('p' + Math.min(i, this.modelo().productos.length - 1) + '-solucion');
+    const j = Math.min(i, this.modelo().productos.length - 1);
+    this.enfocar('p' + j + '-modo-' + this.modelo().productos[j].modo);
   }
 
   /** Enter en un campo de la hoja: la acción elegida, como el botón. */
@@ -1177,6 +1414,7 @@ export default class NuevaCotizacionPagina implements OnInit {
           partidas: this.partidas(),
           descuento: m.descuento || undefined,
           baseId: this.cotizacionBase()?.id,
+          ...(m.lugar ? { lugar: m.lugar } : {}),
         };
         if (accion === 'orden' || accion === 'orden-cotizacion') {
           const ordenes = await this.ventas.crearOrdenes(datos, this.usuario?.id ?? this.usuario?.correo ?? '', accion === 'orden-cotizacion', m.metodoPago || 'sin_metodo');
@@ -1185,8 +1423,7 @@ export default class NuevaCotizacionPagina implements OnInit {
           return undefined;
         }
         if (accion === 'descargar') {
-          const fecha = isoEnZona(PLANTAS_ERP.find((p) => p.id === m.plantaId)!.zonaHoraria);
-          const folio = siguienteFolio(this.ventas.cotizaciones().map((c) => c.serie), m.plantaId, fecha);
+          const folio = await this.ventas.folioSiguiente(m.plantaId);
           await this.pdf({ ...datos, folio, fecha: new Date(), referencia: 'Borrador sin guardar' });
           this.avisoAccion.set(`Descargaste ${folio}.pdf. La cotización aún no está guardada.`);
           return undefined;
@@ -1214,7 +1451,7 @@ export default class NuevaCotizacionPagina implements OnInit {
       fecha: d.fecha,
       cliente: { nombre: cliente?.nombre ?? '', correo: cliente?.contacto.correo ?? '' },
       partidas: d.partidas,
-      obras: this.ventas.obras(),
+      obras: [...this.ventas.destinos(), ...this.destinos()],
       descuento: d.descuento,
       referencia: d.referencia,
       emitida: true,
@@ -1224,9 +1461,10 @@ export default class NuevaCotizacionPagina implements OnInit {
   private primerError(): string | null {
     if (this.f.clienteId().invalid()) return 'nueva-cliente';
     if (this.f.metodoPago().invalid()) return 'metodo-sin_metodo';
-    if (this.pideLugar() && !this.obras().length) return 'lugar-direccion';
+    if (this.pideLugar() && this.sinObrasPropias()) return 'lugar-direccion';
     for (let i = 0; i < this.modelo().productos.length; i++) {
       const p = this.f.productos[i];
+      if (p.especificacion.resistenciaKgCm2().invalid()) return this.modelo().productos[i].modo === 'manual' ? `p${i}-kg` : `p${i}-resistencia`;
       for (const [campo, id] of [[p.obraId, 'obra'], [p.entrega, 'entrega'], [p.volumen, 'volumen'], [p.precio, 'precio'], [p.distancia, 'distancia']] as const) {
         if (campo().invalid()) return `p${i}-${id}`;
       }

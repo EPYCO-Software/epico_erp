@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { Construction, Fan, FlaskConical, HardHat, IconNode, Moon, Tractor, Truck, Vibrate } from 'lucide';
 import {
   Aditivo,
@@ -26,6 +27,7 @@ const PRECIO_MR: Record<number, number> = { 36: 3900, 40: 4100, 42: 4250, 45: 44
 export const RESISTENCIAS = { fc: Object.keys(PRECIO_FC).map(Number), mr: Object.keys(PRECIO_MR).map(Number) };
 const AJUSTE_EDAD: Record<number, number> = { 28: 0, 14: 150, 7: 300, 3: 550 };
 const AJUSTE_CEMENTO_RS = 250;
+/** Sin backend (los aditivos reales son productos AJ-ADT-…, ver aditivosServidor). */
 const AJUSTE_ADITIVO: Record<Aditivo, number> = {
   acelerante: 120,
   retardante: 100,
@@ -66,12 +68,36 @@ const linea = (concepto: string, unidad: string, precio: number, cantidad: numbe
   importe: redondear(precio * cantidad),
 });
 
-const ADITIVO_TEXTO: Record<Aditivo, string> = {
-  acelerante: 'acelerante',
-  retardante: 'retardante',
-  impermeabilizante: 'impermeabilizante integral',
-  'fibra-sintetica': 'fibra sintética',
-  'fibra-metalica': 'fibra metálica',
+/** Un aditivo que se puede agregar al concreto: su clave, nombre y lo que suma por m³. */
+export interface AditivoDisponible {
+  id: Aditivo;
+  label: string;
+  precio: number;
+}
+
+/** Los aditivos activos de Productos (AJ-ADT-…), que pone quien carga los productos (ERP y portal). null = sin backend. */
+export const aditivosServidor = signal<AditivoDisponible[] | null>(null);
+
+/** Los que se ofrecen al cotizar: los de Productos o, sin backend, los de siempre. */
+export function aditivosDisponibles(): AditivoDisponible[] {
+  return aditivosServidor() ?? ADITIVOS.map((a) => ({ ...a, precio: AJUSTE_ADITIVO[a.id] ?? 0 }));
+}
+
+/** De un producto AJ-ADT-FIBRA-SINTETICA "Aditivo: fibra sintética" → { id: 'fibra-sintetica', label: 'Fibra sintética' }. */
+export function aditivoDe(p: { codigo: string; nombre: string; precio: number }): AditivoDisponible | null {
+  const m = /^AJ-ADT-(.+)$/.exec(p.codigo);
+  if (!m) return null;
+  const nombre = p.nombre.replace(/^Aditivo:\s*/i, '').trim() || m[1];
+  return { id: m[1].toLowerCase(), label: nombre[0].toUpperCase() + nombre.slice(1), precio: p.precio };
+}
+
+const datosAditivo = (id: Aditivo) => aditivosDisponibles().find((a) => a.id === id) ?? ADITIVOS.find((a) => a.id === id);
+/** Nombre del aditivo para mostrar ("Fibra sintética"); uno que ya no está en Productos, con su clave. */
+export const nombreAditivo = (id: Aditivo) => datosAditivo(id)?.label ?? id;
+/** "fibra sintética": como va dentro de una frase. */
+const textoAditivo = (id: Aditivo) => {
+  const n = nombreAditivo(id);
+  return n[0].toLowerCase() + n.slice(1);
 };
 
 /** Texto del concepto al estilo de la cotización impresa: "Concreto premezclado f´c: 200 kg/cm², Rev. 14 cm, Edad 28 días." */
@@ -84,18 +110,38 @@ export function conceptoConcreto(p: PartidaCotizacion): string {
     `TMA ${e.tmaMm} mm`,
   ];
   if (e.cemento !== 'CPC 30R') partes.push(`cemento ${e.cemento}`);
-  if (e.aditivos.length) partes.push(`con ${e.aditivos.map((a) => ADITIVO_TEXTO[a]).join(', ')}`);
+  if (e.aditivos.length) partes.push(`con ${e.aditivos.map(textoAditivo).join(', ')}`);
   return partes.join(', ') + '.';
 }
 
+/** Un concreto del catálogo de productos (CON-FC-250 → fc 250) con su precio y las soluciones para las que sirve. */
+export interface ConcretoDisponible {
+  /** Id del front: 'fc-250', 'mr-45'. */
+  id: string;
+  tipo: 'fc' | 'mr';
+  kg: number;
+  precio: number;
+  soluciones: string[];
+}
+
+/**
+ * Los concretos reales (los productos activos del backend), que pone quien carga los productos: el ERP (VentasService)
+ * o el portal (catálogo). null = sin backend: el tarifario fijo. Ver concretos.ts.
+ */
+export const concretosServidor = signal<ConcretoDisponible[] | null>(null);
+
 export function precioConcreto(p: PartidaCotizacion): number {
   const e = p.especificacion;
-  const base = (e.tipoResistencia === 'fc' ? PRECIO_FC : PRECIO_MR)[e.resistenciaKgCm2] ?? 0;
+  // El precio de lista del producto real si lo hay; si no, el del tarifario
+  const base =
+    concretosServidor()?.find((c) => c.tipo === e.tipoResistencia && c.kg === e.resistenciaKgCm2)?.precio ??
+    (e.tipoResistencia === 'fc' ? PRECIO_FC : PRECIO_MR)[e.resistenciaKgCm2] ??
+    0;
   return (
     base +
     (AJUSTE_EDAD[e.edadDias] ?? 0) +
     (e.cemento === 'CPC 30R RS' ? AJUSTE_CEMENTO_RS : 0) +
-    e.aditivos.reduce((t, a) => t + AJUSTE_ADITIVO[a], 0)
+    e.aditivos.reduce((t, a) => t + (aditivosDisponibles().find((x) => x.id === a)?.precio ?? 0), 0)
   );
 }
 
@@ -105,7 +151,13 @@ export const kmExtra = (t: Traslado) => Math.max(0, Math.round((t.distanciaKm - 
 /** Líneas de una partida: el concreto, el traslado si pasa del radio y, debajo, cada servicio con su unidad y mínimos. */
 export function lineasPartida(p: PartidaCotizacion): Linea[] {
   const v = p.volumenM3;
-  const r: Linea[] = [linea(conceptoConcreto(p), 'M³', p.precioM3 ?? precioConcreto(p), v)];
+  // Pedido especial sin precio: va en cero y lo dice (el precio lo confirma Ventas)
+  const porConfirmar = p.especial && p.precioM3 == null;
+  const r: Linea[] = [
+    porConfirmar
+      ? linea(`${conceptoConcreto(p)} · Pedido especial: precio por confirmar`, 'M³', 0, v)
+      : linea(conceptoConcreto(p), 'M³', p.precioM3 ?? precioConcreto(p), v),
+  ];
   const extra = p.traslado ? kmExtra(p.traslado) : 0;
   if (p.traslado && extra > 0 && p.traslado.precioKm > 0) {
     r.push(
@@ -167,8 +219,8 @@ export interface GrupoObra {
 export function agruparPorObra(partidas: PartidaCotizacion[], obras: Obra[]): GrupoObra[] {
   const grupos = new Map<string, GrupoObra>();
   for (const p of partidas) {
-    const obra = obras.find((o) => o.id === p.obraId);
-    if (!obra) continue;
+    // Una obra que no está en la lista (sin permiso de ver obras, o aún no carga) no esconde la partida
+    const obra = obras.find((o) => o.id === p.obraId) ?? ({ id: p.obraId, nombre: 'Obra', direccion: '', municipio: '' } as Obra);
     const g = grupos.get(obra.id) ?? { obra, partidas: [], volumen: 0 };
     g.partidas.push(p);
     g.volumen += p.volumenM3;
@@ -237,8 +289,9 @@ export function etiquetas(e: EspecificacionConcreto): string[] {
   if (e.edadDias !== 28) r.push(`Resistencia a ${e.edadDias} días`);
   r.push(`Rev. ${e.revenimientoCm} cm`, `TMA ${e.tmaMm} mm`);
   if (e.cemento !== 'CPC 30R') r.push(e.cemento);
-  if (e.exposicion !== 'normal') r.push(EXPOSICIONES.find((x) => x.id === e.exposicion)!.label);
-  for (const a of e.aditivos) r.push(ADITIVOS.find((x) => x.id === a)!.label);
+  // Un valor que no conocemos se muestra tal cual (no rompe la vista)
+  if (e.exposicion !== 'normal') r.push(EXPOSICIONES.find((x) => x.id === e.exposicion)?.label ?? e.exposicion);
+  for (const a of e.aditivos) r.push(nombreAditivo(a));
   return r;
 }
 
@@ -253,21 +306,23 @@ export function textoServicios(p: PartidaCotizacion): string {
  * Lo que vende la concretera: concreto (lo principal), servicios (bombeo, renta de maquinaria…) y productos generales
  * (sacos de cemento, aditivos sueltos… cualquier extra).
  */
-export type TipoProducto = 'concreto' | 'servicio' | 'general';
+export type TipoProducto = 'concreto' | 'aditivo' | 'servicio' | 'general';
 
 export const TIPOS_PRODUCTO: Record<TipoProducto, string> = {
   concreto: 'Concreto',
+  aditivo: 'Aditivo',
   servicio: 'Servicio',
   general: 'Producto general',
 };
 
 /** Las del tarifario (f´c, MR, ajustes, servicios, maquinaria) y las de los productos que se dan de alta. */
-export type CategoriaProducto = 'concreto-fc' | 'concreto-mr' | 'ajuste' | 'concreto' | 'servicio' | 'maquinaria' | 'general';
+export type CategoriaProducto = 'concreto-fc' | 'concreto-mr' | 'ajuste' | 'aditivo' | 'concreto' | 'servicio' | 'maquinaria' | 'general';
 
 export const CATEGORIAS_PRODUCTO: Record<CategoriaProducto, string> = {
   'concreto-fc': 'Concreto f´c',
   'concreto-mr': 'Concreto MR',
   ajuste: 'Ajuste al concreto',
+  aditivo: 'Aditivo',
   concreto: 'Concreto',
   servicio: 'Servicio',
   maquinaria: 'Renta de maquinaria',
@@ -279,6 +334,7 @@ export const TIPO_DE_CATEGORIA: Record<CategoriaProducto, TipoProducto> = {
   'concreto-fc': 'concreto',
   'concreto-mr': 'concreto',
   ajuste: 'concreto',
+  aditivo: 'aditivo',
   concreto: 'concreto',
   servicio: 'servicio',
   maquinaria: 'servicio',
@@ -288,6 +344,8 @@ export const TIPO_DE_CATEGORIA: Record<CategoriaProducto, TipoProducto> = {
 /** Unidades para dar de alta un producto, según su tipo (la primera, por omisión). */
 export const UNIDADES_PRODUCTO: Record<TipoProducto, string[]> = {
   concreto: ['M³'],
+  // Se suma al precio del concreto por m³
+  aditivo: ['M³'],
   servicio: ['Servicio', 'M³', 'Día', 'Hora', 'Visita', 'Viaje', 'Km', 'Litro', 'Pieza'],
   general: ['Pieza', 'Saco', 'Kg', 'Tonelada', 'Litro', 'Metro', 'M³', 'Km'],
 };
@@ -324,6 +382,8 @@ export interface ProductoTarifa {
   configuracion?: ConfigConcreto;
   /** Servicios de renta de equipo, conectados (o aún no) a sus unidades: para logística. */
   equipo?: EquipoServicio;
+  /** Concretos: las soluciones del cotizador para las que sirve (pavimento, losa…). Ver concretos.ts. */
+  soluciones?: string[];
 }
 
 const kgCm2 = (n: string) => `${n} kg/cm²`;
@@ -374,8 +434,8 @@ export const PRODUCTOS: ProductoTarifa[] = [
   ...(Object.entries(AJUSTE_ADITIVO) as [Aditivo, number][]).map(([a, precio]) => ({
     id: `aditivo-${a}`,
     codigo: `AJ-ADT-${a.toUpperCase()}`,
-    nombre: `Aditivo: ${ADITIVO_TEXTO[a]}`,
-    categoria: 'ajuste' as const,
+    nombre: `Aditivo: ${textoAditivo(a)}`,
+    categoria: 'aditivo' as const,
     unidad: 'M³',
     precio,
     descripcion: 'Se suma al precio del concreto por m³.',

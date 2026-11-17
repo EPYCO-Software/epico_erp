@@ -1,16 +1,30 @@
-import { Service, computed, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import {
+  AUTH_API_URL,
+  ApiCotizacion,
+  ApiProducto,
+  AuthService,
   ConfiguracionConcreto,
+  Contexto,
+  PRODUCTOS,
+  aCotizacion,
+  contexto,
+  cotizacionApi,
+  mensajeError,
   CotizacionGuardada,
   DisenoGuardado,
   EspecificacionConcreto,
   EstadoCotizacion,
   ModoEdicion,
   PartidaCotizacion,
+  plantaPara,
 } from 'ui';
+import { ObrasService } from './obras.service';
 
-// shortcut: diseños, partidas y cotizaciones en memoria (se pierden al recargar). Al conectar el backend,
-// persistir por cliente (diseños y cotizaciones) y por solicitud (partidas) sin cambiar esta API.
+// Sin backend (pruebas, demo): diseños y cotizaciones de ejemplo en memoria. Las partidas de la cotización en curso
+// (el carrito) siempre viven aquí hasta guardarla.
 const DISENOS_DEMO: DisenoGuardado[] = [
   {
     id: 'd1', nombre: 'Pavimento patio norte', solucionId: 'pavimento', favorito: true,
@@ -83,12 +97,70 @@ export const visibleAlCliente = (c: CotizacionGuardada) => !c.ocultaAlCliente &&
 let siguiente = 1;
 const nuevoId = (prefijo: string) => `${prefijo}-${Date.now().toString(36)}-${siguiente++}`;
 
-/** Diseños guardados, partidas de la cotización en curso y cotizaciones guardadas (con sus series). */
+interface ApiDiseno {
+  id: string;
+  nombre: string;
+  solucionId: string;
+  especificacion: EspecificacionConcreto | string;
+  favorito: boolean;
+}
+
+const aDiseno = (d: ApiDiseno): DisenoGuardado => ({
+  id: d.id,
+  nombre: d.nombre,
+  solucionId: d.solucionId,
+  especificacion: typeof d.especificacion === 'string' ? (JSON.parse(d.especificacion) as EspecificacionConcreto) : d.especificacion,
+  favorito: d.favorito,
+});
+
+/** La unidad de un producto del tarifario (para las líneas de servicios que se mandan a la API). */
+const unidadDe = (id: string) => PRODUCTOS.find((p) => p.id === id)?.unidad ?? '';
+
+/**
+ * Diseños guardados, partidas de la cotización en curso y cotizaciones guardadas (con sus series). Con backend, los
+ * diseños y las cotizaciones son los del cliente (/portal/disenos y /portal/cotizaciones): guardar una cotización la
+ * manda al ERP como "recibida" (el folio y los precios los pone el backend) y aceptarla genera sus pedidos allá.
+ */
 @Service()
 export class CotizacionService {
-  private readonly _disenos = signal<DisenoGuardado[]>(DISENOS_DEMO);
+  private readonly base = inject(AUTH_API_URL, { optional: true });
+  private readonly http = this.base ? inject(HttpClient) : null;
+  private readonly auth = this.base ? inject(AuthService) : null;
+  private readonly obras = inject(ObrasService);
+  private readonly _disenos = signal<DisenoGuardado[]>(this.base ? [] : DISENOS_DEMO);
   private readonly _partidas = signal<PartidaCotizacion[]>([]);
-  private readonly _cotizaciones = signal<CotizacionGuardada[]>(COTIZACIONES_DEMO);
+  private readonly _cotizaciones = signal<CotizacionGuardada[]>(this.base ? [] : COTIZACIONES_DEMO);
+  readonly errorCarga = signal('');
+  /** Plantas y productos del backend para traducir cotizaciones (ui/api/ventas). */
+  private ctx: Contexto | null = null;
+
+  constructor() {
+    if (!this.base) return;
+    const cliente = computed(() => this.auth!.sesion()?.cliente?.id ?? '');
+    effect(() => {
+      if (cliente()) untracked(() => void this.recargar());
+    });
+  }
+
+  private get<T>(ruta: string): Promise<T> {
+    return firstValueFrom(this.http!.get<T>(this.base + ruta));
+  }
+
+  async recargar(): Promise<void> {
+    try {
+      const [catalogo, cotizaciones, disenos] = await Promise.all([
+        this.get<{ productos: ApiProducto[] }>('/portal/catalogo'),
+        this.get<{ items: ApiCotizacion[] }>('/portal/cotizaciones?pagina=1&tamano=500'),
+        this.get<ApiDiseno[]>('/portal/disenos'),
+      ]);
+      this.ctx = contexto(this.auth!.sesion()?.empresas ?? [], catalogo.productos);
+      this._cotizaciones.set(cotizaciones.items.map((c) => aCotizacion(c, this.ctx!)).sort((a, b) => b.fecha.localeCompare(a.fecha)));
+      this._disenos.set(disenos.map(aDiseno));
+      this.errorCarga.set('');
+    } catch (e) {
+      this.errorCarga.set(mensajeError(e));
+    }
+  }
   private readonly _edicion = signal<{ origen: CotizacionGuardada; modo: ModoEdicion } | null>(null);
   private consecutivo = COTIZACIONES_DEMO.length;
 
@@ -111,17 +183,24 @@ export class CotizacionService {
     });
   });
 
-  guardarDiseno(nombre: string, solucionId: string, especificacion: EspecificacionConcreto): DisenoGuardado {
-    const diseno: DisenoGuardado = { id: nuevoId('d'), nombre: nombre.trim(), solucionId, especificacion, favorito: false };
+  async guardarDiseno(nombre: string, solucionId: string, especificacion: EspecificacionConcreto): Promise<DisenoGuardado> {
+    const nuevo = { nombre: nombre.trim(), solucionId, especificacion, favorito: false };
+    const diseno: DisenoGuardado = this.base
+      ? aDiseno(await firstValueFrom(this.http!.post<ApiDiseno>(`${this.base}/portal/disenos`, { ...nuevo, especificacion: JSON.stringify(especificacion) })))
+      : { ...nuevo, id: nuevoId('d') };
     this._disenos.update((d) => [diseno, ...d]);
     return diseno;
   }
 
+  /** Se marca de inmediato; con backend se guarda allá (si falla, se vuelve a leer). */
   alternarFavorito(id: string): void {
     this._disenos.update((d) => d.map((x) => (x.id === id ? { ...x, favorito: !x.favorito } : x)));
+    const d = this._disenos().find((x) => x.id === id);
+    if (this.base && d)
+      firstValueFrom(this.http!.put(`${this.base}/portal/disenos/${id}`, { ...d, especificacion: JSON.stringify(d.especificacion) })).catch(() => void this.recargar());
   }
 
-  agregarPartida(nombre: string, config: ConfiguracionConcreto): PartidaCotizacion {
+  agregarPartida(nombre: string, config: ConfiguracionConcreto & Pick<PartidaCotizacion, 'especial'>): PartidaCotizacion {
     const partida: PartidaCotizacion = { ...config, id: nuevoId('p'), nombre };
     this._partidas.update((p) => [...p, partida]);
     return partida;
@@ -161,10 +240,30 @@ export class CotizacionService {
     return `EPI-WEB-${clavePlanta}-${String(fecha.getFullYear()).slice(-2)}${String(this.consecutivo).padStart(3, '0')}`;
   }
 
-  /** Guarda la cotización en curso con su folio y deja el carrito vacío para empezar otra. */
-  guardarCotizacion(folio: string, fecha = new Date()): CotizacionGuardada {
+  /**
+   * Guarda la cotización en curso y deja el carrito vacío para empezar otra. Con backend la manda al ERP (llega como
+   * "recibida"; folio, precios y planta de cada partida los pone el backend) y devuelve la que quedó, con su folio.
+   * shortcut: la API tiene una planta y una obra por cotización: las de la primera partida.
+   */
+  async guardarCotizacion(folio: string, fecha = new Date()): Promise<CotizacionGuardada> {
     const e = this._edicion();
     const revision = e?.modo === 'revision';
+    if (this.base) {
+      if (!this.ctx) await this.recargar();
+      const partidas = this._partidas();
+      const planta = plantaPara(this.obras.buscar(partidas[0]?.obraId ?? null)).clave;
+      const cuerpo = cotizacionApi(
+        { clienteId: this.auth!.sesion()?.cliente?.id ?? '', plantaId: planta, partidas, descuento: 0, ...(e && !revision ? { baseId: e.origen.id } : {}) },
+        this.ctx!,
+        unidadDe,
+        revision ? { revisionDeId: e.origen.id } : {},
+      );
+      const cot = aCotizacion(await firstValueFrom(this.http!.post<ApiCotizacion>(`${this.base}/portal/cotizaciones`, cuerpo)), this.ctx!);
+      this._cotizaciones.update((c) => [cot, ...c]);
+      this._partidas.set([]);
+      this._edicion.set(null);
+      return cot;
+    }
     const cot: CotizacionGuardada = {
       id: nuevoId('c'),
       folio,
@@ -185,6 +284,15 @@ export class CotizacionService {
   /** El cliente la aceptó: en el ERP pasa a "pedido", como al confirmarla allá. */
   aceptada(id: string): void {
     this._cotizaciones.update((l) => l.map((c) => (c.id === id ? { ...c, estado: 'pedido' } : c)));
+  }
+
+  readonly conServidor = !!this.base;
+
+  /** Con backend: la acepta allá (genera sus pedidos) y devuelve los folios de los pedidos. */
+  async aceptar(id: string): Promise<string[]> {
+    const pedidos = await firstValueFrom(this.http!.post<{ folio: string }[]>(`${this.base}/portal/cotizaciones/${id}/aceptar`, null));
+    this.aceptada(id);
+    return pedidos.map((p) => p.folio);
   }
 
   /** Cómo se relaciona con su serie u origen ("Revisión 1 de EPI-WEB-ESC-26001", "Basada en EPI-…"); null si es original. */

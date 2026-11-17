@@ -21,23 +21,23 @@ describe('PerfilService', () => {
     }),
   );
 
-  it('permite guardar varios receptores fiscales', () => {
+  it('permite guardar varios receptores fiscales', async () => {
     const servicio = TestBed.inject(PerfilService);
-    servicio.guardarFacturacion(fiscal('Empresa alterna'));
+    await servicio.guardarFacturacion(fiscal('Empresa alterna'));
     expect(servicio.facturacion()).toHaveLength(2);
   });
 
-  it('mantiene un solo receptor predeterminado', () => {
+  it('mantiene un solo receptor predeterminado', async () => {
     const servicio = TestBed.inject(PerfilService);
-    const nuevo = servicio.guardarFacturacion(fiscal('Empresa alterna', true));
+    const nuevo = await servicio.guardarFacturacion(fiscal('Empresa alterna', true));
     expect(servicio.facturacion().filter((f) => f.predeterminado)).toEqual([
       expect.objectContaining({ id: nuevo.id }),
     ]);
   });
 
-  it('normaliza RFC, correo y código postal', () => {
+  it('normaliza RFC, correo y código postal', async () => {
     const servicio = TestBed.inject(PerfilService);
-    const guardado = servicio.guardarFacturacion({
+    const guardado = await servicio.guardarFacturacion({
       ...fiscal('Empresa alterna'),
       rfc: ' abc010101aa1 ',
       correo: ' FACTURAS@EMPRESA.MX ',
@@ -50,9 +50,9 @@ describe('PerfilService', () => {
     });
   });
 
-  it('guarda los datos de la empresa representada', () => {
+  it('guarda los datos de la empresa representada', async () => {
     const servicio = TestBed.inject(PerfilService);
-    servicio.actualizarUsuario({
+    await servicio.actualizarUsuario({
       ...servicio.usuario(),
       nombre: 'Mariana',
       apellidos: 'Pech',
@@ -81,13 +81,13 @@ describe('PerfilService', () => {
     });
   });
 
-  it('agrega y elimina documentos de un receptor fiscal', () => {
+  it('agrega y elimina documentos de un receptor fiscal', async () => {
     const servicio = TestBed.inject(PerfilService);
     const receptor = servicio.facturacion()[0];
     const archivo = new File(['contenido'], 'constancia.pdf', { type: 'application/pdf' });
 
     expect(
-      servicio.agregarDocumentos(receptor.id, 'Constancia de situación fiscal', [archivo]),
+      await servicio.agregarDocumentos(receptor.id, 'Constancia de situación fiscal', [archivo]),
     ).toEqual({ agregados: 1, rechazados: [] });
 
     const documento = servicio.buscarFacturacion(receptor.id)!.documentos[0];
@@ -96,16 +96,16 @@ describe('PerfilService', () => {
       tipo: 'Constancia de situación fiscal',
     });
 
-    servicio.eliminarDocumento(receptor.id, documento.id);
+    await servicio.eliminarDocumento(receptor.id, documento.id);
     expect(servicio.buscarFacturacion(receptor.id)!.documentos).toEqual([]);
   });
 
-  it('rechaza documentos con un formato no permitido', () => {
+  it('rechaza documentos con un formato no permitido', async () => {
     const servicio = TestBed.inject(PerfilService);
     const receptor = servicio.facturacion()[0];
     const archivo = new File(['contenido'], 'datos.exe');
 
-    expect(servicio.agregarDocumentos(receptor.id, 'Otro', [archivo])).toEqual({
+    expect(await servicio.agregarDocumentos(receptor.id, 'Otro', [archivo])).toEqual({
       agregados: 0,
       rechazados: ['datos.exe'],
     });

@@ -1,6 +1,6 @@
 import { CATEGORIAS_PRODUCTO, CategoriaProducto, PRODUCTOS, pesos } from 'ui';
-import { RAZONES_SOCIALES } from '../../core/plantas';
-import { CLIENTES, VENDEDORES } from './datos';
+import { plantasVigentes } from '../../core/plantas';
+import { CLIENTES, VENDEDORES, vendedores } from './datos';
 
 /**
  * Datos del Análisis de ventas (Reportes → Ventas): cada venta como líneas (concreto, bombeo…) con su fecha de entrega,
@@ -193,13 +193,17 @@ export const granularidad = (r: Rango): Dimension => {
   return d <= 31 ? 'dia' : d <= 120 ? 'semana' : 'mes';
 };
 
-const PLANTAS = RAZONES_SOCIALES.flatMap((r) => r.plantas);
 /** Orden fijo de cada entidad que puede ser serie: de él sale su color. */
 export const ORDEN_SERIE: Record<DimensionSerie, string[]> = {
-  planta: PLANTAS.map((p) => p.id),
+  // Las plantas y los vendedores de la sesión (con backend, los reales)
+  get planta() {
+    return plantasVigentes().map((p) => p.id);
+  },
   // Las que se venden juntas (concreto f´c, MR y bombeo) en los colores 1-3, que se distinguen entre todos
-  categoria: ['concreto-fc', 'concreto-mr', 'servicio', 'maquinaria', 'ajuste', 'concreto', 'general'],
-  vendedor: Object.keys(VENDEDORES),
+  categoria: ['concreto-fc', 'concreto-mr', 'servicio', 'maquinaria', 'ajuste', 'aditivo', 'concreto', 'general'],
+  get vendedor() {
+    return Object.keys(vendedores());
+  },
 };
 
 /** Paleta categórica validada (orden fijo; el color sigue a la entidad, no a su lugar). */
@@ -273,7 +277,7 @@ export function nombreDe(d: Dimension, id: string, n: Nombres): string {
     case 'dia':
       return fechaCorta(id, false);
     case 'planta':
-      return PLANTAS.find((p) => p.id === id)?.nombre.replace('Planta ', '') ?? id;
+      return plantasVigentes().find((p) => p.id === id)?.nombre.replace('Planta ', '') ?? id;
     case 'categoria':
       return CATEGORIAS_PRODUCTO[id as CategoriaProducto] ?? id;
     case 'producto':
@@ -281,7 +285,7 @@ export function nombreDe(d: Dimension, id: string, n: Nombres): string {
     case 'cliente':
       return n.cliente[id] ?? CLIENTES_HISTORIAL[id] ?? id;
     case 'vendedor':
-      return VENDEDORES[id] ?? id;
+      return vendedores()[id] ?? (id ? id : 'Sin vendedor');
   }
 }
 

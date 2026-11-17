@@ -1,4 +1,5 @@
-import { Component, inject, viewChild } from '@angular/core';
+import { Component, inject, signal, viewChild } from '@angular/core';
+import { mensajeDe } from './datos';
 import { Router } from '@angular/router';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
@@ -28,6 +29,9 @@ import { DatosLista, ListasPreciosService } from './precios';
         <article [class]="cajas.hoja + ' max-w-3xl'">
           <h1 class="text-2xl font-bold tracking-[-0.02em]">Nueva lista de precios</h1>
           <p class="mt-1 text-sm text-texto-suave">Después de guardarla, agrega sus líneas: el precio de cada producto o categoría.</p>
+          @if (error()) {
+            <p role="alert" class="mt-4 text-sm font-medium text-[#8E332C]">{{ error() }}</p>
+          }
           <app-editor-lista class="mt-6" formId="nueva-lista" [botones]="false" (listo)="crear($event)" />
         </article>
       </div>
@@ -43,9 +47,16 @@ export default class NuevaListaPagina {
   protected readonly botonSecundario =
     'inline-flex h-9 items-center rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
 
-  protected crear(d: DatosLista): void {
-    const l = this.servicio.crear(d);
-    void this.router.navigate(['/ventas/listas-de-precios', l.id]);
+  protected readonly error = signal('');
+
+  protected async crear(d: DatosLista): Promise<void> {
+    this.error.set('');
+    try {
+      const l = await this.servicio.crear(d);
+      void this.router.navigate(['/ventas/listas-de-precios', l.id]);
+    } catch (e) {
+      this.error.set(mensajeDe(e));
+    }
   }
 
   protected descartar(): void {

@@ -27,6 +27,8 @@ export const routes: Routes = [
     canActivate: [guestGuard],
     loadComponent: () => import('./features/auth/login'),
   },
+  // Enlace del correo de "olvidé mi contraseña" (sin guard: sirve aunque haya otra sesión abierta).
+  { path: 'restablecer', title: 'Recuperar contraseña · EPICO ERP', loadComponent: () => import('ui').then((m) => m.Restablecer) },
   {
     path: '',
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
@@ -231,6 +233,29 @@ export const routes: Routes = [
             loadComponent: () => import('./features/ventas/clientes'),
           },
           {
+            path: 'obras',
+            title: 'Obras · EPICO ERP',
+            loadComponent: () => import('./features/ventas/obras'),
+          },
+          {
+            path: 'obras/nueva',
+            title: 'Nueva obra · EPICO ERP',
+            loadComponent: () => import('./features/ventas/nueva-obra'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
+            path: 'obras/:id',
+            title: 'Obra · EPICO ERP',
+            loadComponent: () => import('./features/ventas/obra'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
+            path: 'clientes/nuevo',
+            title: 'Nuevo cliente · EPICO ERP',
+            loadComponent: () => import('./features/ventas/nuevo-cliente'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
             path: 'clientes/:id',
             // El nombre vigente del cliente (se puede editar), sin cargar sus datos con la app: se importan al abrirla.
             title: (ruta) => {
@@ -240,8 +265,9 @@ export const routes: Routes = [
               );
             },
             loadComponent: () => import('./features/ventas/cliente'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
           },
-          ...menuEnConstruccion('ventas', ['/ventas/cotizaciones', '/ventas/cotizaciones/recibidas', '/ventas/ordenes', '/ventas/por-cobrar', '/ventas/productos', '/ventas/listas-de-precios', '/ventas/descuentos-y-lealtad', '/ventas/reportes/ventas', '/ventas/reportes/vendedores', '/ventas/reportes/productos', '/ventas/reportes/clientes', '/ventas/clientes']),
+          ...menuEnConstruccion('ventas', ['/ventas/cotizaciones', '/ventas/cotizaciones/recibidas', '/ventas/ordenes', '/ventas/por-cobrar', '/ventas/productos', '/ventas/listas-de-precios', '/ventas/descuentos-y-lealtad', '/ventas/reportes/ventas', '/ventas/reportes/vendedores', '/ventas/reportes/productos', '/ventas/reportes/clientes', '/ventas/clientes', '/ventas/obras']),
         ],
       },
       {
@@ -253,8 +279,35 @@ export const routes: Routes = [
       {
         path: 'configuracion',
         data: { modulo: 'seguridad' },
-        title: 'Configuración · EPICO ERP',
-        loadComponent: () => import('./features/configuracion/configuracion'),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'usuarios' },
+          { path: 'usuarios', title: 'Usuarios · EPICO ERP', loadComponent: () => import('./features/configuracion/usuarios') },
+          {
+            path: 'usuarios/nuevo',
+            title: 'Nuevo usuario · EPICO ERP',
+            loadComponent: () => import('./features/configuracion/nuevo-usuario'),
+          },
+          {
+            path: 'usuarios/:id',
+            title: 'Usuario · EPICO ERP',
+            loadComponent: () => import('./features/configuracion/usuario'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          { path: 'roles', title: 'Roles y permisos · EPICO ERP', loadComponent: () => import('./features/configuracion/roles') },
+          { path: 'roles/nuevo', title: 'Nuevo rol · EPICO ERP', loadComponent: () => import('./features/configuracion/nuevo-rol') },
+          {
+            path: 'roles/:id',
+            title: 'Rol · EPICO ERP',
+            loadComponent: () => import('./features/configuracion/rol'),
+            canDeactivate: [(c: { puedeSalir(): boolean }) => c.puedeSalir()],
+          },
+          {
+            path: 'servidores-correo',
+            title: 'Servidores de correo · EPICO ERP',
+            loadComponent: () => import('./features/configuracion/servidores-correo'),
+          },
+          ...menuEnConstruccion('seguridad', ['/configuracion/usuarios', '/configuracion/roles', '/configuracion/servidores-correo']),
+        ],
       },
       {
         path: 'modulos/:id',

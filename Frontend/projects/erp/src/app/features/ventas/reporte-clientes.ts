@@ -1,7 +1,7 @@
 import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Download, Search, TriangleAlert } from 'lucide';
-import { Icon } from 'ui';
+import { Download, TriangleAlert } from 'lucide';
+import { Buscador, FiltrosElegidos, GrupoFiltro, Icon, enRango, opcionesDe, pasaFiltro } from 'ui';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_VISTA } from '../../layout/vista-completa';
 import { FiltrosReporte, FiltrosReporteBarra, filtrosIniciales, rangoComparado, textoComparado } from './filtros-reporte';
@@ -68,7 +68,7 @@ const VACIO: Omit<Resumen, 'id' | 'nombre'> = { importe: 0, m3: 0, cantidad: 0, 
  */
 @Component({
   selector: 'app-reporte-clientes',
-  imports: [EnEncabezado, FiltrosReporteBarra, Grafica, Icon, IndicadoresReporte, RouterLink, TablaReporte],
+  imports: [Buscador, EnEncabezado, FiltrosReporteBarra, Grafica, Icon, IndicadoresReporte, RouterLink, TablaReporte],
   template: `
     <ng-template appEnEncabezado>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -142,19 +142,14 @@ const VACIO: Omit<Resumen, 'id' | 'nombre'> = { importe: 0, m3: 0, cantidad: 0, 
 
           <section class="glass min-w-0 p-4 sm:p-5" aria-labelledby="clientes-tabla">
             <h2 id="clientes-tabla" class="font-bold">Cartera · {{ rango() }}</h2>
-            <div class="mt-3 flex flex-wrap items-end gap-3">
-              <div class="relative min-w-56">
-                <label for="clientes-buscar" class="sr-only">Buscar cliente</label>
-                <ui-icon [icono]="iconos.buscar" [tamano]="16" class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texto-suave" />
-                <input id="clientes-buscar" type="search" placeholder="Buscar cliente…" class="campo h-9 pr-3 pl-9 text-sm" [value]="texto()" (input)="texto.set($any($event.target).value)" />
-              </div>
-              <div class="flex flex-wrap gap-1" role="group" aria-label="Estado">
-                <button type="button" [class]="chip(!estado())" [attr.aria-pressed]="!estado()" (click)="estado.set(null)">Todos ({{ filas().length }})</button>
-                @for (e of conteoEstados(); track e.id) {
-                  <button type="button" [class]="chip(estado() === e.id)" [attr.aria-pressed]="estado() === e.id" (click)="estado.set(e.id)">{{ e.nombre }} ({{ e.n }})</button>
-                }
-              </div>
-            </div>
+            <ui-buscador
+              class="mt-3 max-w-xl"
+              idBuscar="clientes-buscar"
+              etiqueta="Buscar cliente"
+              [(texto)]="texto"
+              [grupos]="grupos()"
+              [(filtros)]="filtrosCartera"
+            />
             <app-tabla-reporte class="mt-3" titulo="Cartera de clientes" [columnas]="columnas()" [filas]="visibles()" [clave]="clave" ordenInicial="importe" [(seleccion)]="seleccion" />
           </section>
 
@@ -233,7 +228,7 @@ export default class ReporteClientes {
   private readonly fuente = inject(ReporteFuente);
 
   protected readonly cajas = CAJAS_VISTA;
-  protected readonly iconos = { descargar: Download, buscar: Search, alerta: TriangleAlert };
+  protected readonly iconos = { descargar: Download, alerta: TriangleAlert };
   protected readonly tarjeta = 'min-w-0 rounded-2xl border border-acero/60 bg-white/70 p-4';
   protected readonly botonSecundario =
     'inline-flex h-9 items-center gap-2 rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
@@ -241,12 +236,6 @@ export default class ReporteClientes {
     return (
       'h-8 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-epico ' +
       (activo ? 'bg-white text-carbon shadow-sm' : 'text-texto-suave hover:text-carbon')
-    );
-  }
-  protected chip(activo: boolean): string {
-    return (
-      'inline-flex h-9 items-center rounded-lg border px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico ' +
-      (activo ? 'border-epico bg-epico/8 text-epico-oscuro' : 'border-acero/80 bg-white/80 hover:border-carbon/40')
     );
   }
   protected readonly estados = ESTADOS;
@@ -261,7 +250,8 @@ export default class ReporteClientes {
   protected readonly filtros = signal<FiltrosReporte>(filtrosIniciales());
   protected readonly modo = signal<Modo>('pareto');
   protected readonly texto = signal('');
-  protected readonly estado = signal<Estado | null>(null);
+  /** Por estado (nuevo, creciendo…), en el botón de filtros del buscador de la cartera. */
+  protected readonly filtrosCartera = signal<FiltrosElegidos>({});
 
   protected readonly lineas = computed(() => filtrar(this.fuente.lineas(), this.filtros()));
   private readonly anteriores = computed(() => filtrar(this.fuente.lineas(), { ...this.filtros(), ...rangoComparado(this.filtros()) }));
@@ -339,12 +329,29 @@ export default class ReporteClientes {
     return filas;
   });
 
-  protected readonly conteoEstados = computed(() =>
-    (Object.keys(ESTADOS) as Estado[]).map((id) => ({ id, nombre: ESTADOS[id].nombre, n: this.filas().filter((f) => f.estado === id).length })).filter((e) => e.n),
-  );
+  protected readonly grupos = computed<GrupoFiltro[]>(() => [
+    {
+      id: 'estado',
+      titulo: 'Estado',
+      opciones: (Object.keys(ESTADOS) as Estado[])
+        .map((id) => ({ id, nombre: ESTADOS[id].nombre, n: this.filas().filter((f) => f.estado === id).length }))
+        .filter((e) => e.n),
+    },
+    { id: 'planta', titulo: 'Planta', opciones: opcionesDe(this.filas().flatMap((f) => f.plantas), (p) => p, (p) => nombreDe('planta', p, this.fuente.nombres())) },
+    { id: 'importe', titulo: 'Importe', rango: 'numero', prefijo: '$' },
+    { id: 'dias', titulo: 'Días sin comprar', rango: 'numero', sufijo: ' días' },
+  ]);
   protected readonly visibles = computed(() => {
     const q = this.texto().trim().toLowerCase();
-    return this.filas().filter((f) => (!this.estado() || f.estado === this.estado()) && (!q || f.nombre.toLowerCase().includes(q)));
+    const f = this.filtrosCartera();
+    return this.filas().filter(
+      (c) =>
+        pasaFiltro(f, 'estado', c.estado) &&
+        (!f['planta']?.length || c.plantas.some((p) => f['planta'].includes(p))) &&
+        enRango(f, 'importe', c.importe) &&
+        enRango(f, 'dias', c.diasSinComprar) &&
+        (!q || c.nombre.toLowerCase().includes(q)),
+    );
   });
   protected readonly enRiesgo = computed(() =>
     this.filas()

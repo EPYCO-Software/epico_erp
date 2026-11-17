@@ -1,8 +1,10 @@
-import { Service, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { Boxes, CreditCard, Megaphone, Stamp, Ticket, TicketPercent, Tickets } from 'lucide';
-import { CATEGORIAS_PRODUCTO, CategoriaProducto, ProductoTarifa, pesos } from 'ui';
+import { AUTH_API_URL, AuthService, CATEGORIAS_PRODUCTO, todos, CategoriaProducto, ProductoTarifa, pesos } from 'ui';
 import { HistorialService } from '../../core/historial';
-import { VentasService, registro } from './datos';
+import { VentasService, mensajeDe, registro } from './datos';
 
 /** Las 7 plantillas de Odoo (Descuentos y programas de lealtad). */
 export type TipoPrograma = 'promocion' | 'codigo' | 'compra-x' | 'proxima-orden' | 'lealtad' | 'cupones' | 'sellos';
@@ -289,9 +291,42 @@ const DEMO: Programa[] = [
   },
 ];
 
+// ---------- backend ----------
+
+interface ApiPrograma {
+  id: string;
+  nombre: string;
+  tipo: string;
+  activo: boolean;
+  inicio: string | null;
+  fin: string | null;
+  productoId: string | null;
+  categoriaId: string | null;
+  compraMinima: number | null;
+  codigo: string | null;
+  cantidadX: number | null;
+  cantidadY: number | null;
+  recompensa: TipoRecompensa;
+  valor: number | null;
+  pesosPorPunto: number | null;
+  puntosCanje: number | null;
+  meta: number | null;
+  empresaRestringidaId: string | null;
+}
+interface ApiCupon {
+  id: string;
+  programaId: string;
+  codigo: string;
+  clienteId: string | null;
+  ganadoEnPedidoId: string | null;
+  usadoEnPedidoId: string | null;
+  usadoEn: string | null;
+}
+
 /**
  * Ventas → Productos → Descuentos y programas de lealtad: alta desde una plantilla, edición, cupones (generar y
- * marcar usados) y el historial de cada uno.
+ * marcar usados) y el historial de cada uno. Con backend todo vive allá (/programas-descuento y /cupones) y el historial
+ * lo escribe él; sin él (pruebas, demo), en memoria con programas de ejemplo.
  * shortcut: aún no se aplican al cotizar; evaluar() es la lógica que usará la cotización, y entonces registrar la
  * orden sumará puntos y sellos por cliente y emitirá los cupones de la próxima orden.
  */
@@ -299,14 +334,102 @@ const DEMO: Programa[] = [
 export class ProgramasService {
   private readonly historial = inject(HistorialService);
   private readonly ventas = inject(VentasService);
+  private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
+  private readonly base = inject(AUTH_API_URL, { optional: true });
 
-  readonly programas = signal<Programa[]>(DEMO);
+  readonly programas = signal<Programa[]>(this.base ? [] : DEMO);
+  readonly errorCarga = signal('');
+  private categorias = new Map<string, string>();
+  private cupones: ApiCupon[] = [];
+
+  constructor() {
+    if (!this.base) return;
+    const quien = computed(() => this.auth.sesion()?.usuario.id ?? '');
+    effect(() => {
+      if (quien()) untracked(() => void this.recargar());
+    });
+  }
+
+  private get<T>(ruta: string): Promise<T> {
+    return firstValueFrom(this.http.get<T>(this.base + ruta));
+  }
+
+  async recargar(): Promise<void> {
+    try {
+      const [programas, cupones, cats] = await Promise.all([
+        this.get<ApiPrograma[]>('/programas-descuento?take=500'),
+        todos((r) => this.get<ApiCupon[]>(r), '/cupones'),
+        this.get<{ id: string; clave: string }[]>('/categorias-producto?take=500'),
+      ]);
+      this.categorias = new Map(cats.map((c) => [c.clave, c.id]));
+      const claveDe = new Map(cats.map((c) => [c.id, c.clave]));
+      this.cupones = cupones;
+      this.programas.set(
+        programas
+          .map(
+            (p): Programa => ({
+              id: p.id,
+              nombre: p.nombre,
+              tipo: p.tipo.replace(/_/g, '-') as TipoPrograma,
+              activo: p.activo,
+              inicio: p.inicio?.slice(0, 10) ?? '',
+              fin: p.fin?.slice(0, 10) ?? '',
+              productoId: p.productoId ?? '',
+              categoria: ((p.categoriaId && claveDe.get(p.categoriaId)) || '') as CategoriaProducto | '',
+              compraMinima: p.compraMinima ?? 0,
+              codigo: p.codigo ?? '',
+              cantidadX: p.cantidadX ?? 0,
+              cantidadY: p.cantidadY ?? 0,
+              recompensa: p.recompensa,
+              valor: p.valor ?? 0,
+              pesosPorPunto: p.pesosPorPunto ?? 0,
+              puntosCanje: p.puntosCanje ?? 0,
+              meta: p.meta ?? 0,
+              cupones: cupones.filter((c) => c.programaId === p.id).map((c) => ({ codigo: c.codigo, usado: !!(c.usadoEn || c.usadoEnPedidoId) })),
+            }),
+          )
+          .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+      );
+      this.errorCarga.set('');
+    } catch (e) {
+      this.errorCarga.set(mensajeDe(e));
+    }
+  }
+
+  /** El cuerpo para el backend: tipo en snake_case, categoría por id y los opcionales vacíos como null. */
+  private cuerpo(p: Omit<Programa, 'id' | 'cupones'>) {
+    const n = (x: number) => x || null;
+    return {
+      nombre: p.nombre.trim(),
+      tipo: p.tipo.replace(/-/g, '_'),
+      activo: p.activo,
+      inicio: p.inicio || null,
+      fin: p.fin || null,
+      productoId: p.productoId || null,
+      categoriaId: p.categoria ? (this.categorias.get(p.categoria) ?? null) : null,
+      compraMinima: p.compraMinima,
+      codigo: p.codigo.trim() || null,
+      cantidadX: n(p.cantidadX),
+      cantidadY: n(p.cantidadY),
+      recompensa: p.recompensa,
+      valor: p.valor,
+      pesosPorPunto: n(p.pesosPorPunto),
+      puntosCanje: n(p.puntosCanje),
+      meta: n(p.meta),
+    };
+  }
 
   programa(id: string): Programa | undefined {
     return this.programas().find((p) => p.id === id);
   }
 
-  crear(datos: Omit<Programa, 'id'>): Programa {
+  async crear(datos: Omit<Programa, 'id'>): Promise<Programa> {
+    if (this.base) {
+      const r = await firstValueFrom(this.http.post<ApiPrograma>(`${this.base}/programas-descuento`, { ...this.cuerpo(datos), empresaRestringidaId: null }));
+      await this.recargar();
+      return this.programa(r.id)!;
+    }
     const p = { ...datos, id: 'pr-' + crypto.randomUUID().slice(0, 8), nombre: datos.nombre.trim() };
     this.programas.update((l) => [...l, p]);
     this.historial.registrar(registro.programa(p.id), {
@@ -316,10 +439,16 @@ export class ProgramasService {
     return p;
   }
 
-  editar(id: string, datos: Omit<Programa, 'id' | 'tipo' | 'cupones'>): void {
+  async editar(id: string, datos: Omit<Programa, 'id' | 'tipo' | 'cupones'>): Promise<void> {
     const antes = this.programa(id);
     if (!antes) return;
     const despues: Programa = { ...antes, ...datos, nombre: datos.nombre.trim() };
+    if (this.base) {
+      const actual = await this.get<ApiPrograma>(`/programas-descuento/${id}`);
+      await firstValueFrom(this.http.put(`${this.base}/programas-descuento/${id}`, { ...actual, ...this.cuerpo(despues), id }));
+      await this.recargar();
+      return;
+    }
     const productos = this.ventas.productos();
     const cambios = [
       { campo: 'Nombre', antes: antes.nombre, despues: despues.nombre },
@@ -333,21 +462,35 @@ export class ProgramasService {
   }
 
   /** Genera n cupones únicos (en todos los programas) para compartir. */
-  generarCupones(id: string, n: number): string[] {
+  async generarCupones(id: string, n: number): Promise<string[]> {
     const p = this.programa(id);
     if (!p) return [];
     const usados = this.programas().flatMap((x) => x.cupones.map((c) => c.codigo));
     const nuevos: string[] = [];
     for (let i = 0; i < n; i++) nuevos.push(nuevoCodigo([...usados, ...nuevos]));
+    if (this.base) {
+      await Promise.all(nuevos.map((codigo) => firstValueFrom(this.http.post(`${this.base}/cupones`, { programaId: id, codigo }))));
+      await this.recargar();
+      return nuevos;
+    }
     this.reemplazar({ ...p, cupones: [...p.cupones, ...nuevos.map((codigo) => ({ codigo, usado: false }))] });
     this.historial.registrar(registro.programa(id), { texto: `${n} ${n === 1 ? 'cupón generado' : 'cupones generados'}`, detalles: [nuevos.join(', ')] });
     return nuevos;
   }
 
-  alternarUsado(id: string, codigo: string): void {
+  async alternarUsado(id: string, codigo: string): Promise<void> {
     const p = this.programa(id);
     const c = p?.cupones.find((x) => x.codigo === codigo);
     if (!p || !c) return;
+    if (this.base) {
+      const api = this.cupones.find((x) => x.programaId === id && x.codigo === codigo);
+      if (!api) return;
+      await firstValueFrom(
+        this.http.put(`${this.base}/cupones/${api.id}`, { ...api, usadoEn: c.usado ? null : new Date().toISOString(), usadoEnPedidoId: c.usado ? null : api.usadoEnPedidoId }),
+      );
+      await this.recargar();
+      return;
+    }
     this.reemplazar({ ...p, cupones: p.cupones.map((x) => (x.codigo === codigo ? { ...x, usado: !x.usado } : x)) });
     this.historial.registrar(registro.programa(id), { texto: `Cupón ${codigo} ${c.usado ? 'disponible otra vez' : 'marcado como usado'}` });
   }

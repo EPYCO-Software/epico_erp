@@ -57,11 +57,11 @@ public class ClienteContacto : BaseEntity, IDePadre
     [Rastreado("Principal")] public bool Principal { get; set; }
     /// <summary>Si tiene, entra al portal.</summary>
     public Guid? UsuarioId { get; set; }
-    string IDePadre.PadreTipo => nameof(Cliente);
-    Guid IDePadre.PadreId => ClienteId;
+    string? IDePadre.PadreTipo => nameof(Cliente);
+    Guid? IDePadre.PadreId => ClienteId;
 }
 
-public class ClienteDatoFiscal : BaseEntity, IDePadre
+public class ClienteDatoFiscal : BaseEntity, IDePadre, IDeCliente
 {
     public Guid ClienteId { get; set; }
     [MaxLength(100), Rastreado("Alias")] public string Alias { get; set; } = "";
@@ -73,13 +73,17 @@ public class ClienteDatoFiscal : BaseEntity, IDePadre
     [MaxLength(254), EmailAddress, Rastreado("Correo")] public string? Correo { get; set; }
     [Rastreado("Dirección fiscal")] public string? DireccionFiscal { get; set; }
     [Rastreado("Predeterminado")] public bool Predeterminado { get; set; }
-    string IDePadre.PadreTipo => nameof(Cliente);
-    Guid IDePadre.PadreId => ClienteId;
+    string? IDePadre.PadreTipo => nameof(Cliente);
+    Guid? IDePadre.PadreId => ClienteId;
 }
 
-public class Obra : BaseEntity, IDePadre
+/// <summary>Obra de un cliente, o general (sin cliente: banco de material, patio…) de la organización.</summary>
+public class Obra : BaseEntity, IDePadre, IDeCliente, IDeOrganizacion, IRestringible
 {
-    public Guid ClienteId { get; set; }
+    public Guid OrganizacionId { get; set; }
+    [Rastreado("Solo para", TipoDatoCambio.Referencia)] public Guid? EmpresaRestringidaId { get; set; }
+    /// <summary>null = obra general (el portal no la ve).</summary>
+    [Rastreado("Cliente", TipoDatoCambio.Referencia)] public Guid? ClienteId { get; set; }
     [MaxLength(200), Rastreado("Nombre")] public string Nombre { get; set; } = "";
     [Rastreado("Dirección")] public string Direccion { get; set; } = "";
     [MaxLength(120), Rastreado("Municipio")] public string? Municipio { get; set; }
@@ -90,8 +94,21 @@ public class Obra : BaseEntity, IDePadre
     public Guid? ResponsableFotoArchivoId { get; set; }
     /// <summary>[{ nombre, lada, numero }]</summary>
     public JsonDocument? Contactos { get; set; }
-    string IDePadre.PadreTipo => nameof(Cliente);
-    Guid IDePadre.PadreId => ClienteId;
+    // El portal solo trabaja con obras de su cliente: ahí ClienteId nunca es null.
+    Guid IDeCliente.ClienteId { get => ClienteId ?? Guid.Empty; set => ClienteId = value; }
+    string? IDePadre.PadreTipo => ClienteId is null ? null : nameof(Cliente);
+    Guid? IDePadre.PadreId => ClienteId;
+}
+
+/// <summary>Diseño de concreto que el cliente guarda en el portal para volver a cotizarlo.</summary>
+public class DisenoPortal : BaseEntity, IDeCliente
+{
+    public Guid ClienteId { get; set; }
+    [Required, MaxLength(120)] public string Nombre { get; set; } = "";
+    [MaxLength(40)] public string? SolucionId { get; set; }
+    /// <summary>JSON libre del front (resistencia, revenimiento, aditivos…).</summary>
+    public JsonDocument? Especificacion { get; set; }
+    public bool Favorito { get; set; }
 }
 
 public class Prospecto : BaseEntity, IDeOrganizacion
@@ -145,7 +162,28 @@ public class Producto : BaseEntity, IDeOrganizacion, IRestringible
     [MaxLength(3)] public string? ConcretoSuministro { get; set; }
     /// <summary>Servicio de renta: qué equipo.</summary>
     public TipoEquipo? EquipoTipo { get; set; }
+    /// <summary>Para qué sirve (solo concreto): claves de <see cref="Soluciones.Todas"/>. El cotizador ofrece las que tengan productos.</summary>
+    [Rastreado("Soluciones", TipoDatoCambio.Texto)] public List<string> Soluciones { get; set; } = [];
     [Rastreado("Activo")] public bool Activo { get; set; } = true;
+}
+
+/// <summary>Catálogo fijo de soluciones del cotizador.</summary>
+public static class Soluciones
+{
+    public static readonly string[] Todas = ["pavimento", "losa", "cimentacion", "columnas", "firmes", "relleno", "especial"];
+
+    /// <summary>Etiquetas por resistencia para el tarifario: MRxx = pavimento; f'c por rangos.</summary>
+    public static List<string> Sugeridas(string? concretoFc)
+    {
+        if (concretoFc is null) return [];
+        if (concretoFc.StartsWith("MR", StringComparison.OrdinalIgnoreCase)) return ["pavimento"];
+        if (!int.TryParse(concretoFc, out var fc)) return [];
+        return [.. new (string Clave, int Min, int Max)[]
+            {
+                ("pavimento", 300, 350), ("losa", 200, 300), ("cimentacion", 150, 250), ("columnas", 250, 350),
+                ("firmes", 100, 200), ("relleno", 100, 150), ("especial", 400, int.MaxValue),
+            }.Where(r => fc >= r.Min && fc <= r.Max).Select(r => r.Clave)];
+    }
 }
 
 public class Existencia : IEntidad
@@ -222,8 +260,8 @@ public class ReglaPrecio : BaseEntity, IDePadre
     [Range(0, 99_999_999), Rastreado("Cantidad mínima")] public decimal CantidadMinima { get; set; }
     [Rastreado("Inicio")] public DateOnly? Inicio { get; set; }
     [Rastreado("Fin")] public DateOnly? Fin { get; set; }
-    string IDePadre.PadreTipo => nameof(ListaPrecios);
-    Guid IDePadre.PadreId => ListaPreciosId;
+    string? IDePadre.PadreTipo => nameof(ListaPrecios);
+    Guid? IDePadre.PadreId => ListaPreciosId;
 }
 
 public class ProgramaDescuento : BaseEntity, IDeOrganizacion, IRestringible

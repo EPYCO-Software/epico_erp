@@ -72,7 +72,8 @@ import { SelectorPlantas } from './selector-plantas';
           <app-icono-modulo [modulo]="m.id" class="size-7 shrink-0" />
           <span class="truncate text-lg font-semibold tracking-[-0.01em] text-carbon">{{ m.nombre }}</span>
         </a>
-        @if (m.menu) {
+        @let menu = modulos.menuDe(m);
+        @if (menu.length) {
           <!-- Menús desplegables como Odoo (CDK Menu: con uno abierto, al pasar el mouse por otro se abre ese; flechas
                entre menús). Se subraya el que contiene la página abierta. En celular, segunda fila con scroll de lado. -->
           <nav
@@ -80,7 +81,7 @@ import { SelectorPlantas } from './selector-plantas';
             class="sin-barra order-last -mx-4 w-[calc(100%+2rem)] overflow-x-auto px-2 lg:order-0 lg:mx-0 lg:ml-3 lg:w-auto lg:px-0"
           >
             <div cdkMenuBar class="flex h-11 items-stretch lg:h-14">
-              @for (g of m.menu; track g.nombre) {
+              @for (g of menu; track g.nombre) {
                 <button
                   type="button"
                   cdkMenuItem
@@ -201,7 +202,8 @@ export class Encabezado {
   /** El menú del módulo con la página abierta (por segmentos: /ventas/cotizaciones/nueva es de "Órdenes"). */
   protected readonly menuActivo = computed(() => {
     const url = this.router.lastSuccessfulNavigation()?.finalUrl;
-    return url && this.modulo()?.menu?.find((g) => enlacesDelMenu(g).some((e) => containsTree(url, this.router.parseUrl(e.ruta))));
+    const m = this.modulo();
+    return url && m && this.modulos.menuDe(m).find((g) => enlacesDelMenu(g).some((e) => containsTree(url, this.router.parseUrl(e.ruta))));
   });
   protected readonly claseEnlace =
     'block rounded-lg py-1.5 whitespace-nowrap transition-colors hover:bg-carbon/5 focus-visible:bg-carbon/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-epico aria-[current=page]:font-semibold';

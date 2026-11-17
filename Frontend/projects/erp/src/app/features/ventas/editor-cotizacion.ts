@@ -8,7 +8,7 @@ import {
   FieldError,
   Icon,
   PartidaCotizacion,
-  RESISTENCIAS,
+  resistenciasDe,
   SERVICIOS,
   ServicioObra,
   etiquetas,
@@ -19,7 +19,7 @@ import {
   textoServicios,
   totalesCotizacion,
 } from 'ui';
-import { TRASLADO_POR_OMISION, VentasService, especificacionBase } from './datos';
+import { TRASLADO_POR_OMISION, VentasService, especificacionBase, trasladoDe } from './datos';
 
 interface PartidaEditable extends PartidaCotizacion {
   /** Precio del concreto por m³ en edición: el especial o, si no hay, el del tarifario. */
@@ -44,7 +44,8 @@ export function cambiosDe(e: Edicion): CambiosCotizacion {
       const tarifa = precioConcreto(p);
       return {
         ...p,
-        precioM3: (precio ?? tarifa) === tarifa ? undefined : (precio ?? tarifa),
+        // Pedido especial: no tiene tarifa; sin precio sigue por confirmar
+        precioM3: p.especial ? (precio ?? undefined) : (precio ?? tarifa) === tarifa ? undefined : (precio ?? tarifa),
         traslado:
           distancia == null
             ? undefined
@@ -111,7 +112,7 @@ const offset = (iso: string) => /[+-]\d{2}:\d{2}$/.exec(iso)?.[0] ?? 'Z';
                 />
                 por m³
               </span>
-              <span [id]="'editar-precio-tarifa-' + i" class="text-texto-suave">Tarifa \${{ pesos(tarifa(p)) }}</span>
+              <span [id]="'editar-precio-tarifa-' + i" class="text-texto-suave">{{ p.especial ? 'Pedido especial: escribe su precio antes de enviarla' : 'Tarifa $' + pesos(tarifa(p)) }}</span>
             </div>
             <ui-field-error [campo]="f.partidas[i].precio" [errorId]="'editar-precio-error-' + i" />
 
@@ -162,12 +163,12 @@ const offset = (iso: string) => /[+-]\d{2}:\d{2}$/.exec(iso)?.[0] ?? 'Z';
               <label for="nuevo-producto" class="font-medium">Producto</label>
               <select id="nuevo-producto" class="campo mt-1 h-9 px-2" [formField]="nuevo.producto">
                 <optgroup label="Concreto f´c (compresión)">
-                  @for (v of resistencias.fc; track v) {
+                  @for (v of resistencias().fc; track v) {
                     <option [value]="'fc-' + v">Concreto f´c {{ v }} kg/cm²</option>
                   }
                 </optgroup>
                 <optgroup label="Concreto MR (pavimentos)">
-                  @for (v of resistencias.mr; track v) {
+                  @for (v of resistencias().mr; track v) {
                     <option [value]="'mr-' + v">Concreto MR {{ v }} kg/cm²</option>
                   }
                 </optgroup>
@@ -186,14 +187,22 @@ const offset = (iso: string) => /[+-]\d{2}:\d{2}$/.exec(iso)?.[0] ?? 'Z';
               />
               <ui-field-error [campo]="nuevo.volumen" errorId="nuevo-volumen-error" />
             </div>
-            <div>
-              <label for="nuevo-obra" class="font-medium">Obra</label>
-              <select id="nuevo-obra" class="campo mt-1 h-9 px-2" [formField]="nuevo.obraId">
-                @for (o of obrasCliente(); track o.id) {
-                  <option [value]="o.id">{{ o.nombre }}</option>
-                }
-              </select>
-            </div>
+            @if (c().lugar; as l) {
+              <!-- Va a un lugar de entrega: no se elige obra (es el mismo lugar que el resto de la cotización) -->
+              <div>
+                <p class="font-medium">Se entrega en</p>
+                <p class="mt-1 text-texto-suave">{{ l.direccion }}, {{ l.municipio }}</p>
+              </div>
+            } @else {
+              <div>
+                <label for="nuevo-obra" class="font-medium">Obra</label>
+                <select id="nuevo-obra" class="campo mt-1 h-9 px-2" [formField]="nuevo.obraId">
+                  @for (o of obrasCliente(); track o.id) {
+                    <option [value]="o.id">{{ o.nombre }}</option>
+                  }
+                </select>
+              </div>
+            }
             <div>
               <label for="nuevo-entrega" class="font-medium">Entrega</label>
               <input
@@ -298,19 +307,21 @@ export class EditorCotizacion implements OnInit {
     'inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-epico-oscuro transition-colors hover:bg-epico/5 focus-visible:outline-2 focus-visible:outline-epico';
   // La renta de maquinaria lleva días por equipo: se conserva tal cual (se ve como texto) y no se edita aquí.
   protected readonly servicios = SERVICIOS.filter((s) => s.id !== 'renta-maquinaria');
-  protected readonly resistencias = RESISTENCIAS;
+  /** Los concretos que están en Productos (sin backend, los del tarifario). */
+  protected readonly resistencias = computed(() => resistenciasDe(null));
   protected readonly etiquetas = etiquetas;
   protected readonly pesos = pesos;
   protected readonly tarifa = precioConcreto;
   protected readonly maquinaria = (p: PartidaCotizacion) => textoServicios({ ...p, servicios: [] });
   private readonly ventas = inject(VentasService);
-  protected readonly obra = (id: string) => this.ventas.obras().find((o) => o.id === id)?.nombre ?? '';
+  protected readonly obra = (id: string) => this.ventas.destinos().find((o) => o.id === id)?.nombre ?? '';
   protected readonly obrasCliente = computed(() => this.ventas.obras().filter((o) => o.clienteId === this.c().clienteId));
 
   protected readonly modelo = signal<Edicion>({ partidas: [], descuento: 0, traslado: { ...TRASLADO_POR_OMISION } });
   protected readonly f = form(this.modelo, (m) => {
     applyEach(m.partidas, (p) => {
-      required(p.precio, { message: 'Escribe el precio por m³.' });
+      // El pedido especial puede quedar por confirmar (no se envía ni se confirma así)
+      required(p.precio, { message: 'Escribe el precio por m³.', when: ({ valueOf }) => !valueOf(p).especial });
       min(p.precio, 1, { message: 'El precio debe ser mayor a cero.' });
       min(p.distancia, 0, { message: 'La distancia no puede ser negativa.' });
     });
@@ -342,11 +353,11 @@ export class EditorCotizacion implements OnInit {
   ngOnInit(): void {
     const c = this.c();
     this.modelo.set({
-      partidas: c.partidas.map((p) => ({ ...p, precio: p.precioM3 ?? precioConcreto(p), distancia: p.traslado?.distanciaKm ?? null })),
+      partidas: c.partidas.map((p) => ({ ...p, precio: p.precioM3 ?? (p.especial ? null : precioConcreto(p)), distancia: p.traslado?.distanciaKm ?? null })),
       descuento: c.descuento ?? 0,
       // La tarifa con que se cotizó (la de su primer producto con distancia) o la de siempre.
       traslado: (({ incluidosKm, precioKm }) => ({ incluidosKm, precioKm }))(
-        c.partidas.find((p) => p.traslado)?.traslado ?? TRASLADO_POR_OMISION,
+        c.partidas.find((p) => p.traslado)?.traslado ?? trasladoDe(c.plantaId),
       ),
     });
     this.inicial = JSON.stringify(this.modelo());

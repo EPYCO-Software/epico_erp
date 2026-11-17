@@ -1,6 +1,7 @@
 import { DestroyRef, Service, inject, signal } from '@angular/core';
-import { ViajeCamion, plantaPara } from 'ui';
+import { AUTH_API_URL, ViajeCamion, plantaPara } from 'ui';
 import { ProgramaViaje, simularViaje } from '../../features/pedidos/seguimiento';
+import { PedidosService } from './pedidos.service';
 
 // shortcut: viajes simulados del pedido demo PED-26-0140 (Torre Norte, planta Cozumel), relativos a la hora de
 // carga. Al conectar el ERP, viajesDe() devuelve los ViajeCamion reales y `ahora` solo sirve para "hace N min".
@@ -20,21 +21,32 @@ function programasDemo(t0: number): ProgramaViaje[] {
   ];
 }
 
-/** Camiones de cada pedido y su posición. Se actualiza cada pocos segundos. */
+/**
+ * Camiones de cada pedido y su posición. Con backend, los viajes (remisiones) de cada pedido de PedidosService, que se
+ * vuelven a pedir cada minuto; sin GPS de flota aún, solo horarios. Sin backend, simulados.
+ */
 @Service()
 export class SeguimientoService {
   private readonly _ahora = signal(new Date());
   /** Reloj compartido: posiciones simuladas y textos "hace N min". */
   readonly ahora = this._ahora.asReadonly();
-  private readonly programas = programasDemo(Date.now());
+  private readonly conServidor = !!inject(AUTH_API_URL, { optional: true });
+  private readonly pedidos = inject(PedidosService);
+  private readonly programas = this.conServidor ? [] : programasDemo(Date.now());
 
   constructor() {
     const reloj = setInterval(() => this._ahora.set(new Date()), 5000);
-    inject(DestroyRef).onDestroy(() => clearInterval(reloj));
+    // shortcut: sin tiempo real, los viajes se vuelven a pedir cada minuto (junto con los pedidos).
+    const viajes = this.conServidor ? setInterval(() => void this.pedidos.recargar(), 60_000) : undefined;
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(reloj);
+      clearInterval(viajes);
+    });
   }
 
   /** Viajes del pedido, ordenados por salida. Vacío si el pedido no tiene camiones asignados. */
   viajesDe(pedidoId: string): ViajeCamion[] {
+    if (this.conServidor) return this.pedidos.viajes().get(pedidoId) ?? [];
     const ahora = this._ahora();
     return this.programas.filter((p) => p.pedidoId === pedidoId).map((p) => simularViaje(p, ahora));
   }

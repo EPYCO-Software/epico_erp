@@ -137,13 +137,12 @@
             <input id="recordar" type="checkbox" class="casilla lg:size-6.5" [formField]="f.recordar" />
             <label for="recordar" class="text-carbon lg:text-[max(14px,calc(var(--u)*17))]">Mantener sesión</label>
           </div>
-          <button
-            type="button"
-            class="min-h-11 rounded font-medium text-epico underline underline-offset-4 hover:text-epico-oscuro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico lg:min-h-6 lg:text-[max(13px,calc(var(--u)*16))]"
-            (click)="aviso.set('Si no puedes entrar, contacta al administrador de sistemas de tu empresa.')"
+          <a
+            routerLink="/restablecer"
+            class="flex min-h-11 items-center rounded font-medium text-epico underline underline-offset-4 hover:text-epico-oscuro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico lg:min-h-6 lg:text-[max(13px,calc(var(--u)*16))]"
           >
-            ¿Problemas para ingresar?
-          </button>
+            ¿Olvidaste tu contraseña?
+          </a>
         </div>
 
         <div aria-live="polite" class="text-sm">

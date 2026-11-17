@@ -10,12 +10,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { Lock, MapPin, PencilLine, Phone, X } from 'lucide';
-import { ContactoObra, Icon, Mapa, Obra } from 'ui';
+import { Avatar, ContactoObra, Icon, Mapa, mensajeError, Obra, ObraForm, telefonoEnlace, telefonoVisible } from 'ui';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
 import { PedidosService, enCurso } from '../../core/services/pedidos.service';
-import { Avatar } from './avatar';
-import { ObraForm } from './obra-form';
-import { telefonoEnlace, telefonoVisible } from './telefono';
 
 @Component({
   selector: 'app-obra-panel',
@@ -52,7 +49,7 @@ import { telefonoEnlace, telefonoVisible } from './telefono';
             <p class="sr-only" aria-live="polite">{{ mensaje() }}</p>
 
             @if (editando()) {
-              <app-obra-form
+              <ui-obra-form
                 prefijo="panel-editar"
                 [nivelTitulo]="3"
                 [inicial]="o"
@@ -109,7 +106,7 @@ import { telefonoEnlace, telefonoVisible } from './telefono';
                 >
                   <h3 id="obra-responsable-titulo" class="font-bold">Responsable y contactos</h3>
                   <div class="mt-3 flex items-center gap-3">
-                    <app-avatar
+                    <ui-avatar-obra
                       class="size-14 text-xl"
                       [nombre]="o.responsable.nombre"
                       [foto]="o.responsable.foto"
@@ -209,12 +206,16 @@ export class ObraPanel {
     if (!this.bloqueada()) this.editando.set(true);
   }
 
-  protected guardar(datos: NuevaObra): void {
+  protected async guardar(datos: NuevaObra): Promise<void> {
     const obra = this.obra();
     if (!obra || this.bloqueada()) return;
-    this.obras.actualizar(obra.id, datos);
-    this.editando.set(false);
-    this.mensaje.set('Cambios guardados.');
+    try {
+      await this.obras.actualizar(obra.id, datos);
+      this.editando.set(false);
+      this.mensaje.set('Cambios guardados.');
+    } catch (e) {
+      this.mensaje.set(mensajeError(e));
+    }
   }
 
   protected cerrar(): void {

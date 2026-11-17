@@ -114,9 +114,9 @@ describe('CotizadorState: maquinaria y obra de entrega', () => {
     expect(s.textoAccion()).toBe('Agregar a cotización');
   });
 
-  it('la partida lleva la obra elegida; una obra nueva queda seleccionada', () => {
+  it('la partida lleva la obra elegida; una obra nueva queda seleccionada', async () => {
     const s = crear();
-    const obra = s.agregarObra({ nombre: 'Plaza Centro', direccion: 'Calle 5 #20', municipio: 'Mérida, Yuc.', responsable: { nombre: 'Ana Pérez' }, contactos: [{ nombre: 'Ana', lada: '+52', numero: '9991234567' }] });
+    const obra = await s.agregarObra({ nombre: 'Plaza Centro', direccion: 'Calle 5 #20', municipio: 'Mérida, Yuc.', responsable: { nombre: 'Ana Pérez' }, contactos: [{ nombre: 'Ana', lada: '+52', numero: '9991234567' }] });
     expect(s.obraId()).toBe(obra.id);
     s.elegirSolucion('losa');
     s.agregar();

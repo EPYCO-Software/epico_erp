@@ -1,11 +1,12 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Search } from 'lucide';
-import { Icon } from 'ui';
+import { Buscador, FiltrosElegidos, GrupoFiltro, enRango, opcionesDe, pasaFiltro } from 'ui';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
 import { DetalleLista } from './detalle-lista';
 import { ListaPrecios, ListasPreciosService, filtrarListas, textoPlantas } from './precios';
+import { permisosSesion } from '../../core/permisos';
 
 /**
  * Ventas → Productos → Listas de precios (/ventas/listas-de-precios), como en Odoo: varias listas, cada una con su
@@ -14,34 +15,26 @@ import { ListaPrecios, ListasPreciosService, filtrarListas, textoPlantas } from 
  */
 @Component({
   selector: 'app-listas-precios',
-  imports: [Icon, RouterLink, EnEncabezado, PanelLateral, DetalleLista],
+  imports: [Buscador, RouterLink, EnEncabezado, PanelLateral, DetalleLista],
   template: `
     <ng-template appEnEncabezado>
       <div
         class="flex items-center gap-3 md:grid md:grid-cols-[minmax(max-content,1fr)_minmax(0,640px)_minmax(max-content,1fr)] md:gap-6"
       >
         <div class="flex items-center gap-3">
-          <a routerLink="/ventas/listas-de-precios/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          @if (puede('ventas.listas_precios.crear')) {
+            <a routerLink="/ventas/listas-de-precios/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          }
           <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Listas de precios</h1>
         </div>
-        <form role="search" class="relative min-w-0 flex-1" (submit)="$event.preventDefault()">
-          <label for="buscar-lista" class="sr-only">Buscar listas por nombre, moneda o planta</label>
-          <ui-icon
-            [icono]="iconoBuscar"
-            [tamano]="17"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texto-suave max-sm:hidden"
-          />
-          <input
-            id="buscar-lista"
-            type="search"
-            autocomplete="off"
-            placeholder="Buscar…"
-            class="campo h-9 rounded-lg bg-white/65! pr-3 pl-3 text-[15px] sm:pl-9"
-            [value]="texto()"
-            (input)="texto.set($any($event.target).value)"
-            (keydown.escape)="texto.set('')"
-          />
-        </form>
+        <ui-buscador
+          class="min-w-0 flex-1"
+          idBuscar="buscar-lista"
+          etiqueta="Buscar listas por nombre, moneda o planta"
+          [(texto)]="texto"
+          [grupos]="grupos()"
+          [(filtros)]="filtros"
+        />
         <p class="text-right text-sm text-texto-suave max-md:sr-only" aria-live="polite">{{ conteo() }}</p>
       </div>
     </ng-template>
@@ -120,6 +113,8 @@ import { ListaPrecios, ListasPreciosService, filtrarListas, textoPlantas } from 
   `,
 })
 export default class ListasPrecios {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly servicio = inject(ListasPreciosService);
   private readonly router = inject(Router);
 
@@ -127,7 +122,33 @@ export default class ListasPrecios {
   protected readonly cajas = CAJAS_LISTA;
   protected readonly fila = FILA_LISTA;
   protected readonly texto = signal('');
-  protected readonly filas = computed(() => filtrarListas(this.servicio.listas(), this.texto()));
+  private readonly base = computed(() => filtrarListas(this.servicio.listas(), this.texto()));
+  /** Filtros por columna, en el buscador: planta (una lista sin plantas aplica en todas), moneda y si tiene líneas. */
+  protected readonly filtros = signal<FiltrosElegidos>({});
+  protected readonly grupos = computed<GrupoFiltro[]>(() => {
+    const base = this.base();
+    return [
+      { id: 'planta', titulo: 'Planta', opciones: opcionesDe(base.flatMap((l) => l.plantas), (p) => p, (p) => textoPlantas([p])) },
+      { id: 'moneda', titulo: 'Moneda', opciones: opcionesDe(base, (l) => l.moneda) },
+      {
+        id: 'lineas',
+        titulo: 'Líneas',
+        opciones: [
+          { id: 'si', nombre: 'Con líneas', n: base.filter((l) => l.reglas.length).length },
+          { id: 'no', nombre: 'Sin líneas', n: base.filter((l) => !l.reglas.length).length },
+        ],
+      },
+    ];
+  });
+  protected readonly filas = computed(() => {
+    const f = this.filtros();
+    return this.base().filter(
+      (l) =>
+        (!f['planta']?.length || !l.plantas.length || l.plantas.some((p) => f['planta'].includes(p))) &&
+        pasaFiltro(f, 'moneda', l.moneda) &&
+        pasaFiltro(f, 'lineas', l.reglas.length ? 'si' : 'no'),
+    );
+  });
   protected plantas(l: ListaPrecios): string {
     return textoPlantas(l.plantas);
   }

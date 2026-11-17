@@ -21,6 +21,7 @@ import { CambiarCobro } from './cambiar-cobro';
 import { CambiosPedido, VentasService, mensajeDe, pedidoEditable } from './datos';
 import { EditorPedido } from './editor-pedido';
 import { PlantaPedido } from './planta-pedido';
+import { permisosSesion } from '../../core/permisos';
 
 const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 'entregado'];
 
@@ -130,13 +131,16 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
           @if (p().facturaFolio; as factura) {
             <span class="text-texto-suave">{{ factura }}</span>
           }
-          <app-cambiar-cobro [p]="p()" (cambiado)="aviso.set($event)" />
+          @if (puede('ventas.pedidos.cobrar')) {
+            <app-cambiar-cobro [p]="p()" (cambiado)="aviso.set($event)" />
+          }
         </dd>
         <dt class="self-center text-texto-suave"><label for="metodo-pago">Método de pago</label></dt>
         <dd>
           <select
             id="metodo-pago"
-            class="campo h-9 w-auto px-2 text-sm"
+            class="campo h-9 w-auto px-2 text-sm disabled:opacity-60"
+            [disabled]="!puede('ventas.pedidos.editar')"
             (change)="cambiarMetodo($any($event.target).value)"
           >
             @for (m of metodos; track m.id) {
@@ -168,6 +172,8 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
   `,
 })
 export class DetallePedido {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly ventas = inject(VentasService);
 
   readonly p = input.required<PedidoVista>();
@@ -191,7 +197,7 @@ export class DetallePedido {
   protected readonly enlace =
     'rounded font-medium underline-offset-4 hover:text-epico hover:underline focus-visible:outline-2 focus-visible:outline-epico';
   protected readonly pesos = pesos;
-  protected readonly obras = this.ventas.obras;
+  protected readonly obras = this.ventas.destinos;
   protected readonly completa = computed(() => this.vista() === 'completa');
   protected readonly cotizacion = computed(() => this.ventas.cotizaciones().find((c) => c.id === this.p().cotizacionId));
   /** La partida de su cotización o, si es una orden directa, la suya. */
@@ -201,7 +207,7 @@ export class DetallePedido {
 
   // Editar: mientras no se entregue ni se cancele. Al pasar a otra orden se sale de la edición.
   private readonly injector = inject(Injector);
-  protected readonly puedeEditar = computed(() => pedidoEditable(this.p()));
+  protected readonly puedeEditar = computed(() => pedidoEditable(this.p()) && this.puede('ventas.pedidos.editar'));
   protected readonly editando = linkedSignal({ source: computed(() => this.p().id), computation: () => false });
   private readonly editor = viewChild(EditorPedido);
   private readonly botonEditar = viewChild<ElementRef<HTMLButtonElement>>('botonEditar');

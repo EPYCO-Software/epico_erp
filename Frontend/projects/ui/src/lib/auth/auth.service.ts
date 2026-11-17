@@ -8,6 +8,9 @@ export interface PlantaSesion {
   zonaHoraria: string;
   lat: number | null;
   lng: number | null;
+  /** Traslado de la planta: km incluidos en el precio y $ por km adicional por m³. */
+  kmIncluidos?: number;
+  precioKm?: number;
 }
 
 /** Razón social a la que el usuario tiene acceso, con sus plantas. */
@@ -30,6 +33,8 @@ export interface Sesion {
   empresas?: EmpresaSesion[];
   /** "*" = todos. */
   permisos?: string[];
+  /** Solo en el portal: el cliente del usuario (todo lo que ve es de él). */
+  cliente?: { id: string; nombre: string } | null;
 }
 
 export interface Credenciales {
@@ -55,37 +60,79 @@ export const AUTH_STORAGE_KEY = new InjectionToken<string>('AUTH_STORAGE_KEY');
 
 /**
  * Base de la API de autenticación ("/api/v1"). Si la app no la provee, el login es de demostración.
- * shortcut: el portal aún no la provee (el backend no tiene usuarios de portal); proveerla cuando los tenga.
  */
 export const AUTH_API_URL = new InjectionToken<string>('AUTH_API_URL');
+
+/** De qué app es el login (el backend no deja entrar a un usuario del portal en el ERP ni al revés). */
+export const AUTH_APP = new InjectionToken<'erp' | 'portal'>('AUTH_APP', { factory: () => 'erp' });
 
 @Service()
 export class AuthService {
   private readonly key = inject(AUTH_STORAGE_KEY);
+  private readonly app = inject(AUTH_APP);
   private readonly api = inject(AUTH_API_URL, { optional: true });
   private readonly _sesion = signal<Sesion | null>(this.leer());
   /** Un solo refresh a la vez: varias peticiones con 401 esperan el mismo. */
   private refrescando: Promise<Sesion | null> | null = null;
+  /** La validación de la sesión guardada, una vez por carga de la app (o la del login recién hecho). */
+  private validada: Promise<boolean> | null = null;
 
   readonly sesion = this._sesion.asReadonly();
   readonly autenticado = computed(() => this._sesion() !== null);
+  /** La última validación o renovación no llegó al servidor (red o 5xx): la sesión se conserva, pero no se entra. */
+  readonly sinConexion = signal(false);
 
   async login(c: Credenciales): Promise<Sesion> {
-    const sesion = this.api ? await this.pedir('/auth/login', { correo: c.correo, password: c.password, empresaId: c.empresaId }) : await demo(c);
+    const sesion = this.api ? await this.pedir('/auth/login', { correo: c.correo, password: c.password, empresaId: c.empresaId, app: this.app }) : await demo(c);
     this.guardar(sesion, c.recordar);
+    this.validada = Promise.resolve(true);
     return sesion;
   }
 
-  /** Token nuevo con el refresh token (que también cambia). Si ya no sirve, cierra la sesión y devuelve null. */
+  /**
+   * ¿La sesión guardada sigue viva en el servidor? Al abrir la app no se confía en lo que hay en el navegador: se
+   * renueva con el refresh token (el backend lo rechaza si se cerró la sesión, el usuario está inactivo, etc.) y
+   * así también llegan permisos y empresas al día. Si el servidor la rechaza, se borra. Si no responde (red o 5xx),
+   * se conserva pero no se entra (sinConexion) y se vuelve a intentar en la siguiente navegación. Sin backend (demo), sí.
+   */
+  validar(): Promise<boolean> {
+    if (!this._sesion()) return Promise.resolve(false);
+    if (!this.api) return Promise.resolve(true);
+    if (!this._sesion()?.refreshToken) {
+      this.logout();
+      return Promise.resolve(false);
+    }
+    this.validada ??= this.refrescar().then((s) => {
+      if (!s) this.validada = null;
+      return !!s;
+    });
+    return this.validada;
+  }
+
+  /**
+   * Token nuevo con el refresh token (que también cambia). Si el servidor ya no lo acepta, cierra la sesión y devuelve
+   * null; si no responde (red o 5xx), devuelve null sin cerrarla, para no sacar a todos cuando el servidor se cae.
+   */
   refrescar(): Promise<Sesion | null> {
     const refreshToken = this._sesion()?.refreshToken;
     if (!this.api || !refreshToken) return Promise.resolve(null);
     this.refrescando ??= this.pedir('/auth/refresh', { refreshToken })
       .then((s) => {
         this.guardar(s, this.recordada());
+        this.sinConexion.set(false);
         return s;
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        if (e instanceof ErrorAuth && (e.status === 0 || e.status >= 500)) {
+          this.sinConexion.set(true);
+          return null;
+        }
+        // Otra pestaña ya lo rotó (la sesión es la misma en localStorage): se usa el suyo, ya renovado.
+        const guardada = this.leer();
+        if (guardada?.refreshToken && guardada.refreshToken !== refreshToken) {
+          this._sesion.set(guardada);
+          return guardada;
+        }
         this.logout();
         return null;
       })
@@ -99,9 +146,23 @@ export class AuthService {
     if (this.api && refreshToken) void fetch(`${this.api}/auth/logout`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ refreshToken }) }).catch(() => {});
     this.borrar();
     this._sesion.set(null);
+    this.validada = null;
   }
 
-  private async pedir(ruta: string, cuerpo: object): Promise<Sesion> {
+  /** true si hay backend: sin él (demo) no se puede recuperar la contraseña. */
+  readonly conServidor = !!this.api;
+
+  /** Manda el enlace para restablecer la contraseña. El backend responde igual exista o no el correo. */
+  async olvide(correo: string): Promise<void> {
+    await this.pedir<void>('/auth/olvide', { correo });
+  }
+
+  /** Nueva contraseña con el token del enlace del correo; cierra todas las sesiones de ese usuario. */
+  async restablecer(token: string, password: string): Promise<void> {
+    await this.pedir<void>('/auth/restablecer', { token, password });
+  }
+
+  private async pedir<T = Sesion>(ruta: string, cuerpo: object): Promise<T> {
     let r: Response;
     try {
       r = await fetch(`${this.api}${ruta}`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(cuerpo) });
@@ -112,7 +173,7 @@ export class AuthService {
       const problema = (await r.json().catch(() => null)) as { detail?: string } | null;
       throw new ErrorAuth(r.status, problema?.detail ?? '');
     }
-    return (await r.json()) as Sesion;
+    return (r.status === 204 ? undefined : await r.json()) as T;
   }
 
   private guardar(sesion: Sesion, recordar: boolean): void {

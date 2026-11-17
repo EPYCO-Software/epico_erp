@@ -2,10 +2,11 @@ import { Component, ElementRef, Injector, afterNextRender, computed, inject, inp
 import { RouterLink } from '@angular/router';
 import { Maximize2, PencilLine, Plus, Trash2, X } from 'lucide';
 import { Icon } from 'ui';
-import { VentasService } from './datos';
+import { VentasService, mensajeDe } from './datos';
 import { EditorLista } from './editor-lista';
 import { DatosLista, ListaPrecios, ListasPreciosService, MONEDAS, ReglaPrecio, textoAplicaEn, textoPlantas, textoPrecio, textoVigencia } from './precios';
 import { ReglaPrecioDialogo } from './regla-precio';
+import { permisosSesion } from '../../core/permisos';
 
 /**
  * Una lista de precios, igual en la vista previa y en la vista completa: moneda y plantas (Editar las cambia con el
@@ -42,9 +43,11 @@ import { ReglaPrecioDialogo } from './regla-precio';
     @if (editando()) {
       <app-editor-lista class="mt-4 border-t border-acero/60 pt-4" [lista]="l()" (listo)="guardar($event)" (descartar)="terminar('')" />
     } @else {
-      <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
-        <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
-      </button>
+      @if (puede('ventas.listas_precios.editar')) {
+        <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
+          <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
+        </button>
+      }
       <dl class="mt-4 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt class="text-texto-suave">Moneda</dt>
         <dd>{{ monedas[l().moneda] }} ({{ l().moneda }})</dd>
@@ -96,15 +99,19 @@ import { ReglaPrecioDialogo } from './regla-precio';
           </tbody>
         </table>
       </div>
-      <button #botonAgregar type="button" class="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 font-semibold text-epico-oscuro transition-colors hover:bg-epico/5 focus-visible:outline-2 focus-visible:outline-epico" (click)="abrirRegla(null)">
-        <ui-icon [icono]="iconos.agregar" [tamano]="16" />Agregar una línea
-      </button>
+      @if (puede('ventas.listas_precios.editar')) {
+        <button #botonAgregar type="button" class="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 font-semibold text-epico-oscuro transition-colors hover:bg-epico/5 focus-visible:outline-2 focus-visible:outline-epico" (click)="abrirRegla(null)">
+          <ui-icon [icono]="iconos.agregar" [tamano]="16" />Agregar una línea
+        </button>
+      }
     </section>
 
     <app-regla-precio [listaId]="l().id" [moneda]="l().moneda" [regla]="reglaAbierta()" [(abierto)]="dialogo" />
   `,
 })
 export class DetalleLista {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly servicio = inject(ListasPreciosService);
   private readonly ventas = inject(VentasService);
   private readonly injector = inject(Injector);
@@ -148,9 +155,13 @@ export class DetalleLista {
     this.editando.set(true);
   }
 
-  protected guardar(d: DatosLista): void {
-    this.servicio.editar(this.l().id, d);
-    this.terminar('Cambios guardados.');
+  protected async guardar(d: DatosLista): Promise<void> {
+    try {
+      await this.servicio.editar(this.l().id, d);
+      this.terminar('Cambios guardados.');
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
   }
 
   /** Al salir de la edición el foco vuelve a "Editar". */
@@ -165,10 +176,14 @@ export class DetalleLista {
     this.dialogo.set(true);
   }
 
-  protected quitar(r: ReglaPrecio): void {
+  protected async quitar(r: ReglaPrecio): Promise<void> {
     if (!confirm(`¿Quitar la línea de ${this.aplicaEn(r)} (${this.precio(r)})?`)) return;
-    this.servicio.quitarRegla(this.l().id, r.id);
-    this.aviso.set('Línea quitada.');
+    try {
+      await this.servicio.quitarRegla(this.l().id, r.id);
+      this.aviso.set('Línea quitada.');
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
     this.botonAgregar().nativeElement.focus();
   }
 }

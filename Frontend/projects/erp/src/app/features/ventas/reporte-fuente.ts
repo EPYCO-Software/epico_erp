@@ -1,16 +1,17 @@
 import { Service, computed, inject } from '@angular/core';
+import { AUTH_API_URL } from 'ui';
 import { VENDEDORES, VentasService } from './datos';
 import { CLIENTES_HISTORIAL, LineaVenta, Nombres, historialDemo, hoy } from './reporte-datos';
 
 /**
- * De dónde leen los reportes (Ventas, Vendedores, Productos, Clientes): el historial de demostración y las órdenes del
- * ERP (sin canceladas, sin IVA), con los nombres y los precios de lista. Uno solo para todos: el historial se genera
- * una vez.
+ * De dónde leen los reportes (Ventas, Vendedores, Productos, Clientes): las órdenes del ERP (sin canceladas, sin IVA),
+ * con los nombres y los precios de lista. Sin backend (pruebas, demo) se suma un historial de demostración.
  */
 @Service()
 export class ReporteFuente {
   private readonly ventas = inject(VentasService);
-  private readonly historial = historialDemo(hoy());
+  private readonly demo = !inject(AUTH_API_URL, { optional: true });
+  private readonly historial = this.demo ? historialDemo(hoy()) : [];
 
   readonly lineas = computed<LineaVenta[]>(() => {
     const vendedorDe = new Map(this.ventas.cotizaciones().map((c) => [c.id, c.vendedorId]));
@@ -26,7 +27,7 @@ export class ReporteFuente {
           clienteId: p.clienteId,
           productoId: esp ? `${esp.tipoResistencia}-${esp.resistenciaKgCm2}` : p.producto,
           categoria: esp?.tipoResistencia === 'mr' ? 'concreto-mr' : 'concreto-fc',
-          vendedorId: vendedorDe.get(p.cotizacionId ?? '') ?? Object.keys(VENDEDORES)[0],
+          vendedorId: vendedorDe.get(p.cotizacionId ?? '') ?? (this.demo ? Object.keys(VENDEDORES)[0] : ''),
           cantidad: p.volumenM3,
           unidad: 'M³',
           m3: p.volumenM3,
@@ -38,7 +39,7 @@ export class ReporteFuente {
 
   readonly nombres = computed<Nombres>(() => ({
     producto: Object.fromEntries(this.ventas.productos().map((p) => [p.id, p.nombre])),
-    cliente: { ...CLIENTES_HISTORIAL, ...Object.fromEntries(this.ventas.clientes().map((c) => [c.id, c.nombre])) },
+    cliente: { ...(this.demo ? CLIENTES_HISTORIAL : {}), ...Object.fromEntries(this.ventas.clientes().map((c) => [c.id, c.nombre])) },
   }));
 
   /** Precio de lista de cada producto (para "precio obtenido vs. lista"). */

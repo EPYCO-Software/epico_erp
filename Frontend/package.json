@@ -4,7 +4,9 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve erp",
+    "erp": "ng serve erp",
     "start:erp": "ng serve erp",
+    "portal": "ng serve portal",
     "start:portal": "ng serve portal",
     "build:erp": "ng build erp",
     "build:portal": "ng build portal",

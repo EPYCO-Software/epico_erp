@@ -1,6 +1,6 @@
 import { Component, inject, input, signal } from '@angular/core';
 import { Download, FileText, Trash2, Upload } from 'lucide';
-import { DatosFacturacion, DocumentoFiscal, Icon, TipoDocumentoFiscal } from 'ui';
+import { DatosFacturacion, DocumentoFiscal, Icon, TipoDocumentoFiscal, mensajeError } from 'ui';
 import { PerfilService } from '../../core/services/perfil.service';
 
 const TIPOS: TipoDocumentoFiscal[] = [
@@ -34,11 +34,10 @@ let siguienteSelector = 0;
           <select
             [id]="idTipo"
             class="campo h-10 px-3 text-sm"
-            [value]="tipo()"
             (change)="cambiarTipo($event)"
           >
             @for (opcion of tipos; track opcion) {
-              <option [value]="opcion">{{ opcion }}</option>
+              <option [value]="opcion" [selected]="opcion === tipo()">{{ opcion }}</option>
             }
           </select>
         </div>
@@ -125,13 +124,13 @@ export class DocumentosFiscales {
     this.tipo.set((event.target as HTMLSelectElement).value as TipoDocumentoFiscal);
   }
 
-  protected seleccionarArchivos(event: Event): void {
+  protected async seleccionarArchivos(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const archivos = Array.from(input.files ?? []);
     input.value = '';
     if (!archivos.length) return;
 
-    const resultado = this.perfil.agregarDocumentos(this.datos().id, this.tipo(), archivos);
+    const resultado = await this.perfil.agregarDocumentos(this.datos().id, this.tipo(), archivos);
     this.error.set(
       resultado.rechazados.length
         ? `No se agregaron: ${resultado.rechazados.join(', ')}. Revisa el formato y que no excedan 10 MB.`
@@ -144,14 +143,24 @@ export class DocumentosFiscales {
     }
   }
 
-  protected eliminar(idDocumento: string): void {
-    this.perfil.eliminarDocumento(this.datos().id, idDocumento);
-    this.mensaje.set('Documento eliminado.');
-    this.error.set('');
+  protected async eliminar(idDocumento: string): Promise<void> {
+    try {
+      await this.perfil.eliminarDocumento(this.datos().id, idDocumento);
+      this.mensaje.set('Documento eliminado.');
+      this.error.set('');
+    } catch (e) {
+      this.error.set(mensajeError(e));
+    }
   }
 
-  protected descargar(documento: DocumentoFiscal): void {
-    const url = URL.createObjectURL(documento.archivo);
+  protected async descargar(documento: DocumentoFiscal): Promise<void> {
+    let contenido: Blob;
+    try {
+      contenido = await this.perfil.contenido(documento);
+    } catch (e) {
+      return this.error.set(mensajeError(e));
+    }
+    const url = URL.createObjectURL(contenido);
     const enlace = document.createElement('a');
     enlace.href = url;
     enlace.download = documento.nombre;

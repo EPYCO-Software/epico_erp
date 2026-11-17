@@ -1,3 +1,4 @@
+import { LugarDeEntrega } from './obra';
 import { PartidaCotizacion } from './cotizacion';
 
 export type EstadoPedido = 'programado' | 'en_planta' | 'en_ruta' | 'en_obra' | 'entregado' | 'cancelado';
@@ -23,6 +24,8 @@ export interface Pedido {
   clienteId: string;
   plantaId: string;
   obraId: string;
+  /** Sin obra: el lugar de entrega (viene de su cotización o de la orden directa). */
+  lugar?: LugarDeEntrega;
   producto: string;
   volumenM3: number;
   /** ISO 8601 con offset. */

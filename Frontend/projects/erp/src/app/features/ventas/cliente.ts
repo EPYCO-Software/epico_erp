@@ -1,4 +1,4 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { Historial } from '../../layout/historial';
@@ -48,4 +48,10 @@ export default class ClienteVenta {
   protected readonly c = computed(() => this.ventas.cliente(this.id()));
   protected readonly registro = registro;
   protected readonly cajas = CAJAS_VISTA;
+  private readonly detalle = viewChild(DetalleCliente);
+
+  /** canDeactivate de la ruta: editándolo, pregunta antes de salir (o de pasar a otro cliente). */
+  puedeSalir(): boolean {
+    return !this.detalle()?.enEdicion() || confirm('Estás editando este cliente. Si cambias, se perderán los cambios que no hayas guardado. ¿Continuar?');
+  }
 }

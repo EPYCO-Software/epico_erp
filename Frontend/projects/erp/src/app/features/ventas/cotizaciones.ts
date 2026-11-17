@@ -1,17 +1,16 @@
 import { Component, computed, inject, input, linkedSignal, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
-import { EyeOff, ListFilter, Search, X } from 'lucide';
-import { AuthService, CotizacionVista, EstadoCotizacion, FechaZonaPipe, Icon } from 'ui';
+import { EyeOff } from 'lucide';
+import { AuthService, CotizacionVista, EstadoCotizacion, FechaZonaPipe, Icon, Buscador, FiltrosElegidos, GrupoFiltro, enRango, opcionesDe, pasaFiltro } from 'ui';
 import { PlantasService } from '../../core/plantas';
 import { AvatarChat } from '../../layout/avatar-chat';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
 import { ESTADOS_COTIZACION, VentasService, filtrarCotizaciones, totalVigente } from './datos';
 import { DetalleCotizacion } from './detalle-cotizacion';
-import { FiltrosCotizaciones } from './filtros-cotizaciones';
+import { permisosSesion } from '../../core/permisos';
 
-const O = new Intl.ListFormat('es', { type: 'disjunction' });
 
 /**
  * Ventas → Cotizaciones: la vista de lista, como Odoo. La barra ("Nuevo", título y buscador con los filtros aplicados
@@ -23,14 +22,13 @@ const O = new Intl.ListFormat('es', { type: 'disjunction' });
 @Component({
   selector: 'app-cotizaciones',
   imports: [
-    DecimalPipe,
+    Buscador, DecimalPipe,
     RouterLink,
     FechaZonaPipe,
     Icon,
     AvatarChat,
     EnEncabezado,
     PanelLateral,
-    FiltrosCotizaciones,
     DetalleCotizacion,
   ],
   template: `
@@ -39,47 +37,21 @@ const O = new Intl.ListFormat('es', { type: 'disjunction' });
         class="flex items-center gap-3 md:grid md:grid-cols-[minmax(max-content,1fr)_minmax(0,640px)_minmax(max-content,1fr)] md:gap-6"
       >
         <div class="flex items-center gap-3">
-          <a routerLink="nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          @if (puede('ventas.cotizaciones.crear')) {
+            <a routerLink="nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          }
           <!-- En celular el título ya se ve marcado en el menú del módulo -->
           <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">{{ recibidas() ? 'Cotizaciones recibidas' : 'Cotizaciones' }}</h1>
         </div>
 
-        <form role="search" class="min-w-0 flex-1" (submit)="$event.preventDefault()">
-          <div
-            class="flex min-h-9 items-center gap-2 rounded-lg border border-acero-oscuro bg-white/65 pr-1 pl-3 transition-colors hover:border-carbon has-[input:focus]:border-epico has-[input:focus]:outline-3 has-[input:focus]:outline-epico/25"
-          >
-            <ui-icon [icono]="iconos.buscar" [tamano]="17" class="shrink-0 text-texto-suave max-sm:hidden" />
-            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-0.5">
-              @for (f of facetas(); track f.id) {
-                <span class="inline-flex h-6.5 items-center gap-1 rounded-md bg-epico/10 pl-2 text-sm font-medium text-epico-oscuro">
-                  <ui-icon [icono]="iconos.filtro" [tamano]="14" class="max-sm:hidden" />
-                  {{ f.texto }}
-                  <button
-                    type="button"
-                    class="flex size-6 items-center justify-center rounded-md transition-colors hover:bg-epico/15 focus-visible:outline-2 focus-visible:outline-epico"
-                    [attr.aria-label]="'Quitar filtro: ' + f.texto"
-                    (click)="f.quitar(); entrada.focus()"
-                  >
-                    <ui-icon [icono]="iconos.quitar" [tamano]="14" />
-                  </button>
-                </span>
-              }
-              <label for="buscar-cotizacion" class="sr-only">Buscar cotizaciones por folio, cliente u obra</label>
-              <input
-                #entrada
-                id="buscar-cotizacion"
-                type="search"
-                autocomplete="off"
-                placeholder="Buscar…"
-                class="h-7 min-w-14 flex-1 bg-transparent text-[15px] text-carbon outline-none placeholder:text-texto-suave [&::-webkit-search-cancel-button]:appearance-none"
-                [value]="texto()"
-                (input)="texto.set($any($event.target).value)"
-                (keydown.escape)="texto.set('')"
-              />
-            </div>
-            <app-filtros-cotizaciones class="h-7 shrink-0" [(soloMias)]="soloMias" [(estados)]="elegidos" />
-          </div>
-        </form>
+        <ui-buscador
+          class="min-w-0 flex-1"
+          idBuscar="buscar-cotizacion"
+          etiqueta="Buscar cotizaciones por folio, cliente u obra"
+          [(texto)]="texto"
+          [grupos]="grupos()"
+          [(filtros)]="filtros"
+        />
 
         <p class="text-right text-sm text-texto-suave max-md:sr-only" aria-live="polite">{{ conteo() }}</p>
       </div>
@@ -199,30 +171,43 @@ const O = new Intl.ListFormat('es', { type: 'disjunction' });
   `,
 })
 export default class Cotizaciones {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly plantas = inject(PlantasService);
   // El vendedor es el usuario: con API, su id; en la demo, su correo.
   private readonly correo = ((u) => u?.id ?? u?.correo ?? null)(inject(AuthService).sesion()?.usuario);
 
   protected readonly estados = ESTADOS_COTIZACION;
-  protected readonly iconos = { buscar: Search, filtro: ListFilter, quitar: X, oculta: EyeOff };
+  protected readonly iconos = { oculta: EyeOff };
 
   protected readonly texto = signal('');
   /** De la ruta (data.recibidas): Ventas → Cotizaciones recibidas, las que pidieron los clientes en el portal. */
   readonly recibidas = input(false);
-  /** Como Odoo: la lista abre con "Mis cotizaciones"; las recibidas, con todas las recibidas (aún sin responder). */
-  protected readonly soloMias = linkedSignal(() => !this.recibidas());
-  protected readonly elegidos = linkedSignal<EstadoCotizacion[]>(() => (this.recibidas() ? ['recibida'] : []));
+  /**
+   * Filtros por columna en el buscador. Como Odoo: la lista abre con "Mis cotizaciones" (vendedor = el usuario); las
+   * recibidas, con todas las recibidas (aún sin responder).
+   */
+  protected readonly filtros = linkedSignal<FiltrosElegidos>((): FiltrosElegidos =>
+    this.recibidas() ? { estado: ['recibida'] } : this.correo ? { vendedor: [this.correo] } : {},
+  );
 
   private readonly ventas = inject(VentasService);
   private readonly router = inject(Router);
-  protected readonly filas = computed(() =>
-    filtrarCotizaciones(this.ventas.cotizaciones(), {
-      plantas: this.plantas.seleccion(),
-      vendedorId: this.soloMias() ? this.correo : null,
-      estados: this.elegidos(),
-      texto: this.texto(),
-    }),
+  /** Las de las plantas elegidas que coinciden con el texto: de ellas salen los conteos de cada filtro. */
+  private readonly base = computed(() =>
+    filtrarCotizaciones(this.ventas.cotizaciones(), { plantas: this.plantas.seleccion(), vendedorId: null, estados: [], texto: this.texto() }),
   );
+  protected readonly filas = computed(() => {
+    const f = this.filtros();
+    return this.base().filter(
+      (c) =>
+        pasaFiltro(f, 'vendedor', c.vendedorId) &&
+        pasaFiltro(f, 'estado', c.estado) &&
+        pasaFiltro(f, 'planta', c.plantaId) &&
+        enRango(f, 'fecha', c.fecha) &&
+        enRango(f, 'total', c.total),
+    );
+  });
   protected readonly total = computed(() => totalVigente(this.filas()));
 
   /** Las marcadas con las casillas; se desmarcan al cambiar la búsqueda, los filtros o las plantas, como en Odoo. */
@@ -235,19 +220,32 @@ export default class Cotizaciones {
     return n === 1 ? '1 cotización' : `${n} cotizaciones`;
   });
 
-  /** Filtros aplicados, como etiquetas dentro del buscador; la X los quita. */
-  protected readonly facetas = computed(() => {
-    const facetas: { id: string; texto: string; quitar: () => void }[] = [];
-    if (this.soloMias()) facetas.push({ id: 'mias', texto: 'Mis cotizaciones', quitar: () => this.soloMias.set(false) });
-    const elegidos = (Object.keys(ESTADOS_COTIZACION) as EstadoCotizacion[]).filter((e) => this.elegidos().includes(e));
-    if (elegidos.length) {
-      const texto = O.format(elegidos.map((e) => ESTADOS_COTIZACION[e].nombre));
-      facetas.push({ id: 'estado', texto, quitar: () => this.elegidos.set([]) });
-    }
-    return facetas;
+  /** Un grupo por columna: vendedor (el usuario, "Mis cotizaciones", primero), estado, planta, fecha y total. */
+  protected readonly grupos = computed<GrupoFiltro[]>(() => {
+    const base = this.base();
+    const nombres = new Map(base.map((c) => [c.vendedorId, c.vendedorNombre]));
+    const vendedores = opcionesDe(base, (c) => c.vendedorId, (id) => (id === this.correo ? 'Mis cotizaciones' : (nombres.get(id) ?? id)));
+    if (this.correo && !vendedores.some((v) => v.id === this.correo)) vendedores.push({ id: this.correo, nombre: 'Mis cotizaciones', n: 0 });
+    vendedores.sort((a, b) => Number(b.id === this.correo) - Number(a.id === this.correo));
+    const plantas = new Map(base.map((c) => [c.plantaId, c.plantaNombre]));
+    return [
+      { id: 'vendedor', titulo: 'Vendedor', opciones: vendedores },
+      {
+        id: 'estado',
+        titulo: 'Estado',
+        opciones: (Object.keys(ESTADOS_COTIZACION) as EstadoCotizacion[]).map((id) => ({
+          id,
+          nombre: ESTADOS_COTIZACION[id].nombre,
+          n: base.filter((c) => c.estado === id).length,
+        })),
+      },
+      { id: 'planta', titulo: 'Planta', opciones: opcionesDe(base, (c) => c.plantaId, (id) => plantas.get(id) ?? id) },
+      { id: 'fecha', titulo: 'Fecha', rango: 'fecha' },
+      { id: 'total', titulo: 'Total', rango: 'numero', prefijo: '$' },
+    ];
   });
 
-  protected readonly obras = this.ventas.obras;
+  protected readonly obras = this.ventas.destinos;
   protected readonly fila = FILA_LISTA;
   protected readonly cajas = CAJAS_LISTA;
   protected readonly vista = vistaPrevia();

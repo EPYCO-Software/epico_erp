@@ -1,7 +1,8 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { MonitorCheck, Search } from 'lucide';
-import { Cliente, Icon } from 'ui';
+import { AuthService, Cliente, Icon, Buscador, FiltrosElegidos, GrupoFiltro, enRango, opcionesDe, pasaFiltro } from 'ui';
+import { TODOS, tiene } from '../../core/permisos';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
 import { VentasService, filtrarClientes, telefono } from './datos';
@@ -14,31 +15,26 @@ import { DetalleCliente } from './detalle-cliente';
  */
 @Component({
   selector: 'app-clientes-ventas',
-  imports: [Icon, EnEncabezado, PanelLateral, DetalleCliente],
+  imports: [Buscador, Icon, EnEncabezado, PanelLateral, DetalleCliente, RouterLink],
   template: `
     <ng-template appEnEncabezado>
       <div
         class="flex items-center gap-3 md:grid md:grid-cols-[minmax(max-content,1fr)_minmax(0,640px)_minmax(max-content,1fr)] md:gap-6"
       >
-        <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Clientes</h1>
-        <form role="search" class="relative min-w-0 flex-1" (submit)="$event.preventDefault()">
-          <label for="buscar-cliente" class="sr-only">Buscar clientes por nombre, razón social, RFC o contacto</label>
-          <ui-icon
-            [icono]="iconos.buscar"
-            [tamano]="17"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texto-suave max-sm:hidden"
-          />
-          <input
-            id="buscar-cliente"
-            type="search"
-            autocomplete="off"
-            placeholder="Buscar…"
-            class="campo h-9 rounded-lg bg-white/65! pr-3 pl-3 text-[15px] sm:pl-9"
-            [value]="texto()"
-            (input)="texto.set($any($event.target).value)"
-            (keydown.escape)="texto.set('')"
-          />
-        </form>
+        <div class="flex items-center gap-3">
+          @if (puedeCrear()) {
+            <a routerLink="/ventas/clientes/nuevo" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          }
+          <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Clientes</h1>
+        </div>
+        <ui-buscador
+          class="min-w-0 flex-1"
+          idBuscar="buscar-cliente"
+          etiqueta="Buscar clientes por nombre, razón social, RFC o contacto"
+          [(texto)]="texto"
+          [grupos]="grupos()"
+          [(filtros)]="filtros"
+        />
         <p class="text-right text-sm text-texto-suave max-md:sr-only" aria-live="polite">{{ conteo() }}</p>
       </div>
     </ng-template>
@@ -147,6 +143,9 @@ export default class ClientesVentas {
   private readonly ventas = inject(VentasService);
 
   protected readonly iconos = { buscar: Search, portal: MonitorCheck };
+  /** Sin permiso de crear clientes no se ofrece "Nuevo" (el backend lo rechazaría). */
+  private readonly auth = inject(AuthService);
+  protected readonly puedeCrear = computed(() => tiene(this.auth.sesion()?.permisos ?? [TODOS], 'ventas.clientes.crear'));
   protected readonly fila = FILA_LISTA;
   protected readonly cajas = CAJAS_LISTA;
   protected readonly telefono = telefono;
@@ -155,7 +154,34 @@ export default class ClientesVentas {
     this.ventas.obras().reduce((m, o) => m.set(o.clienteId, (m.get(o.clienteId) ?? 0) + 1), new Map<string, number>()),
   );
   protected readonly texto = signal('');
-  protected readonly filas = computed(() => filtrarClientes(this.ventas.clientes(), this.texto()));
+  private readonly base = computed(() => filtrarClientes(this.ventas.clientes(), this.texto()));
+  /** Filtros por columna, en el buscador: con o sin RFC, obras y portal. */
+  protected readonly filtros = signal<FiltrosElegidos>({});
+  private readonly columnas = {
+    rfc: (c: Cliente) => (c.empresa.rfc ? 'si' : 'no'),
+    obras: (c: Cliente) => ((this.obras().get(c.id) ?? 0) > 0 ? 'si' : 'no'),
+    portal: (c: Cliente) => (c.portal ? 'si' : 'no'),
+  };
+  protected readonly grupos = computed<GrupoFiltro[]>(() => {
+    const base = this.base();
+    const n = (col: keyof typeof this.columnas, v: string) => base.filter((c) => this.columnas[col](c) === v).length;
+    const siNo = (id: keyof typeof this.columnas, titulo: string, si: string, no: string) => ({
+      id,
+      titulo,
+      opciones: [
+        { id: 'si', nombre: si, n: n(id, 'si') },
+        { id: 'no', nombre: no, n: n(id, 'no') },
+      ],
+    });
+    return [
+      siNo('rfc', 'RFC', 'Con RFC', 'Sin RFC'),
+      siNo('obras', 'Obras', 'Con obras', 'Sin obras'),
+      siNo('portal', 'Portal', 'Conectado al portal', 'Sin portal'),
+    ];
+  });
+  protected readonly filas = computed(() =>
+    this.base().filter((c) => (Object.keys(this.columnas) as (keyof typeof this.columnas)[]).every((col) => pasaFiltro(this.filtros(), col, this.columnas[col](c)))),
+  );
   /** Los marcados con las casillas; se desmarcan al cambiar la búsqueda, como en Odoo. */
   protected readonly casillas = seleccionMultiple(this.filas);
   protected readonly conteo = computed(() => {
@@ -170,9 +196,9 @@ export default class ClientesVentas {
 
   private readonly detalle = viewChild(DetalleCliente);
 
-  /** Con cambios sin guardar en el editor de la vista previa, se pregunta antes de dejarla. */
+  /** Con la vista previa en edición, se pregunta antes de dejarla (el otro cliente abre sin editar). */
   private puedeDejarla(): boolean {
-    return !this.detalle()?.sinGuardar() || confirm('Hay cambios sin guardar en este cliente. ¿Descartarlos?');
+    return !this.detalle()?.enEdicion() || confirm('Estás editando este cliente. Si cambias, se perderán los cambios que no hayas guardado. ¿Continuar?');
   }
 
   protected abrir(c: Cliente): void {

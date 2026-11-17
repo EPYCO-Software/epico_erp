@@ -55,6 +55,8 @@ export const tituloActividad = (a: Pick<Actividad, 'tipo' | 'resumen'>) =>
 
 let siguiente = 1;
 const nuevoId = () => `h-${Date.now().toString(36)}-${siguiente++}`;
+/** Las actividades creadas en memoria (registro que no es del backend) llevan id local. */
+const esLocal = (id: string) => id.startsWith('h-');
 const dia = (fecha: string) => fecha.split('-').reverse().join('/');
 
 /**
@@ -80,13 +82,27 @@ export class HistorialService {
    * Con API: el hilo de los registros de Ventas vive en el backend (lo genera al guardar); VentasService lo conecta.
    * Sin ella (pruebas, demo), todo queda en memoria.
    */
-  remoto: { cargar(registro: string): Promise<EventoHistorial[] | null>; nota(registro: string, texto: string): Promise<boolean> } | null = null;
+  remoto: {
+    cargar(registro: string): Promise<EventoHistorial[] | null>;
+    nota(registro: string, texto: string): Promise<boolean>;
+    /** Pendientes del registro; null si el registro no es del backend. */
+    actividades(registro: string): Promise<Actividad[] | null>;
+    /** La guarda (hecha = ya realizada); null si el registro no es del backend. */
+    programar(a: NuevaActividad, hecha: boolean): Promise<Actividad | null>;
+    cerrar(a: Actividad, como: 'hecha' | 'cancelada'): Promise<void>;
+  } | null = null;
+  /** Con API: a quién se puede asignar una actividad (los usuarios de la organización). */
+  readonly personas = signal<string[] | null>(null);
   /** Los eventos que vinieron del backend (se reemplazan al recargar; los locales, como actividades, se quedan). */
   private readonly delServidor = new Set<string>();
 
   /** Trae del backend el hilo de un registro (si es de los que tiene); sin API no hace nada. */
   async cargar(registro: string): Promise<void> {
-    const eventos = await this.remoto?.cargar(registro).catch(() => null);
+    const [eventos, actividades] = await Promise.all([
+      this.remoto?.cargar(registro).catch(() => null),
+      this.remoto?.actividades(registro).catch(() => null),
+    ]);
+    if (actividades) this.actividades.update((lista) => [...lista.filter((a) => a.registro !== registro), ...actividades]);
     if (!eventos) return;
     this.eventos.update((lista) => [...lista.filter((e) => !(e.registro === registro && this.delServidor.has(e.id))), ...eventos]);
     for (const e of eventos) this.delServidor.add(e.id);
@@ -132,7 +148,11 @@ export class HistorialService {
       .catch(() => this.registrar(registro, { texto, nota: true }));
   }
 
-  programar(a: NuevaActividad): void {
+  /** Con API se guarda allá (si falla, lanza el error y no queda nada a medias). */
+  async programar(a: NuevaActividad): Promise<void> {
+    // Con backend, él escribe "Actividad programada" en el hilo del registro: se vuelve a leer
+    const remota = await this.remoto?.programar(a, false);
+    if (remota) return this.cargar(a.registro);
     this.actividades.update((lista) => [...lista, { ...a, id: nuevoId() }]);
     this.registrar(a.registro, {
       actividad: true,
@@ -142,7 +162,12 @@ export class HistorialService {
   }
 
   /** Hecha (programada antes o directo desde el diálogo): sale de las pendientes y queda en el historial. */
-  marcarHecha(a: NuevaActividad & { id?: string }): void {
+  async marcarHecha(a: NuevaActividad & { id?: string }): Promise<void> {
+    if (this.remoto && a.id && !esLocal(a.id)) {
+      await this.remoto.cerrar(a as Actividad, 'hecha');
+      return this.cargar(a.registro);
+    }
+    if (!a.id && (await this.remoto?.programar(a, true))) return this.cargar(a.registro);
     if (a.id) this.actividades.update((lista) => lista.filter((x) => x.id !== a.id));
     this.registrar(a.registro, {
       actividad: true,
@@ -151,7 +176,11 @@ export class HistorialService {
     });
   }
 
-  cancelar(a: Actividad): void {
+  async cancelar(a: Actividad): Promise<void> {
+    if (this.remoto && !esLocal(a.id)) {
+      await this.remoto.cerrar(a, 'cancelada');
+      return this.cargar(a.registro);
+    }
     this.actividades.update((lista) => lista.filter((x) => x.id !== a.id));
     this.registrar(a.registro, { actividad: true, texto: `Actividad cancelada: ${tituloActividad(a)}` });
   }

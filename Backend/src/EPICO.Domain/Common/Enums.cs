@@ -41,3 +41,8 @@ public enum EstatusPlanta { NoEnviado, Enviado, Confirmado, Actualizacion, Recha
 public enum EstadoViaje { Cargando, EnRuta, EnObra, Regresando, Terminado }
 
 public enum TipoImpuesto { Traslado, Retencion }
+
+/// <summary>Ninguna (puerto 25/1025), StartTls (587) o Ssl (465).</summary>
+public enum SeguridadSmtp { Ninguna, StartTls, Ssl }
+
+public enum EstadoCorreo { Pendiente, Enviado, Fallido }

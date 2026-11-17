@@ -15,8 +15,9 @@ import {
 import { Router } from '@angular/router';
 import { FormField, form, submit, validate } from '@angular/forms/signals';
 import { ChevronDown, Mail, Monitor, Phone, X } from 'lucide';
-import { AuthService, FechaZonaPipe, FieldError, Icon, iniciales } from 'ui';
+import { AUTH_API_URL, AuthService, FechaZonaPipe, FieldError, Icon, iniciales } from 'ui';
 import { PlantasService } from '../core/plantas';
+import { PreferenciasUsuario, SesionAbierta } from '../core/preferencias-usuario';
 import { moverEntrePestanas } from './pestanas';
 
 interface ValoresPreferencias {
@@ -186,7 +187,7 @@ export function nombreDispositivo(ua: string): string {
                 <label for="pref-planta" class="font-semibold sm:pt-2">Planta predeterminada</label>
                 <div class="relative">
                   <select id="pref-planta" class="campo h-10 appearance-none pr-10 pl-3 text-sm" [formField]="f.plantaId">
-                    @for (r of plantas.razones; track r.id) {
+                    @for (r of plantas.razones(); track r.id) {
                       <optgroup [label]="r.nombre">
                         @for (p of r.plantas; track p.id) {
                           <option [value]="p.id">{{ p.nombre }}</option>
@@ -273,10 +274,32 @@ export function nombreDispositivo(ua: string): string {
                   <p class="text-sm text-texto-suave">{{ s.detalle }}</p>
                 </div>
                 <div>
-                  <button type="button" [class]="botonSecundario" (click)="aviso.set(s.id)">{{ s.boton }}</button>
-                  <!-- shortcut: sin backend todavía; solo se avisa. -->
+                  @if (s.id === 'contrasena' && conServidor && aviso() === s.id) {
+                    <!-- Dentro del formulario del diálogo: sin <form> propio, se envía con su botón -->
+                    <div class="grid max-w-sm gap-3" role="group" aria-label="Cambiar contraseña">
+                      <label class="grid gap-1 text-sm font-semibold">
+                        Contraseña actual
+                        <input type="password" autocomplete="current-password" class="campo h-10 px-3 font-normal" [value]="actual()" (input)="actual.set($any($event.target).value)" />
+                      </label>
+                      <label class="grid gap-1 text-sm font-semibold">
+                        Contraseña nueva (mínimo 8 caracteres)
+                        <input type="password" autocomplete="new-password" minlength="8" class="campo h-10 px-3 font-normal" [value]="nueva()" (input)="nueva.set($any($event.target).value)" />
+                      </label>
+                      <div class="flex flex-wrap gap-2">
+                        <button type="button" [class]="botonSecundario" [disabled]="cambiando()" [attr.aria-busy]="cambiando()" (click)="cambiarPassword()">Guardar contraseña</button>
+                        <button type="button" [class]="botonSecundario" (click)="aviso.set('')">Cancelar</button>
+                      </div>
+                    </div>
+                  } @else {
+                    <button type="button" [class]="botonSecundario" (click)="aviso.set(s.id)">{{ s.boton }}</button>
+                  }
                   <p class="mt-1.5 text-sm text-texto-suave empty:hidden" aria-live="polite">
-                    {{ aviso() === s.id ? 'Disponible cuando el ERP se conecte al servidor.' : '' }}
+                    @if (s.id === 'contrasena') {
+                      {{ conServidor ? resultadoPassword() : aviso() === s.id ? 'Disponible cuando el ERP se conecte al servidor.' : '' }}
+                    } @else {
+                      <!-- shortcut: la verificación en dos pasos aún no existe en el backend. -->
+                      {{ aviso() === s.id ? 'Disponible pronto.' : '' }}
+                    }
                   </p>
                 </div>
               </div>
@@ -286,21 +309,46 @@ export function nombreDispositivo(ua: string): string {
                 <p class="font-semibold">Dispositivos</p>
                 <p class="text-sm text-texto-suave">Revisa que todos sean tuyos.</p>
               </div>
-              <!-- shortcut: solo este dispositivo; las demás sesiones vendrán del backend. -->
-              <div class="flex flex-wrap items-center gap-4 rounded-xl border border-acero/60 bg-white/60 px-4 py-3">
-                <ui-icon [icono]="iconos.equipo" [tamano]="28" [grosor]="1.6" />
-                <div class="min-w-0 flex-1">
-                  <p class="font-semibold">{{ dispositivo }}</p>
-                  <p class="flex items-center gap-1.5 text-sm text-texto-suave">
-                    <span class="size-2 rounded-full bg-correcto" aria-hidden="true"></span>Este dispositivo · activo ahora
-                  </p>
-                </div>
-                <button type="button" [class]="botonSecundario" (click)="cerrarSesion()">Cerrar sesión</button>
+              <div class="grid gap-3">
+                @if (sesiones(); as lista) {
+                  <ul class="grid gap-3" aria-label="Sesiones abiertas">
+                    @for (s of lista; track s.id) {
+                      <li class="flex flex-wrap items-center gap-4 rounded-xl border border-acero/60 bg-white/60 px-4 py-3">
+                        <ui-icon [icono]="iconos.equipo" [tamano]="28" [grosor]="1.6" />
+                        <div class="min-w-0 flex-1">
+                          <p class="font-semibold">{{ s.agente ? nombreDispositivo(s.agente) : 'Dispositivo desconocido' }}</p>
+                          <p class="flex flex-wrap items-center gap-1.5 text-sm text-texto-suave">
+                            @if (s.actual) {
+                              <span class="size-2 rounded-full bg-correcto" aria-hidden="true"></span>Este dispositivo ·
+                            }
+                            Desde el {{ s.creadaEn | fechaZona: zona() }}{{ s.ip ? ' · ' + s.ip : '' }}
+                          </p>
+                        </div>
+                        <button type="button" [class]="botonSecundario" (click)="s.actual ? cerrarSesion() : cerrarOtra(s)">
+                          Cerrar sesión<span class="sr-only"> en {{ s.agente ? nombreDispositivo(s.agente) : 'ese dispositivo' }}</span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <div class="flex flex-wrap items-center gap-4 rounded-xl border border-acero/60 bg-white/60 px-4 py-3">
+                    <ui-icon [icono]="iconos.equipo" [tamano]="28" [grosor]="1.6" />
+                    <div class="min-w-0 flex-1">
+                      <p class="font-semibold">{{ dispositivo }}</p>
+                      <p class="flex items-center gap-1.5 text-sm text-texto-suave">
+                        <span class="size-2 rounded-full bg-correcto" aria-hidden="true"></span>Este dispositivo · activo ahora
+                      </p>
+                    </div>
+                    <button type="button" [class]="botonSecundario" (click)="cerrarSesion()">Cerrar sesión</button>
+                  </div>
+                }
+                <p class="text-sm text-texto-suave empty:hidden" aria-live="polite">{{ avisoSesiones() }}</p>
               </div>
             </div>
           </div>
         </div>
 
+        <p role="alert" class="px-6 pb-2 text-sm font-medium text-[#8E332C] empty:hidden">{{ error() }}</p>
         <div class="flex flex-wrap gap-3 border-t border-acero/50 px-6 py-4">
           <button type="submit" class="boton-primario h-11 w-auto px-5">Actualizar preferencias</button>
           <button type="button" [class]="botonSecundario + ' h-11'" (click)="abierto.set(false)">Descartar</button>
@@ -314,6 +362,18 @@ export class Preferencias {
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   protected readonly plantas = inject(PlantasService);
+  private readonly prefs = inject(PreferenciasUsuario);
+  protected readonly conServidor = !!inject(AUTH_API_URL, { optional: true });
+  protected readonly error = signal('');
+  protected readonly actual = signal('');
+  protected readonly nueva = signal('');
+  protected readonly cambiando = signal(false);
+  protected readonly resultadoPassword = signal('');
+  /** Con backend, las sesiones abiertas del usuario; null = solo este dispositivo. */
+  protected readonly sesiones = signal<SesionAbierta[] | null>(null);
+  protected readonly avisoSesiones = signal('');
+  protected readonly nombreDispositivo = nombreDispositivo;
+  protected readonly zona = computed(() => this.plantas.actual().zonaHoraria);
 
   readonly abierto = model(false);
 
@@ -339,7 +399,7 @@ export class Preferencias {
   protected readonly correo = computed(() => this.auth.sesion()?.usuario.correo ?? '');
   protected readonly iniciales = computed(() => iniciales(this.nombre(), 2));
   protected readonly plantasElegidas = computed(() =>
-    this.plantas.razones.flatMap((r) => r.plantas).filter((p) => this.plantas.seleccion().includes(p.id)),
+    this.plantas.razones().flatMap((r) => r.plantas).filter((p) => this.plantas.seleccion().includes(p.id)),
   );
 
   protected readonly pestana = signal<Pestana>('preferencias');
@@ -347,16 +407,21 @@ export class Preferencias {
   /** Hora de referencia para la zona de cada planta: la de cuando se abrió el diálogo. */
   protected readonly ahora = signal('');
 
-  // shortcut: las preferencias viven en este componente (se pierden al recargar o salir) y nada las usa todavía;
-  // con backend, cargarlas y guardarlas por usuario, y aplicar la planta predeterminada al entrar.
-  private readonly guardadas = signal<ValoresPreferencias>({
-    telefono: '',
-    firma: this.nombre(),
-    notificaciones: 'erp',
-    plantaId: this.plantas.actualId(),
-    fueraDesde: '',
-    fueraHasta: '',
-    fueraMensaje: '',
+  // Con backend se guardan por usuario (PreferenciasUsuario: /me/preferencias y el teléfono en /me); la planta
+  // predeterminada se aplica al entrar (PlantasService). shortcut: firma, notificaciones y "fuera de la oficina" aún
+  // no los usa nada.
+  private readonly guardadas = computed<ValoresPreferencias>(() => {
+    const p = this.prefs.valores().preferencias ?? {};
+    return {
+      firma: this.nombre(),
+      notificaciones: 'erp',
+      plantaId: this.plantas.actualId(),
+      fueraDesde: '',
+      fueraHasta: '',
+      fueraMensaje: '',
+      ...p,
+      telefono: this.prefs.yo()?.telefono ?? p.telefono ?? '',
+    };
   });
   protected readonly modelo = signal<ValoresPreferencias>({ ...this.guardadas() });
   protected readonly f = form(this.modelo, (p) => {
@@ -379,6 +444,10 @@ export class Preferencias {
           this.f().reset({ ...this.guardadas() });
           this.pestana.set('preferencias');
           this.aviso.set('');
+          this.error.set('');
+          this.resultadoPassword.set('');
+          this.avisoSesiones.set('');
+          if (this.conServidor) void this.prefs.sesiones().then((s) => this.sesiones.set(s), () => this.sesiones.set(null));
           this.ahora.set(new Date().toISOString());
         });
         d.showModal();
@@ -394,8 +463,16 @@ export class Preferencias {
 
   protected async guardar(event: Event): Promise<void> {
     event.preventDefault();
+    this.error.set('');
     await submit(this.f, async () => {
-      this.guardadas.set({ ...this.modelo() });
+      const m = this.modelo();
+      try {
+        await this.prefs.guardarTelefono(m.telefono.trim());
+        await this.prefs.guardar({ preferencias: { ...m, telefono: m.telefono.trim() } });
+      } catch {
+        this.error.set('No se pudieron guardar las preferencias. Intenta de nuevo.');
+        return undefined;
+      }
       this.abierto.set(false);
       return undefined;
     });
@@ -403,6 +480,35 @@ export class Preferencias {
     if (this.f.fueraHasta().invalid()) {
       this.pestana.set('calendario');
       afterNextRender(() => document.getElementById('pref-fuera-hasta')?.focus(), { injector: this.injector });
+    }
+  }
+
+  protected async cambiarPassword(): Promise<void> {
+    if (this.nueva().length < 8) return this.resultadoPassword.set('La contraseña nueva debe tener al menos 8 caracteres.');
+    this.cambiando.set(true);
+    try {
+      await this.prefs.cambiarPassword(this.actual(), this.nueva());
+      this.resultadoPassword.set('Contraseña cambiada. Se cerraron tus sesiones en otros dispositivos.');
+      this.aviso.set('');
+    } catch (e) {
+      this.resultadoPassword.set(
+        (e as { status?: number }).status === 400 ? 'La contraseña actual no es correcta.' : 'No se pudo cambiar la contraseña. Intenta de nuevo.',
+      );
+    } finally {
+      this.cambiando.set(false);
+      this.actual.set('');
+      this.nueva.set('');
+    }
+  }
+
+  protected async cerrarOtra(s: SesionAbierta): Promise<void> {
+    const nombre = s.agente ? nombreDispositivo(s.agente) : 'ese dispositivo';
+    try {
+      await this.prefs.cerrarSesionRemota(s.id);
+      this.sesiones.update((l) => l?.filter((x) => x.id !== s.id) ?? null);
+      this.avisoSesiones.set(`Se cerró la sesión en ${nombre}.`);
+    } catch {
+      this.avisoSesiones.set(`No se pudo cerrar la sesión en ${nombre}. Intenta de nuevo.`);
     }
   }
 

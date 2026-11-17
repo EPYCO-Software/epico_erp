@@ -9,6 +9,18 @@ x-backend-environment: &backend-environment
   ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
   ConnectionStrings__Default: "Host=database;Port=5432;Database=${POSTGRES_DB:-epico_erp};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in .env}"
   Cors__AllowedOrigins__0: "${FRONTEND_ORIGIN:?Define FRONTEND_ORIGIN in .env}"
+  Jwt__Key: "${JWT_KEY:?Define JWT_KEY in .env}"
+  Seed__RootPassword: "${SEED_ROOT_PASSWORD:-}"
+  Docs__Enabled: "${DOCS_ENABLED:-false}"
+  Cifrado__Llave: "${CIFRADO_LLAVE:-}"
+  Correo__Host: "${SMTP_HOST:-}"
+  Correo__Puerto: "${SMTP_PUERTO:-587}"
+  Correo__Seguridad: "${SMTP_SEGURIDAD:-StartTls}"
+  Correo__Usuario: "${SMTP_USUARIO:-}"
+  Correo__Password: "${SMTP_PASSWORD:-}"
+  Correo__Remitente: "${SMTP_REMITENTE:-}"
+  Correo__UrlErp: "${URL_ERP:-${FRONTEND_ORIGIN}}"
+  Correo__UrlPortal: "${URL_PORTAL:-}"
 
 services:
   database:
@@ -58,6 +70,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      - archivos_data:/data/archivos
     security_opt:
       - no-new-privileges:true
     networks:
@@ -70,6 +84,7 @@ services:
 
 volumes:
   postgres_prod_data:
+  archivos_data:
 
 networks:
   backend:

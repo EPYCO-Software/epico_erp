@@ -35,7 +35,7 @@ const TELEFONO = { kind: 'telefono', message: 'Escribe un teléfono de 10 dígit
     </ng-template>
 
     <form id="editor-cliente" novalidate aria-labelledby="editar-cliente-titulo" (submit)="guardar($event)">
-      <p id="editar-cliente-titulo" class="font-bold">Editar cliente</p>
+      <p id="editar-cliente-titulo" class="font-bold">{{ c() ? 'Editar cliente' : 'Datos del cliente' }}</p>
 
       <fieldset class="mt-4">
         <legend [class]="titulo">Contacto</legend>
@@ -50,15 +50,13 @@ const TELEFONO = { kind: 'telefono', message: 'Escribe un teléfono de 10 dígit
 
       <fieldset class="mt-5">
         <legend [class]="titulo">Empresa</legend>
+        <p class="mb-3 text-sm text-texto-suave">Su razón social, RFC y domicilio fiscal son los de sus datos de facturación (abajo).</p>
         <div class="grid gap-3 @lg:grid-cols-2">
           <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.nombre, id: 'cliente-nombre', etiqueta: 'Nombre comercial' }" />
-          <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.empresa.razonSocial, id: 'cliente-razon-social', etiqueta: 'Razón social' }" />
-          <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.empresa.rfc, id: 'cliente-rfc', etiqueta: 'RFC' }" />
           <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.empresa.giro, id: 'cliente-giro', etiqueta: 'Giro' }" />
           <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.empresa.correo, id: 'cliente-correo', etiqueta: 'Correo', tipo: 'email' }" />
           <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.empresa.telefono, id: 'cliente-telefono', etiqueta: 'Teléfono', tipo: 'tel' }" />
           <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.empresa.sitioWeb, id: 'cliente-sitio', etiqueta: 'Sitio web' }" />
-          <ng-container *ngTemplateOutlet="campo; context: { $implicit: f.empresa.domicilioFiscal, id: 'cliente-domicilio', etiqueta: 'Domicilio fiscal', ancho: true }" />
         </div>
       </fieldset>
 
@@ -108,7 +106,9 @@ const TELEFONO = { kind: 'telefono', message: 'Escribe un teléfono de 10 dígit
       </fieldset>
 
       <div class="mt-5 flex flex-wrap gap-2">
-        <button type="submit" class="boton-primario h-10 w-auto px-4 text-sm">Guardar cambios</button>
+        <button type="submit" class="boton-primario h-10 w-auto px-4 text-sm" [disabled]="guardando()" [attr.aria-busy]="guardando()">
+          {{ c() ? 'Guardar cambios' : 'Crear cliente' }}
+        </button>
         <button type="button" [class]="botonSecundario" (click)="descartar.emit()">Descartar</button>
       </div>
     </form>
@@ -117,7 +117,10 @@ const TELEFONO = { kind: 'telefono', message: 'Escribe un teléfono de 10 dígit
 export class EditorCliente implements OnInit {
   private readonly injector = inject(Injector);
 
-  readonly c = input.required<Cliente>();
+  /** Sin él, alta de un cliente nuevo. */
+  readonly c = input<Cliente | null>(null);
+  /** Mientras quien lo usa guarda (deshabilita el botón). */
+  readonly guardando = input(false);
   readonly listo = output<CambiosCliente>();
   readonly descartar = output();
 
@@ -139,9 +142,7 @@ export class EditorCliente implements OnInit {
     const telefono = ({ value }: { value: () => string }) =>
       !value() || /^\d{10}$/.test(value().replace(/\D/g, '')) ? undefined : TELEFONO;
     required(m.nombre, { message: 'Escribe el nombre comercial.' });
-    required(m.empresa.razonSocial, { message: 'Escribe la razón social.' });
-    required(m.empresa.rfc, { message: 'Escribe el RFC.' });
-    validate(m.empresa.rfc, rfc);
+    // Razón social, RFC y domicilio fiscal se capturan en Facturación: el backend los guarda ahí (no en el cliente).
     email(m.empresa.correo, { message: 'Escribe un correo válido.' });
     validate(m.empresa.telefono, telefono);
     email(m.contacto.correo, { message: 'Escribe un correo válido.' });
@@ -168,12 +169,13 @@ export class EditorCliente implements OnInit {
 
   ngOnInit(): void {
     const c = this.c();
-    this.modelo.set({
-      nombre: c.nombre,
-      empresa: { ...c.empresa },
-      contacto: { ...c.contacto },
-      facturacion: c.facturacion.map((r) => ({ ...r })),
-    });
+    if (c)
+      this.modelo.set({
+        nombre: c.nombre,
+        empresa: { ...c.empresa },
+        contacto: { ...c.contacto },
+        facturacion: c.facturacion.map((r) => ({ ...r })),
+      });
     this.inicial = JSON.stringify(this.modelo());
     this.enfocar('#cliente-contacto-nombre');
   }

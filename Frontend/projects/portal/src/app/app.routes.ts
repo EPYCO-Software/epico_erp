@@ -8,6 +8,8 @@ export const routes: Routes = [
     canActivate: [guestGuard],
     loadComponent: () => import('./features/auth/login'),
   },
+  // Enlace del correo de "olvidé mi contraseña" (sin guard: sirve aunque haya otra sesión abierta).
+  { path: 'restablecer', title: 'Recuperar contraseña · Portal EPICO', loadComponent: () => import('ui').then((m) => m.Restablecer) },
   {
     path: '',
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),

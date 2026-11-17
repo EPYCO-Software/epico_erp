@@ -1,13 +1,14 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Search } from 'lucide';
-import { Icon } from 'ui';
+import { Buscador, FiltrosElegidos, GrupoFiltro, enRango, opcionesDe, pasaFiltro } from 'ui';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
 import { VentasService } from './datos';
 import { DetallePrograma } from './detalle-programa';
 import { Programa, ProgramasService, plantilla, textoPrograma } from './lealtad';
 import { PlantillasPrograma } from './plantillas-programa';
+import { permisosSesion } from '../../core/permisos';
 
 const normalizar = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -18,34 +19,26 @@ const normalizar = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLo
  */
 @Component({
   selector: 'app-programas',
-  imports: [Icon, RouterLink, EnEncabezado, PanelLateral, DetallePrograma, PlantillasPrograma],
+  imports: [Buscador, RouterLink, EnEncabezado, PanelLateral, DetallePrograma, PlantillasPrograma],
   template: `
     <ng-template appEnEncabezado>
       <div
         class="flex items-center gap-3 md:grid md:grid-cols-[minmax(max-content,1fr)_minmax(0,640px)_minmax(max-content,1fr)] md:gap-6"
       >
         <div class="flex items-center gap-3">
-          <a routerLink="/ventas/descuentos-y-lealtad/nuevo" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          @if (puede('ventas.programas.crear')) {
+            <a routerLink="/ventas/descuentos-y-lealtad/nuevo" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          }
           <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Descuentos y programas de lealtad</h1>
         </div>
-        <form role="search" class="relative min-w-0 flex-1" (submit)="$event.preventDefault()">
-          <label for="buscar-programa" class="sr-only">Buscar programas por nombre, tipo o código</label>
-          <ui-icon
-            [icono]="iconoBuscar"
-            [tamano]="17"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texto-suave max-sm:hidden"
-          />
-          <input
-            id="buscar-programa"
-            type="search"
-            autocomplete="off"
-            placeholder="Buscar…"
-            class="campo h-9 rounded-lg bg-white/65! pr-3 pl-3 text-[15px] sm:pl-9"
-            [value]="texto()"
-            (input)="texto.set($any($event.target).value)"
-            (keydown.escape)="texto.set('')"
-          />
-        </form>
+        <ui-buscador
+          class="min-w-0 flex-1"
+          idBuscar="buscar-programa"
+          etiqueta="Buscar programas por nombre, tipo o código"
+          [(texto)]="texto"
+          [grupos]="grupos()"
+          [(filtros)]="filtros"
+        />
         <p class="text-right text-sm text-texto-suave max-md:sr-only" aria-live="polite">{{ conteo() }}</p>
       </div>
     </ng-template>
@@ -136,6 +129,8 @@ const normalizar = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLo
   `,
 })
 export default class Programas {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   protected readonly servicio = inject(ProgramasService);
   private readonly ventas = inject(VentasService);
   private readonly router = inject(Router);
@@ -147,7 +142,26 @@ export default class Programas {
   protected readonly filas = computed(() => {
     const q = normalizar(this.texto().trim());
     const todos = this.servicio.programas();
-    return q ? todos.filter((p) => normalizar(`${p.nombre} ${this.tipo(p)} ${p.codigo}`).includes(q)) : todos;
+    const f = this.filtros();
+    return (q ? todos.filter((p) => normalizar(`${p.nombre} ${this.tipo(p)} ${p.codigo}`).includes(q)) : todos).filter(
+      (p) => pasaFiltro(f, 'tipo', p.tipo) && pasaFiltro(f, 'estado', p.activo ? 'activo' : 'archivado'),
+    );
+  });
+  /** Filtros por columna, en el buscador: tipo de programa y estado. */
+  protected readonly filtros = signal<FiltrosElegidos>({});
+  protected readonly grupos = computed<GrupoFiltro[]>(() => {
+    const todos = this.servicio.programas();
+    return [
+      { id: 'tipo', titulo: 'Tipo', opciones: opcionesDe(todos, (p) => p.tipo, (t) => plantilla(t as Programa['tipo']).nombre) },
+      {
+        id: 'estado',
+        titulo: 'Estado',
+        opciones: [
+          { id: 'activo', nombre: 'Activo', n: todos.filter((p) => p.activo).length },
+          { id: 'archivado', nombre: 'Archivado', n: todos.filter((p) => !p.activo).length },
+        ],
+      },
+    ];
   });
   protected tipo(p: Programa): string {
     return plantilla(p.tipo).nombre;

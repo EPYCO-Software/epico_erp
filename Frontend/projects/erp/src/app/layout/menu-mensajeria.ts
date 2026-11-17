@@ -1,8 +1,23 @@
-import { Component, ElementRef, Injector, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
-import { ArrowLeft, MessageCircle, SquarePen, X } from 'lucide';
+import { ArrowLeft, Bell, MessageCircle, SquarePen, X } from 'lucide';
 import { FechaZonaPipe, Icon } from 'ui';
-import { Conversacion, MensajeriaService, Notificacion, YO, formatoCuando } from '../core/mensajeria';
+import {
+  Conversacion,
+  MensajeriaService,
+  Notificacion,
+  YO,
+  formatoCuando,
+} from '../core/mensajeria';
 import { normalizar } from '../core/modulos';
 import { PlantasService } from '../core/plantas';
 import { IconoModulo } from '../features/inicio/icono-modulo';
@@ -38,7 +53,11 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
       class="relative inline-flex size-11 items-center justify-center rounded-xl text-carbon transition-colors hover:bg-carbon/5 focus-visible:outline-2 focus-visible:outline-epico"
       [attr.aria-label]="etiqueta()"
     >
-      <ui-icon [icono]="iconos.mensajes" [tamano]="23" [grosor]="2" />
+      <ui-icon
+        [icono]="mensajeria.conChat ? iconos.mensajes : iconos.campana"
+        [tamano]="23"
+        [grosor]="2"
+      />
       @if (mensajeria.noLeidos()) {
         <span
           class="absolute top-1 right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-epico px-1 text-xs leading-none font-bold text-white ring-2 ring-white"
@@ -54,13 +73,32 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
       id="panel-mensajeria"
       popover
       role="dialog"
-      aria-label="Mensajes y notificaciones"
+      [attr.aria-label]="mensajeria.conChat ? 'Mensajes y notificaciones' : 'Notificaciones'"
       class="glass-strong m-0 w-[min(30rem,calc(100vw-1rem))] overflow-hidden p-0 text-carbon inset-auto"
       (beforetoggle)="alAbrir($event)"
       (toggle)="alCerrar($event)"
     >
+      @if (!mensajeria.conChat) {
+        <div
+          class="flex items-center justify-between gap-2 border-b border-acero/50 py-2 pr-2 pl-4"
+        >
+          <h2 class="text-sm font-bold">Notificaciones</h2>
+          @if (mensajeria.noLeidos()) {
+            <button
+              type="button"
+              class="h-9 rounded-lg px-2.5 text-sm font-semibold text-epico-oscuro transition-colors hover:bg-epico/8 focus-visible:outline-2 focus-visible:outline-epico"
+              (click)="mensajeria.leerTodas()"
+            >
+              Marcar todas como leídas
+            </button>
+          }
+        </div>
+      }
       @if (!nuevo()) {
-        <div class="flex items-center justify-between gap-2 border-b border-acero/50 px-2 py-2">
+        <div
+          class="flex items-center justify-between gap-2 border-b border-acero/50 px-2 py-2"
+          [class.hidden]="!mensajeria.conChat"
+        >
           <div role="tablist" aria-label="Mensajes y notificaciones" class="flex gap-0.5">
             @for (t of pestanas; track t.id; let i = $index) {
               <button
@@ -72,7 +110,11 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
                 [attr.autofocus]="pestana() === t.id ? '' : null"
                 [tabIndex]="pestana() === t.id ? 0 : -1"
                 class="h-9 rounded-lg px-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-epico sm:px-3"
-                [class]="pestana() === t.id ? 'bg-epico/10 text-epico-oscuro' : 'text-texto-suave hover:bg-carbon/5 hover:text-carbon'"
+                [class]="
+                  pestana() === t.id
+                    ? 'bg-epico/10 text-epico-oscuro'
+                    : 'text-texto-suave hover:bg-carbon/5 hover:text-carbon'
+                "
                 (click)="pestana.set(t.id)"
                 (keydown)="elegirPestana(moverEntrePestanas($event, i))"
               >
@@ -87,14 +129,17 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
             (click)="empezarNuevo()"
           >
             <!-- En celular no cabe el texto junto a las pestañas: queda el icono y el texto para lectores de pantalla -->
-            <ui-icon [icono]="iconos.nuevo" [tamano]="18" class="sm:hidden" /><span class="max-sm:sr-only">Mensaje nuevo</span>
+            <ui-icon [icono]="iconos.nuevo" [tamano]="18" class="sm:hidden" /><span
+              class="max-sm:sr-only"
+              >Mensaje nuevo</span
+            >
           </button>
         </div>
 
         <div
           id="mensajeria-lista"
-          role="tabpanel"
-          [attr.aria-labelledby]="'mensajeria-tab-' + pestana()"
+          [attr.role]="mensajeria.conChat ? 'tabpanel' : null"
+          [attr.aria-labelledby]="mensajeria.conChat ? 'mensajeria-tab-' + pestana() : null"
           class="max-h-[min(30rem,calc(100dvh-7rem))] scroll-caja"
         >
           <ul class="divide-y divide-acero/40">
@@ -113,8 +158,12 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
                     </span>
                     <span class="min-w-0 flex-1">
                       <span class="flex items-baseline justify-between gap-2">
-                        <span class="truncate" [class]="n.leida ? 'font-semibold' : 'font-bold'">{{ n.titulo }}</span>
-                        <time class="shrink-0 text-xs text-texto-suave" [attr.datetime]="n.fecha">{{ n.fecha | fechaZona: zona() : formato(n.fecha) }}</time>
+                        <span class="truncate" [class]="n.leida ? 'font-semibold' : 'font-bold'">{{
+                          n.titulo
+                        }}</span>
+                        <time class="shrink-0 text-xs text-texto-suave" [attr.datetime]="n.fecha">{{
+                          n.fecha | fechaZona: zona() : formato(n.fecha)
+                        }}</time>
                       </span>
                       <span class="line-clamp-2 text-sm text-texto-suave">{{ n.texto }}</span>
                       @if (!n.leida) {
@@ -122,16 +171,21 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
                       }
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    class="absolute top-1.5 right-1.5 flex size-8 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-carbon/5 hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico"
-                    [attr.aria-label]="'Descartar notificación: ' + n.titulo"
-                    (click)="mensajeria.descartarNotificacion(n.id)"
-                  >
-                    <ui-icon [icono]="iconos.cerrar" [tamano]="16" />
-                  </button>
+                  @if (mensajeria.conChat) {
+                    <button
+                      type="button"
+                      class="absolute top-1.5 right-1.5 flex size-8 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-carbon/5 hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico"
+                      [attr.aria-label]="'Descartar notificación: ' + n.titulo"
+                      (click)="mensajeria.descartarNotificacion(n.id)"
+                    >
+                      <ui-icon [icono]="iconos.cerrar" [tamano]="16" />
+                    </button>
+                  }
                   @if (!n.leida) {
-                    <span class="pointer-events-none absolute top-11 right-4 size-2.5 rounded-full bg-epico" aria-hidden="true"></span>
+                    <span
+                      class="pointer-events-none absolute top-11 right-4 size-2.5 rounded-full bg-epico"
+                      aria-hidden="true"
+                    ></span>
                   }
                 </li>
               }
@@ -151,13 +205,21 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
                   />
                   <span class="min-w-0 flex-1">
                     <span class="flex items-baseline justify-between gap-2">
-                      <span class="truncate" [class]="c.noLeidos ? 'font-bold' : 'font-semibold'">{{ c.nombre }}</span>
+                      <span class="truncate" [class]="c.noLeidos ? 'font-bold' : 'font-semibold'">{{
+                        c.nombre
+                      }}</span>
                       @if (ultimo(c); as u) {
-                        <time class="shrink-0 text-xs text-texto-suave" [attr.datetime]="u.fecha">{{ u.fecha | fechaZona: zona() : formato(u.fecha) }}</time>
+                        <time class="shrink-0 text-xs text-texto-suave" [attr.datetime]="u.fecha">{{
+                          u.fecha | fechaZona: zona() : formato(u.fecha)
+                        }}</time>
                       }
                     </span>
                     <span class="flex items-start gap-2">
-                      <span class="line-clamp-2 flex-1 text-sm" [class]="c.noLeidos ? 'text-carbon' : 'text-texto-suave'">{{ resumen(c) }}</span>
+                      <span
+                        class="line-clamp-2 flex-1 text-sm"
+                        [class]="c.noLeidos ? 'text-carbon' : 'text-texto-suave'"
+                        >{{ resumen(c) }}</span
+                      >
                       @if (c.noLeidos) {
                         <span
                           class="mt-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-epico px-1.5 text-xs leading-none font-bold text-white"
@@ -209,7 +271,11 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
                 class="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-carbon/4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-epico"
                 (click)="escribirA(p.id)"
               >
-                <app-avatar-chat [nombre]="p.nombre" [estado]="p.estado" class="size-10 text-base" />
+                <app-avatar-chat
+                  [nombre]="p.nombre"
+                  [estado]="p.estado"
+                  class="size-10 text-base"
+                />
                 <span class="min-w-0">
                   <span class="block truncate font-semibold">{{ p.nombre }}</span>
                   <span class="block truncate text-sm text-texto-suave">{{ p.puesto }}</span>
@@ -218,7 +284,9 @@ const ESTADOS = { en_linea: 'en línea', ausente: 'ausente', desconectado: 'desc
               </button>
             </li>
           } @empty {
-            <li class="px-6 py-8 text-center text-sm text-texto-suave">Nadie coincide con «{{ filtro() }}».</li>
+            <li class="px-6 py-8 text-center text-sm text-texto-suave">
+              Nadie coincide con «{{ filtro() }}».
+            </li>
           }
         </ul>
       }
@@ -233,7 +301,13 @@ export class MenuMensajeria {
 
   protected readonly pestanas = PESTANAS;
   protected readonly estados = ESTADOS;
-  protected readonly iconos = { mensajes: MessageCircle, cerrar: X, volver: ArrowLeft, nuevo: SquarePen };
+  protected readonly iconos = {
+    mensajes: MessageCircle,
+    campana: Bell,
+    cerrar: X,
+    volver: ArrowLeft,
+    nuevo: SquarePen,
+  };
   protected readonly moverEntrePestanas = moverEntrePestanas;
   protected readonly pestana = signal<Pestana>('notificaciones');
   protected readonly nuevo = signal(false);
@@ -248,14 +322,21 @@ export class MenuMensajeria {
 
   /** En "Notificaciones" va todo junto (como Odoo); en las otras, solo chats o solo canales. */
   protected readonly lista = computed(() => {
+    if (!this.mensajeria.conChat) return [];
     const todas = this.mensajeria.recientes();
     const p = this.pestana();
-    return p === 'notificaciones' ? todas : todas.filter((c) => c.tipo === (p === 'chats' ? 'chat' : 'canal'));
+    return p === 'notificaciones'
+      ? todas
+      : todas.filter((c) => c.tipo === (p === 'chats' ? 'chat' : 'canal'));
   });
   protected readonly vacia = computed(
-    () => !this.lista().length && (this.pestana() !== 'notificaciones' || !this.mensajeria.notificaciones().length),
+    () =>
+      !this.lista().length &&
+      (this.pestana() !== 'notificaciones' || !this.mensajeria.notificaciones().length),
   );
-  protected readonly textoVacio = computed(() => PESTANAS.find((t) => t.id === this.pestana())!.vacio);
+  protected readonly textoVacio = computed(
+    () => PESTANAS.find((t) => t.id === this.pestana())!.vacio,
+  );
   protected readonly personas = computed(() => {
     const palabras = normalizar(this.filtro()).split(/\s+/).filter(Boolean);
     return this.mensajeria.personas.filter((p) => {
@@ -266,11 +347,12 @@ export class MenuMensajeria {
 
   protected etiqueta(): string {
     const n = this.mensajeria.noLeidos();
-    return `Mensajes y notificaciones${n ? `, ${n} sin leer` : ''}`;
+    return `${this.mensajeria.conChat ? 'Mensajes y notificaciones' : 'Notificaciones'}${n ? `, ${n} sin leer` : ''}`;
   }
 
   protected alAbrir(e: Event): void {
-    if ((e as ToggleEvent).newState === 'open') colocarBajo(this.panel().nativeElement, this.disparador().nativeElement, 480);
+    if ((e as ToggleEvent).newState === 'open')
+      colocarBajo(this.panel().nativeElement, this.disparador().nativeElement, 480);
   }
 
   /** Al cerrarse vuelve a la lista, para que al abrir de nuevo el foco caiga en la pestaña elegida. */
@@ -297,7 +379,9 @@ export class MenuMensajeria {
     const u = this.ultimo(c);
     if (!u) return 'Sin mensajes todavía';
     if (u.autorId === YO) return `Tú: ${u.texto}`;
-    return c.tipo === 'canal' ? `${this.mensajeria.persona(u.autorId)?.nombre ?? 'Alguien'}: ${u.texto}` : u.texto;
+    return c.tipo === 'canal'
+      ? `${this.mensajeria.persona(u.autorId)?.nombre ?? 'Alguien'}: ${u.texto}`
+      : u.texto;
   }
 
   /** Lo que el avatar y el contador dicen con color, en texto para lectores de pantalla. */
@@ -305,7 +389,8 @@ export class MenuMensajeria {
     const partes = [c.tipo === 'canal' ? 'Canal' : ''];
     const estado = this.mensajeria.persona(c.personaId)?.estado;
     if (estado) partes.push(ESTADOS[estado]);
-    if (c.noLeidos) partes.push(`${c.noLeidos} ${c.noLeidos === 1 ? 'mensaje sin leer' : 'mensajes sin leer'}`);
+    if (c.noLeidos)
+      partes.push(`${c.noLeidos} ${c.noLeidos === 1 ? 'mensaje sin leer' : 'mensajes sin leer'}`);
     return partes.filter(Boolean).join(', ');
   }
 
@@ -318,7 +403,7 @@ export class MenuMensajeria {
   protected abrirNotificacion(n: Notificacion): void {
     this.mensajeria.leerNotificacion(n.id);
     this.panel().nativeElement.hidePopover();
-    void this.router.navigateByUrl(n.ruta);
+    if (n.ruta) void this.router.navigateByUrl(n.ruta);
   }
 
   protected empezarNuevo(): void {

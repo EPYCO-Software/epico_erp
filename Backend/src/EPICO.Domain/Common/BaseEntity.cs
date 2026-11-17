@@ -17,17 +17,35 @@ public interface IDeOrganizacion
     Guid OrganizacionId { get; set; }
 }
 
+/// <summary>Registro de un cliente: el portal solo ve los de su cliente.</summary>
+public interface IDeCliente
+{
+    Guid ClienteId { get; set; }
+}
+
 /// <summary>Compartido con la organización salvo que se limite a una razón social (vacío = todas).</summary>
 public interface IRestringible
 {
     Guid? EmpresaRestringidaId { get; set; }
 }
 
+/// <summary>A dónde se entrega: una obra registrada (ObraId) o un lugar capturado solo para el documento (Entrega*).</summary>
+public interface ILugarEntrega
+{
+    Guid? ObraId { get; set; }
+    string? EntregaDireccion { get; set; }
+    string? EntregaMunicipio { get; set; }
+    string? EntregaReferencias { get; set; }
+    decimal? EntregaLat { get; set; }
+    decimal? EntregaLng { get; set; }
+}
+
 /// <summary>Línea de un documento: sus cambios se anotan también en el hilo del padre (RegistroPadre de Evento).</summary>
 public interface IDePadre
 {
-    string PadreTipo { get; }
-    Guid PadreId { get; }
+    /// <summary>null = sin padre (p. ej. obra general).</summary>
+    string? PadreTipo { get; }
+    Guid? PadreId { get; }
 }
 
 /// <summary>Campo rastreado: cada cambio queda en EventoCambio (como tracking=True en Odoo).</summary>

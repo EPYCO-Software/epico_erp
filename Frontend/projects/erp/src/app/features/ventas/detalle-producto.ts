@@ -3,9 +3,10 @@ import { FormField, form, min, required, submit, validate } from '@angular/forms
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Maximize2, PencilLine, X } from 'lucide';
-import { CATEGORIAS_PRODUCTO, EstadoPedidoEtiqueta, FechaZonaPipe, FieldError, Icon, ProductoTarifa, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, pesos } from 'ui';
+import { CATEGORIAS_PRODUCTO, EstadoPedidoEtiqueta, FechaZonaPipe, FieldError, Icon, ProductoTarifa, SOLUCIONES, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, pesos } from 'ui';
 import { ESTADOS_COTIZACION, NuevoProducto, VentasService, delTarifario, existenciasBajas, mensajeDe, textoEquipo } from './datos';
 import { FormProducto } from './form-producto';
+import { permisosSesion } from '../../core/permisos';
 
 /**
  * Un producto, igual en la vista previa de Productos y en su vista completa: tipo, código, categoría, unidad, precio de
@@ -41,9 +42,11 @@ import { FormProducto } from './form-producto';
     </div>
 
     @if (!editando()) {
-      <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
-        <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
-      </button>
+      @if (puede('ventas.productos.editar')) {
+        <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
+          <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
+        </button>
+      }
     }
     <p class="mt-2 text-sm font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ avisoEdicion() }}</p>
 
@@ -58,6 +61,10 @@ import { FormProducto } from './form-producto';
         <dd>{{ p().codigo }}</dd>
         <dt class="text-texto-suave">Categoría</dt>
         <dd>{{ categoria() }}</dd>
+        @if (soluciones(); as s) {
+          <dt class="text-texto-suave">Soluciones</dt>
+          <dd>{{ s }}</dd>
+        }
         <dt class="text-texto-suave">Unidad</dt>
         <dd>{{ p().unidad }}</dd>
         @if (p().equipo; as e) {
@@ -169,6 +176,8 @@ import { FormProducto } from './form-producto';
   `,
 })
 export class DetalleProducto {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly ventas = inject(VentasService);
 
   readonly p = input.required<ProductoTarifa>();
@@ -184,6 +193,10 @@ export class DetalleProducto {
     'rounded font-semibold text-epico-oscuro underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-epico';
   protected readonly pesos = pesos;
   protected readonly textoEquipo = textoEquipo;
+  /** "Pavimento, Losa y estructura" (concretos con soluciones del cotizador). */
+  protected readonly soluciones = computed(() =>
+    (this.p().soluciones ?? []).map((id) => SOLUCIONES.find((x) => x.id === id)?.nombre ?? id).join(', '),
+  );
   protected readonly estados = ESTADOS_COTIZACION;
   protected readonly completa = computed(() => this.vista() === 'completa');
   protected readonly categoria = computed(() => CATEGORIAS_PRODUCTO[this.p().categoria]);

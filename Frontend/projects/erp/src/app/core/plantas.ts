@@ -1,16 +1,19 @@
-import { Service, computed, signal } from '@angular/core';
-import { Planta } from 'ui';
+import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
+import { AuthService, EmpresaSesion, Planta } from 'ui';
+import { PreferenciasUsuario } from './preferencias-usuario';
 
 /** Razón social de la concretera, con las plantas que opera. Una concretera puede tener varias. */
+/** Planta del ERP: la de ui más su traslado (de la sesión del backend). */
+export type PlantaErp = Planta & { traslado?: { incluidosKm: number; precioKm: number } };
+
 export interface RazonSocial {
   id: string;
   nombre: string;
-  plantas: Planta[];
+  plantas: PlantaErp[];
 }
 
-// shortcut: razones sociales y plantas fijas para la demo (las del portal más Cancún), con coordenadas aproximadas
-// (las de Xpujil y Cancún, del centro del municipio); vendrán del backend
-// según la concretera con la que entró el usuario y las plantas que tiene permitidas.
+// Sin backend (pruebas, demo): razones sociales y plantas fijas, con coordenadas aproximadas (las de Xpujil y Cancún,
+// del centro del municipio). Con backend se usan las de la sesión (razonesDeSesion).
 export const RAZONES_SOCIALES: RazonSocial[] = [
   {
     id: 'sureste',
@@ -29,6 +32,31 @@ export const RAZONES_SOCIALES: RazonSocial[] = [
     ],
   },
 ];
+
+/**
+ * Las razones sociales y plantas que puede ver el usuario, de la sesión del backend. La planta se identifica por su
+ * código (ESC, CZM…), como en todo el front y en los folios; ventas-api la traduce al id de sucursal.
+ */
+export function razonesDeSesion(empresas: EmpresaSesion[]): RazonSocial[] {
+  return empresas
+    .filter((e) => e.plantas.length)
+    .map((e) => ({
+      id: e.id,
+      nombre: e.nombre,
+      plantas: e.plantas.map((p) => ({
+        id: p.codigo,
+        nombre: p.nombre,
+        zonaHoraria: p.zonaHoraria,
+        ubicacion: p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : undefined,
+        traslado: p.kmIncluidos != null && p.precioKm != null ? { incluidosKm: p.kmIncluidos, precioKm: p.precioKm } : undefined,
+      })),
+    }));
+}
+
+const vigentes = signal<RazonSocial[]>(RAZONES_SOCIALES);
+/** Las razones sociales vigentes: las de la sesión o, sin backend, las fijas. Para código fuera de componentes. */
+export const razonesVigentes = vigentes.asReadonly();
+export const plantasVigentes = computed(() => vigentes().flatMap((r) => r.plantas));
 
 export type EstadoGrupo = 'todas' | 'algunas' | 'ninguna';
 
@@ -58,13 +86,35 @@ export function estadoGrupo(seleccion: string[], ids: string[]): EstadoGrupo {
  */
 @Service()
 export class PlantasService {
-  readonly razones = RAZONES_SOCIALES;
-  // shortcut: la selección vive en memoria; con backend, guardarla por usuario y filtrar los datos con ella.
+  readonly razones = razonesVigentes;
+  // shortcut: la selección vive en memoria; guardarla por usuario cuando exista PreferenciaUsuario en la API.
   readonly seleccion = signal<string[]>([RAZONES_SOCIALES[0].plantas[0].id]);
   readonly actualId = signal(RAZONES_SOCIALES[0].plantas[0].id);
 
-  private readonly todas = RAZONES_SOCIALES.flatMap((r) => r.plantas);
-  readonly actual = computed(() => this.todas.find((p) => p.id === this.actualId()) ?? this.todas[0]);
+  readonly actual = computed(() => plantasVigentes().find((p) => p.id === this.actualId()) ?? plantasVigentes()[0]);
+
+  constructor() {
+    const auth = inject(AuthService);
+    // Al entrar (o cambiar de usuario) toma las plantas de la sesión; si la selección ya no existe, la primera.
+    effect(() => {
+      const empresas = auth.sesion()?.empresas;
+      const razones = empresas?.length ? razonesDeSesion(empresas) : [];
+      vigentes.set(razones.length ? razones : RAZONES_SOCIALES);
+      untracked(() => {
+        const ids = new Set(plantasVigentes().map((p) => p.id));
+        const quedan = this.seleccion().filter((id) => ids.has(id));
+        if (!quedan.length) this.soloEsta(plantasVigentes()[0].id);
+        else this.cambiar(quedan);
+      });
+    });
+    // Al llegar las preferencias del usuario, su planta predeterminada (si sigue siendo suya)
+    const prefs = inject(PreferenciasUsuario);
+    effect(() => {
+      if (!prefs.cargadas()) return;
+      const id = untracked(() => prefs.valores().preferencias?.plantaId);
+      if (id && untracked(() => plantasVigentes().some((p) => p.id === id))) untracked(() => this.soloEsta(id));
+    });
+  }
   /** Cuántas plantas hay además de la principal. */
   readonly otras = computed(() => this.seleccion().length - 1);
 

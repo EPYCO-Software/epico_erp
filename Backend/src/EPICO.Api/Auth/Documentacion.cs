@@ -1,7 +1,5 @@
 using System.Net;
 using System.Reflection;
-using System.Runtime.CompilerServices;
-using EPICO.Api.Controllers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.OpenApi;
@@ -59,7 +57,7 @@ public static class Documentacion
             op.Responses.TryAdd("401", new OpenApiResponse { Description = "Sin token o token vencido" });
 
             var permisos = a.MethodInfo.GetCustomAttributes<PermisoAttribute>().Select(p => p.Permiso).ToList();
-            if (Recurso(a.ControllerTypeInfo) is { } recurso)
+            if (Permisos.Recurso(a.ControllerTypeInfo) is { } recurso)
                 permisos.Add(PermisoAttribute.DeCrud(recurso, ctx.Description.HttpMethod ?? "GET"));
             if (permisos.Count == 0) return Task.CompletedTask;
 
@@ -68,15 +66,5 @@ public static class Documentacion
             op.Responses.TryAdd("403", new OpenApiResponse { Description = $"Falta {texto} o el registro es de otra empresa" });
             return Task.CompletedTask;
         });
-    }
-
-    /// <summary>El Recurso de un CrudController (es una constante en cada controlador; se lee sin construirlo).</summary>
-    static string? Recurso(Type t)
-    {
-        for (var b = t; b is not null; b = b.BaseType)
-            if (b.IsGenericType && b.GetGenericTypeDefinition() == typeof(CrudController<>))
-                return (string?)t.GetProperty("Recurso", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .GetValue(RuntimeHelpers.GetUninitializedObject(t));
-        return null;
     }
 }

@@ -36,7 +36,7 @@ export interface OpcionUsuario {
       type="button"
       class="flex min-h-11 min-w-11 items-center justify-center gap-2.5 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico"
       [class]="etiqueta() ? 'py-1 pr-2 pl-1 transition-colors hover:bg-carbon/5' : ''"
-      aria-label="Menú de usuario"
+      [attr.aria-label]="nombreBoton()"
       [cdkMenuTriggerFor]="menu"
       (pointerenter)="alEntrar($event)"
       (pointerleave)="alSalir()"
@@ -108,6 +108,8 @@ export class UserMenu {
     'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left font-medium outline-none hover:bg-carbon/5 focus-visible:bg-carbon/5 focus-visible:ring-2 focus-visible:ring-epico';
   protected readonly correo = computed(() => this.auth.sesion()?.usuario.correo ?? '');
   protected readonly iniciales = computed(() => iniciales(this.auth.sesion()?.usuario.nombre ?? '?', this.letras()));
+  /** Empieza con lo que se ve (iniciales y etiqueta) para que el nombre accesible lo contenga (WCAG 2.5.3). */
+  protected readonly nombreBoton = computed(() => [this.iniciales(), this.etiqueta()].filter(Boolean).join(' ') + ', menú de usuario');
 
   private readonly disparador = viewChild.required(CdkMenuTrigger);
   /** El menú abierto se abrió al pasar el mouse (no con clic ni teclado): se cierra al sacar el mouse. */

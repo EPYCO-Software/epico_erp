@@ -14,8 +14,9 @@ import {
 import { DecimalPipe } from '@angular/common';
 import { CdkMenu, CdkMenuItem, CdkMenuTrigger } from '@angular/cdk/menu';
 import { Router, RouterLink } from '@angular/router';
-import { Check, ChevronDown, ChevronRight, ClipboardCheck, CopyPlus, Download, Eye, EyeOff, Maximize2, PencilLine, Send, X } from 'lucide';
+import { Ban, Check, ChevronDown, ChevronRight, ClipboardCheck, CopyPlus, Download, Eye, EyeOff, Maximize2, PencilLine, Send, X } from 'lucide';
 import {
+  AuthService,
   CotizacionVista,
   ESTADO_PEDIDO,
   EstadoCotizacion,
@@ -27,6 +28,7 @@ import {
   pesos,
 } from 'ui';
 import { BarraEstados } from '../../layout/vista-completa';
+import { TODOS, tiene, permisosSesion } from '../../core/permisos';
 import { ESTADOS_COTIZACION, VentasService, mensajeDe, modificable } from './datos';
 import { CambiosCotizacion, EditorCotizacion } from './editor-cotizacion';
 import { EnviarCotizacion } from './enviar-cotizacion';
@@ -97,28 +99,34 @@ const LISTA = new Intl.ListFormat('es');
           <div class="flex flex-wrap gap-2">
             @if (puedeModificar()) {
               <!-- Como Odoo: en borrador se resalta Enviar; ya enviada, Confirmar -->
-              <button type="button" [class]="enviada() ? botonSecundario : botonPrimario" (click)="enviando.set(true)">
-                <ui-icon [icono]="iconos.enviar" [tamano]="16" />Enviar
-              </button>
-              <button type="button" [class]="enviada() ? botonPrimario : botonSecundario" (click)="confirmar()">
-                <ui-icon [icono]="iconos.confirmar" [tamano]="16" />Confirmar pedido
-              </button>
+              @if (puede('ventas.cotizaciones.enviar')) {
+                <button type="button" [class]="enviada() ? botonSecundario : botonPrimario" (click)="enviando.set(true)">
+                  <ui-icon [icono]="iconos.enviar" [tamano]="16" />Enviar
+                </button>
+              }
+              @if (puede('ventas.cotizaciones.confirmar')) {
+                <button type="button" [class]="enviada() ? botonPrimario : botonSecundario" (click)="confirmar()">
+                  <ui-icon [icono]="iconos.confirmar" [tamano]="16" />Confirmar pedido
+                </button>
+              }
             }
             <!-- Botón dividido: Editar (o, si ya no se puede editar, Nueva basada en esta) y en la flecha las demás -->
-            <div class="flex">
-              <button #botonEditar type="button" [class]="botonSecundario + ' rounded-r-none'" (click)="puedeModificar() ? editar() : basadaEnEsta()">
-                <ui-icon [icono]="puedeModificar() ? iconos.editar : iconos.basada" [tamano]="16" />
-                {{ puedeModificar() ? 'Editar' : 'Nueva basada en esta' }}
-              </button>
-              <button
-                type="button"
-                [class]="botonSecundario + ' -ml-px rounded-l-none px-2'"
-                aria-label="Más opciones de edición"
-                [cdkMenuTriggerFor]="menuEditar"
-              >
-                <ui-icon [icono]="iconos.abrir" [tamano]="16" />
-              </button>
-            </div>
+            @if (puede('ventas.cotizaciones.editar')) {
+              <div class="flex">
+                <button #botonEditar type="button" [class]="botonSecundario + ' rounded-r-none'" (click)="puedeModificar() ? editar() : basadaEnEsta()">
+                  <ui-icon [icono]="puedeModificar() ? iconos.editar : iconos.basada" [tamano]="16" />
+                  {{ puedeModificar() ? 'Editar' : 'Nueva basada en esta' }}
+                </button>
+                <button
+                  type="button"
+                  [class]="botonSecundario + ' -ml-px rounded-l-none px-2'"
+                  aria-label="Más opciones de edición"
+                  [cdkMenuTriggerFor]="menuEditar"
+                >
+                  <ui-icon [icono]="iconos.abrir" [tamano]="16" />
+                </button>
+              </div>
+            }
             <ng-template #menuEditar>
               <section aria-label="Opciones de edición">
                 <div cdkMenu aria-label="Opciones de edición" class="glass-strong mt-1 min-w-72 p-1.5 text-[15px] text-carbon">
@@ -134,6 +142,13 @@ const LISTA = new Intl.ListFormat('es');
                     <span><span class="block font-semibold">Nueva basada en esta</span>
                       <span class="block text-sm text-texto-suave">Otra cotización con estos datos, ligada a esta para comparar precios.</span></span>
                   </button>
+                  @if (puedeModificar() && puedeCancelar()) {
+                    <button cdkMenuItem type="button" [class]="opcionMenu" (cdkMenuItemTriggered)="cancelar()">
+                      <ui-icon [icono]="iconos.cancelar" [tamano]="16" class="mt-0.5 text-[#8E332C]" />
+                      <span><span class="block font-semibold text-[#8E332C]">Cancelar cotización</span>
+                        <span class="block text-sm text-texto-suave">Ya no se envía ni se confirma; queda en la lista como Cancelada.</span></span>
+                    </button>
+                  }
                   <button cdkMenuItem type="button" [class]="opcionMenu" (cdkMenuItemTriggered)="cambiarVisibilidad()">
                     <ui-icon [icono]="c().ocultaAlCliente ? iconos.visible : iconos.oculta" [tamano]="16" class="mt-0.5" />
                     <span><span class="block font-semibold">{{ c().ocultaAlCliente ? 'Mostrar al cliente' : 'Ocultar al cliente' }}</span>
@@ -143,15 +158,17 @@ const LISTA = new Intl.ListFormat('es');
               </section>
             </ng-template>
             <!-- El mismo PDF que descarga el cliente en el portal -->
-            <button
-              type="button"
-              aria-label="Descargar PDF"
-              [class]="botonSecundario + ' disabled:opacity-60'"
-              [disabled]="generandoPdf()"
-              (click)="descargarPdf()"
-            >
-              <ui-icon [icono]="iconos.pdf" [tamano]="16" />PDF
-            </button>
+            @if (puede('ventas.cotizaciones.ver')) {
+              <button
+                type="button"
+                aria-label="Descargar PDF"
+                [class]="botonSecundario + ' disabled:opacity-60'"
+                [disabled]="generandoPdf()"
+                (click)="descargarPdf()"
+              >
+                <ui-icon [icono]="iconos.pdf" [tamano]="16" />PDF
+              </button>
+            }
           </div>
         }
         @if (pedidos().length) {
@@ -210,7 +227,7 @@ const LISTA = new Intl.ListFormat('es');
       </p>
     </div>
 
-    @if (base() || derivadas().length) {
+    @if (base() || derivadas().length || versiones().length) {
       <!-- Cotizaciones anidadas: de cuál salió y cuáles salieron de esta, con la diferencia de neto -->
       <section aria-labelledby="relacionadas-titulo" class="mt-3 rounded-xl bg-white/70 p-3 text-sm">
         <!-- Como el resumen: h2 en la vista completa (bajo el h1), h3 en la vista previa (bajo su h2) -->
@@ -226,6 +243,16 @@ const LISTA = new Intl.ListFormat('es');
               <a [routerLink]="['/ventas/cotizaciones', b.id]" [class]="enlace">{{ b.folio }}</a>
               <span>neto \${{ pesos(b.total) }}</span>
               <span [class]="diferencia(c(), b).clase">esta: {{ diferencia(c(), b).texto }}</span>
+            </li>
+          }
+          <!-- Revisiones (R1, R2…): la misma cotización en otra versión; la vigente es la última -->
+          @for (v of versiones(); track v.id) {
+            <li class="flex flex-wrap items-baseline gap-x-2">
+              <span class="text-texto-suave">{{ v.revision > c().revision ? 'Revisión posterior' : 'Versión anterior' }}</span>
+              <a [routerLink]="['/ventas/cotizaciones', v.id]" [class]="enlace">{{ v.folio }}</a>
+              <span class="text-texto-suave">({{ estados[v.estado].nombre }})</span>
+              <span>neto \${{ pesos(v.total) }}</span>
+              <span [class]="diferencia(v, c()).clase">{{ diferencia(v, c()).texto }}</span>
             </li>
           }
           @for (d of derivadas(); track d.id) {
@@ -262,6 +289,8 @@ const LISTA = new Intl.ListFormat('es');
   `,
 })
 export class DetalleCotizacion {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly ventas = inject(VentasService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
@@ -271,7 +300,9 @@ export class DetalleCotizacion {
   readonly vista = input<'panel' | 'completa'>('panel');
   readonly cerrar = output();
 
+  private readonly auth = inject(AuthService);
   protected readonly iconos = {
+    cancelar: Ban,
     cerrar: X,
     completa: Maximize2,
     enviar: Send,
@@ -292,6 +323,15 @@ export class DetalleCotizacion {
   /** De cuál salió ("Nueva basada en esta") y cuáles salieron de esta. */
   protected readonly base = computed(() => this.ventas.cotizaciones().find((x) => x.id === this.c().baseId));
   protected readonly derivadas = computed(() => this.ventas.cotizaciones().filter((x) => x.baseId === this.c().id));
+  /** Las otras versiones de esta (mismo folio sin "-R…"): la original y sus revisiones, de la más nueva a la más vieja. */
+  protected readonly versiones = computed(() => {
+    const serie = (folio: string) => folio.replace(/-R\d+$/, '');
+    const mia = serie(this.c().folio);
+    return this.ventas
+      .cotizaciones()
+      .filter((x) => x.id !== this.c().id && serie(x.folio) === mia)
+      .sort((a, b) => b.revision - a.revision);
+  });
 
   /** Neto de `a` contra `b`: "$1,200.00 menos (−2.5 %)" en verde si mejoró el precio; en rojo si subió. */
   protected diferencia(a: CotizacionVista, b: CotizacionVista): { texto: string; clase: string } {
@@ -306,6 +346,17 @@ export class DetalleCotizacion {
   /** "Nueva basada en esta": la hoja de Nueva cotización con sus datos (?base=ID). */
   protected basadaEnEsta(): void {
     void this.router.navigate(['/ventas/cotizaciones/nueva'], { queryParams: { base: this.c().id } });
+  }
+
+  protected readonly puedeCancelar = computed(() => tiene(this.auth.sesion()?.permisos ?? [TODOS], 'ventas.cotizaciones.cancelar'));
+  protected async cancelar(): Promise<void> {
+    if (!confirm(`¿Cancelar la cotización ${this.c().folio}? Ya no se podrá enviar ni confirmar.`)) return;
+    try {
+      await this.ventas.cancelar(this.c().id);
+      this.aviso.set('Cotización cancelada.');
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
   }
 
   protected async cambiarVisibilidad(): Promise<void> {

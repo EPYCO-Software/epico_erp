@@ -79,3 +79,20 @@ public class Actividad : BaseEntity, IDeOrganizacion
     [Rastreado("Hecha")] public DateTime? HechaEn { get; set; }
     [Rastreado("Cancelada")] public DateTime? CanceladaEn { get; set; }
 }
+
+/// <summary>Aviso para un usuario (campana del ERP). Las genera el sistema al guardar; el usuario solo las marca leídas.</summary>
+public class Notificacion : IEntidad
+{
+    public Guid Id { get; set; }
+    public Guid UsuarioId { get; set; }
+    /// <summary>ventas, pedidos, crm…</summary>
+    [MaxLength(30)] public string Modulo { get; set; } = "";
+    [MaxLength(200)] public string Titulo { get; set; } = "";
+    [MaxLength(500)] public string Texto { get; set; } = "";
+    /// <summary>Ruta del ERP a la que lleva (/ventas/cotizaciones/{id}).</summary>
+    [MaxLength(300)] public string? Ruta { get; set; }
+    public DateTime Fecha { get; set; }
+    public DateTime? LeidaEn { get; set; }
+    /// <summary>Evita repetir avisos que se generan al consultar (actividad-vencida:{id}).</summary>
+    [MaxLength(80), System.Text.Json.Serialization.JsonIgnore] public string? Clave { get; set; }
+}

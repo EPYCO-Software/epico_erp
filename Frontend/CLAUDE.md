@@ -36,9 +36,10 @@ projects/
         core/              interceptors (api.interceptor: token en /api; con 401, un refresh y reintento; si no,
                            al login), modulos.ts (catálogo de módulos = la navegación; búsqueda sin acentos
                            (`normalizar`), favoritos, `menu` del encabezado de cada módulo (menús desplegables con enlaces y secciones con título, como Odoo; `enlacesDelMenu`), `activo` (por ahora solo CRM, Ventas y pedidos), `filtros`
-                           de la pantalla de inicio (se suman: activados por defecto + favoritos; "todos" va solo) y moduloActivoGuard: canActivateChild del shell, cada ruta indica `data.modulo`), plantas.ts
+                           de la pantalla de inicio (se suman: activados por defecto + favoritos; "todos" va solo) y moduloActivoGuard: canActivateChild del shell, cada ruta indica `data.modulo`), permisos.ts (qué ve cada usuario según los permisos de su rol: PERMISOS_MODULO da los prefijos que abren cada módulo, PERMISOS_RUTA el permiso "ver" de cada página; ModulosService.visibles y menuDe() ocultan lo demás y moduloActivoGuard manda a /inicio; módulos sin permisos en el backend, solo root; sin permisos en la sesión (demo), todo. Al agregar una página con permiso propio, agrégala a PERMISOS_RUTA; las altas (/nueva, /nuevo) piden "crear" y van antes que su lista. Botones y acciones: `protected readonly puede = permisosSesion();` y `@if (puede('ventas.productos.editar'))`, con la clave exacta del backend (GET /permisos); sin permiso no se ofrece. VentasApi.cargar: lo que el rol no puede ver (403) llega vacío y no tumba lo demás), plantas.ts
                            (razones sociales con sus plantas y la selección: una principal + otras opcionales, nunca
-                           vacía), mensajeria.ts (notificaciones, chats, canales y ventanas de chat abiertas; demo en
+                           vacía; con backend, las de la sesión (razonesDeSesion, planta = su código); sin él,
+                           RAZONES_SOCIALES; fuera de componentes, razonesVigentes / plantasVigentes), mensajeria.ts (notificaciones, chats, canales y ventanas de chat abiertas; demo en
                            memoria) e historial.ts (HistorialService: el historial
                            de cada registro, como el chatter de Odoo sin mensajes: lo que hacen las pantallas con sus
                            campos antes → después, notas internas y actividades programadas; clave "tipo:id";
@@ -84,6 +85,12 @@ projects/
                              Toda vista completa nueva lo lleva, y sus acciones registran en él.
                            - menu-mensajeria.ts: globo como el de Odoo, un solo icono (no hay campana) con pestañas
                              Notificaciones (todo junto) / Chats / Canales y "Mensaje nuevo" (buscar una persona).
+                             Con backend: campana solo con notificaciones (GET /me/notificaciones al entrar y cada
+                             60 s; leída y "Marcar todas como leídas" con PUT) y el chat oculto (conChat = false).
+                           - Regla: con backend no se muestra nada de ejemplo. Los datos demo (VENDEDORES, EQUIPOS,
+                             LISTAS, DEMO de lealtad, historialDemo de reportes, PERSONAS) solo existen sin AUTH_API_URL
+                             (pruebas). vendedores y equipos son signals de datos.ts que VentasService llena del backend;
+                             listas de precios (precios.ts) y programas (lealtad.ts) leen y escriben en su CRUD.
                            - chats.ts + ventana-chat.ts: chats abiertos abajo a la derecha; caben 3 a la vista y con
                              más la zona se desplaza de lado (row-reverse: el más reciente a la derecha). Minimizar =
                              burbuja redonda con el nombre al pasar el mouse (Esc lo oculta); Esc en una ventana la
@@ -92,7 +99,10 @@ projects/
                              en el nombre = solo esa, casillas = combinar.
                            - Los dos paneles son `popover` nativo (Esc, clic fuera y foco de vuelta los da el
                              navegador), colocados con `colocarBajo` (popover.ts) para no salirse de la ventana.
-                           - ayuda.ts y preferencias.ts: diálogos del menú del avatar. Preferencias como Odoo
+                           - ayuda.ts y preferencias.ts: diálogos del menú del avatar. Con backend, preferencias
+                             por usuario (core/preferencias-usuario.ts: /me, /me/preferencias, /me/password; la planta
+                             predeterminada se aplica al entrar). Seguridad → Dispositivos: /me/sesiones (cerrar las
+                             de otros equipos; la de este es cerrar sesión). Preferencias como Odoo
                              (Preferencias / Calendario / Seguridad), anclado arriba para que cambiar de pestaña no lo
                              mueva; edita una copia y solo "Actualizar preferencias" la guarda. Se abren por signal
                              para que, al cerrar, el foco vuelva al avatar. pestanas.ts: teclado de pestañas ARIA.
@@ -112,7 +122,7 @@ projects/
                            página salen solas del `menu` con `menuEnConstruccion()`)
         features/ventas/   módulo Ventas (/ventas → /ventas/cotizaciones; el de clientes es CRM). cotizaciones.ts: vista de
                            lista como Odoo. En la barra del encabezado: "Nuevo", título y buscador con los filtros
-                           aplicados como etiquetas (por defecto "Mis cotizaciones"; filtros-cotizaciones.ts: popover
+                           aplicados como etiquetas (por defecto "Mis cotizaciones"; ui-buscador: popover
                            con casillas, los estados se suman). Tabla de lado a lado con casillas para marcar varias o
                            todas (se desmarcan al cambiar búsqueda, filtros o plantas) y el total sin canceladas.
                            Solo las de las plantas elegidas en el encabezado. datos.ts: 12 cotizaciones demo (shortcut) y filtrarCotizaciones (con pruebas).
@@ -161,7 +171,14 @@ projects/
                            maquinaria como líneas (SRV-…, REN-…), fechas UTC ↔ ISO con offset de la planta, descuento %
                            ↔ importe. El historial de cotizaciones, órdenes, clientes y productos viene del backend
                            (HistorialService.remoto; notas a /historial/…/notas). Sin API (pruebas, portal) sigue la demo
-                           en memoria. shortcut: carga todo y el detalle de cada cotización (N peticiones) al entrar.
+                           en memoria. Cotizaciones y pedidos llegan paginados ({ items, total }) con su detalle
+                           (incluir=partidas / lineas); nombres de usuarios de /usuarios/resumen; el traslado inicial
+                           es el de la planta (trasladoDe, de la sesión); el PDF de un borrador usa el folio de
+                           /secuencias/siguiente (folioSiguiente). Actividades del historial en /actividades
+                           (HistorialService.remoto: actividades, programar, cerrar; "asignada a" = usuarios de la
+                           organización, HistorialService.personas). "Actividad programada / realizada / cancelada"
+                           lo escribe el backend en el hilo del registro: el front solo vuelve a leerlo. shortcut: aún trae todas las cotizaciones y
+                           pedidos al entrar; con volumen, pedir por periodo.
                            Historial: cotizaciones, órdenes y clientes llevan el suyo en la vista completa (claves en
                            `registro`). Guardar cambios registra precio del concreto, descuento y total antes → después y
                            los productos y servicios agregados o quitados (`cambiosEntre`); enviar y confirmar registran
@@ -282,6 +299,64 @@ projects/
                            backend.
                            Prueba solo en Cotizaciones: la vista previa en Liquid Glass (`liquido`). Si gusta, pasa a
                            todas.
+        Soluciones             (ui/lib/cotizacion/concretos.ts) las 7 soluciones del cotizador son etiquetas de los concretos
+                           f´c/MR en Productos (Producto.soluciones). Quien carga los productos llena concretosServidor
+                           (ERP: VentasService; portal: ObrasService con /portal/catalogo): solucionesDisponibles() solo
+                           ofrece las que tienen concretos, resistenciasDe(solucion) las de sus concretos,
+                           sugeridaDisponible() ajusta la sugerida y precioConcreto toma el precio de lista del producto.
+                           Sin backend, el tarifario fijo de formato.ts.
+                           Vocabulario de la partida en la API: exposicion normal|humedad|marina y colocacion directa|bombeable
+                           (el front dice "bombeo"; partidaApi/aPartida lo traducen). Clientes: Eliminar solo sin cotizaciones,
+                           órdenes ni obras (409 del backend; el de mostrador nunca). Cotizaciones: "Cancelar cotización" en
+                           el menú del lápiz (POST /cancelar); "Cotizaciones relacionadas" incluye sus revisiones (mismo folio
+                           sin -R…). Público en general: lo crea la primera cotización "Sin cliente" y entra a la lista.
+                           Aditivos: también son productos (tipo/categoría "aditivo", código AJ-ADT-{CLAVE}; en la API tipo
+                           concreto). aditivosServidor (lo llenan VentasService y ObrasService) → aditivosDisponibles() en los
+                           dos cotizadores; la partida guarda la clave en minúsculas (fibra-sintetica) y su precio por m³ se
+                           suma al concreto. Se dan de alta y se editan (nombre, descripción, precio) en Productos; su código
+                           nunca cambia. Sin backend, los 5 de siempre (ADITIVOS).
+                           Primero se elige cómo: Producto (un concreto de la lista), Solución o Configurar manual (ERP:
+                           segmentos en cada producto de nueva-cotizacion.ts; portal: tarjetas del paso 1, manual va directo a
+                           especificaciones). A mano, concretoExistente(tipo, kg) avisa "Este producto ya existe" con "Usar el
+                           producto"; si no existe es pedido especial (PartidaCotizacion.especial, API `especial`): se guarda
+                           sin tarifa, lineasPartida lo pone en $0 "precio por confirmar" y Ventas escribe su precio en el
+                           editor; el backend no deja enviar, confirmar ni aceptar sin él. Una orden directa lo pide al crear.
+        Lugar de entrega       una cotización (y sus pedidos) va a una obra O a un lugar de entrega capturado solo para ella
+                           (Cotizacion.lugar / Pedido.lugar: dirección, municipio, referencias, GPS, quién recibe; en la
+                           API entrega* + contactoNombre/Telefono y obraId null). No crea obras. Sus partidas apuntan a
+                           idLugar(id) y las vistas lo ven como obra de solo lectura (obraDelLugar, VentasService.destinos);
+                           la sección Obras y los conteos usan solo VentasService.obras. En la nueva cotización, con lugar
+                           los productos no eligen obra (LUGAR); el selector de obras incluye las generales.
+        features/ventas/obras.ts  Ventas → Órdenes → Obras (/ventas/obras, /nueva?cliente=, /:id): posiciones de entrega de un
+                           cliente o generales (Obra.clienteId '' = general; en la API null). CRUD en /obras (permisos
+                           ventas.obras.*; borrar da 409 si la usan cotizaciones o pedidos, y el botón se deshabilita),
+                           historial propio 'obra:'+id. editor-obra.ts = cliente + el formulario de obra compartido
+                           (ui/lib/obras/obra-form.ts, el mismo del portal, con mapa, responsable y contactos).
+        features/configuracion/ módulo Seguridad y plataforma (/configuracion → /configuracion/usuarios; menú "Usuarios y
+                           compañías" como Ajustes de Odoo; Empresas y Plantas en construcción). Todo en el backend
+                           (acceso.ts: AccesoService; sin API, listas vacías). Usuarios (usuarios.ts, detalle-usuario.ts,
+                           usuario.ts, nuevo-usuario.ts, form-usuario.ts): lista con vista previa y vista completa con
+                           historial; alta con /usuarios/alta (datos, contraseña inicial opcional, su rol —uno solo, en el
+                           usuario: Usuario.rolId— y accesos: empresa, planta o todas y predeterminado, sin rol) y edición
+                           con PUT /usuarios/{id} (manda siempre el rolId) + /usuarios/{id}/accesos;
+                           asignar contraseña (también desbloquea), activar/desactivar (no a sí mismo) y sus sesiones
+                           (/sesiones?usuarioId, cerrar). Roles (roles.ts, detalle-rol.ts, rol.ts, nuevo-rol.ts,
+                           form-rol.ts): /roles/resumen (permisos y accesos que lo usan) y matriz de permisos por módulo y
+                           recurso con el catálogo de GET /permisos; PUT /roles/{id}/permisos reemplaza todo. Reglas (con
+                           pruebas): `tiene` (exacta, "*", "modulo.*", "modulo.recurso.*", como el backend), solo se dan
+                           o quitan los permisos que uno tiene, "Acceso total" solo root, roles del sistema solo root,
+                           desmarcar algo cubierto por un comodín lo cambia por sus claves (alternarClave). Eliminar un
+                           rol solo si nadie lo usa. shortcut: usuario.ts y rol.ts crean VentasService para conectar el
+                           historial del backend. Permisos por usuario: el rol es la plantilla y cada usuario guarda solo
+                           la diferencia (AjustesUsuario: agregados y quitados; efectivos = rol + agregados − quitados,
+                           `permitido`/`ponerPermiso`); GET/PUT /usuarios/{id}/permisos, también en /usuarios/alta. La
+                           matriz es matriz-permisos.ts (la comparten form-rol.ts y permisos-usuario.ts); en la ficha,
+                           sección Permisos; en el alta, precargada con el rol. Servidores de correo (servidores-correo.ts, menú "Plataforma"): CRUD de
+                           /servidores-correo; password solo de entrada (null conserva, "" borra; vuelve tienePassword),
+                           "Probar conexión" (POST {id}/probar) y, para root, el global (404 = no hay).
+        ui/src/lib/auth/restablecer.ts  página /restablecer de ERP y portal: sin ?token pide el correo (POST /auth/olvide,
+                           siempre 204); con el token del correo pide la nueva (POST /auth/restablecer; 400 = enlace
+                           vencido o usado). Sin AUTH_API_URL (portal hoy) solo muestra un aviso.
         features/auth/     login del ERP (/login) y capas-glass.ts: baraja de 3 cartas de vidrio (la principal con cara
                            oscura SVG y dos detrás, pegadas, que se reparten al entrar; los vidrios son HTML con
                            backdrop-filter recortado con clipPath objectBoundingBox), tarjetas de módulos inclinadas y
@@ -295,8 +370,15 @@ projects/
         layout/shell.ts    topbar con logo, menú (drawer en móvil) y menú de usuario
         features/auth/     login del portal (/login)
         core/services/     CotizacionService (diseños guardados y partidas), ObrasService (obras del cliente con
-                           dirección y GPS) y ChatService (atención al cliente):
-                           hoy en memoria; reemplazar por HTTP/canal real sin tocar la UI
+                           dirección y GPS) y ChatService (atención al cliente).
+                           Con backend (AUTH_API_URL '/api/v1', proxy projects/portal/proxy.conf.json, apiInterceptor
+                           de ui) todo es de /api/v1/portal/** y del cliente de la sesión (sesion.cliente):
+                           obras, catálogo (sus plantas → plantasServidor de ui, que usa plantaPara: la más cercana a
+                           la obra), cotizaciones (cotizacionApi/aCotizacion de ui/api/ventas, las mismas del ERP; el
+                           folio y los precios los pone el backend), aceptar, diseños, pedidos (pedidos-api.ts) con sus
+                           viajes (SeguimientoService, sondeo cada minuto, sin GPS), remisiones, perfil (la empresa es
+                           de solo lectura), datos fiscales y sus documentos (/portal/archivos). Sin backend (pruebas),
+                           todo de ejemplo en memoria. El chat con el asesor se oculta (no existe en el backend).
         layout/chat-flotante.ts  burbuja de atención al cliente: fija abajo a la derecha, z-70, en todas las páginas
         features/catalogo/ cotizador "Configuremos tu pedido" (destino tras el login):
                            cotizador.state.ts (estado de la página, provisto en el componente), paso-solucion /
@@ -466,6 +548,8 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
   el cuerpo de `login()` por la llamada HTTP (que lance error si falla), vaciar `DEMO` y, si aplica, agregar el
   token en `core/interceptors/api.interceptor.ts` del ERP. Las pantallas no cambian.
 - Errores de login: mensaje genérico, sin revelar qué dato falló.
+- Cada app manda `app` en /auth/login (AUTH_APP de ui: "erp" por omisión, el portal provee "portal"): el backend no deja
+  entrar a un usuario del portal en el ERP ni al revés (403 con su mensaje). El ERP además rechaza una sesión con `cliente`.
 - Formularios nuevos con Signal Forms (`form`, `[formField]`, `submit`) y `ui-field-error` enlazado con
   `aria-describedby`; al enviar inválido, mover el foco al primer campo con error.
 
@@ -515,6 +599,16 @@ Tokens en `projects/ui/styles/base.css` (`@theme`): generan utilidades como `bg-
 
 ### Piezas interactivas de `ui`
 
+- `ui-buscador`: el buscador de TODA lista o tabla (ERP y portal). Regla: ningún filtro fuera de la barra de búsqueda
+  (ni botones, ni segmentos, ni filtros en los encabezados de columna). Filtros por columna: un `GrupoFiltro` por cada
+  columna que lo amerite, en el panel del botón de filtros: categorías con casillas y conteo (`opcionesDe(filas, valor)`;
+  se suman, ninguna = todas; `pasaFiltro`), fechas y montos con `rango: 'fecha' | 'numero'` (desde/hasta; `enRango`), sí/no
+  como dos casillas. Nombres, folios, RFC o teléfonos no llevan filtro: los cubre el texto. Un grupo con una sola opción
+  no se muestra. Los activos van como etiquetas con × en la barra; "Quitar filtros" en el panel. Uso:
+  `<ui-buscador idBuscar="buscar-x" etiqueta="Buscar …" [(texto)]="texto" [grupos]="grupos()" [(filtros)]="filtros" />`.
+  Cotizaciones abre con vendedor = el usuario ("Mis cotizaciones") y Recibidas con estado Recibida. Lo usan todas las
+  listas del ERP (Ventas y Seguridad), la cartera del reporte de Clientes y Mis pedidos y Remisiones del portal.
+  `colocarBajo` (popovers bajo su botón) vive aquí.
 - `ui-mapa`: Google Maps embebido en modo libre (sin API key ni costo). Con GPS muestra el punto exacto; si no,
   busca la dirección. Uso: `<ui-mapa class="h-60" [ubicacion]="obra.ubicacion" [direccion]="…" titulo="Mapa de …" />`.
 

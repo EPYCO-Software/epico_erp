@@ -1,5 +1,7 @@
 import { Service, computed, inject, signal } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from 'ui';
+import { puedeVerModulo, puedeVerRuta } from './permisos';
 
 export type IdModulo =
   | 'seguridad'
@@ -47,7 +49,7 @@ export interface MenuModulo {
 export const enlacesDelMenu = (m: MenuModulo) => [...m.enlaces, ...(m.secciones ?? []).flatMap((s) => s.enlaces)];
 
 // shortcut: módulos activos fijos para todas las empresas; vendrán del backend (licencia/configuración por empresa).
-const ACTIVOS: IdModulo[] = ['crm', 'ventas', 'pedidos'];
+const ACTIVOS: IdModulo[] = ['seguridad', 'crm', 'ventas', 'pedidos'];
 
 /**
  * Los mismos menús que Ventas en Odoo. Las opciones sin página abren "en construcción" (app.routes.ts).
@@ -62,6 +64,7 @@ const MENU_VENTAS: MenuModulo[] = [
       { nombre: 'Cotizaciones recibidas', ruta: '/ventas/cotizaciones/recibidas' },
       { nombre: 'Órdenes', ruta: '/ventas/ordenes' },
       { nombre: 'Clientes', ruta: '/ventas/clientes' },
+      { nombre: 'Obras', ruta: '/ventas/obras' },
     ],
   },
   {
@@ -124,12 +127,26 @@ const MENU_VENTAS: MenuModulo[] = [
   },
 ];
 
+/** Como Ajustes → Usuarios y compañías de Odoo. Empresas y Plantas, en construcción. */
+const MENU_SEGURIDAD: MenuModulo[] = [
+  {
+    nombre: 'Usuarios y compañías',
+    enlaces: [
+      { nombre: 'Usuarios', ruta: '/configuracion/usuarios' },
+      { nombre: 'Roles y permisos', ruta: '/configuracion/roles' },
+      { nombre: 'Empresas', ruta: '/configuracion/empresas' },
+      { nombre: 'Plantas', ruta: '/configuracion/plantas' },
+    ],
+  },
+  { nombre: 'Plataforma', enlaces: [{ nombre: 'Servidores de correo', ruta: '/configuracion/servidores-correo' }] },
+];
+
 /**
  * Catálogo de módulos del ERP, en el orden de la pantalla de inicio. Es la navegación de la app.
  * Los nombres llevan espacio no separable (\u00a0) donde el mockup corta la línea distinto ("Integraciones / e IoT").
  */
 const CATALOGO: Omit<Modulo, 'activo'>[] = [
-  { id: 'seguridad', nombre: 'Seguridad y plataforma', ruta: '/configuracion' },
+  { id: 'seguridad', nombre: 'Seguridad y plataforma', ruta: '/configuracion', menu: MENU_SEGURIDAD },
   { id: 'crm', nombre: 'CRM', ruta: '/clientes' },
   { id: 'ventas', nombre: 'Ventas', ruta: '/ventas', menu: MENU_VENTAS },
   { id: 'pedidos', nombre: 'Pedidos y atención', ruta: '/pedidos' },
@@ -180,9 +197,9 @@ export const FILTROS_MODULOS: { id: FiltroModulos; nombre: string }[] = [
   { id: 'todos', nombre: 'Todos los módulos' },
 ];
 
-/** Los módulos de cualquiera de los filtros (se suman), en el orden del catálogo. */
-export function modulosDelFiltro(filtros: FiltroModulos[], favoritos: Modulo[]): Modulo[] {
-  return MODULOS.filter(
+/** Los módulos de cualquiera de los filtros (se suman), en el orden del catálogo; de `base`, los que puede ver. */
+export function modulosDelFiltro(filtros: FiltroModulos[], favoritos: Modulo[], base: Modulo[] = MODULOS): Modulo[] {
+  return base.filter(
     (m) =>
       filtros.includes('todos') ||
       (filtros.includes('activados') && m.activo) ||
@@ -194,6 +211,25 @@ const LISTA = new Intl.ListFormat('es');
 
 @Service()
 export class ModulosService {
+  private readonly auth = inject(AuthService);
+  /** Los permisos de la sesión (por su rol); sin ellos (demo sin backend), todo. */
+  private readonly permisos = computed(() => this.auth.sesion()?.permisos);
+  /** Los módulos que el usuario puede ver: los que su rol le da (permisos.ts). Los demás no aparecen. */
+  readonly visibles = computed(() => MODULOS.filter((m) => puedeVerModulo(this.permisos(), m.id)));
+
+  /** El menú del módulo solo con las opciones que puede abrir (sin grupos vacíos). */
+  menuDe(m: Modulo): MenuModulo[] {
+    const p = this.permisos();
+    const ver = (e: EnlaceModulo) => puedeVerRuta(p, e.ruta);
+    return (m.menu ?? [])
+      .map((g) => ({
+        ...g,
+        enlaces: g.enlaces.filter(ver),
+        secciones: g.secciones?.map((s) => ({ ...s, enlaces: s.enlaces.filter(ver) })).filter((s) => s.enlaces.length),
+      }))
+      .filter((g) => g.enlaces.length || g.secciones?.length);
+  }
+
   /** Texto del buscador del encabezado (y del de la pantalla de inicio en celular). */
   readonly busqueda = signal('');
   /** Por defecto solo los activados. Nunca queda vacío: sin ninguno es "todos". */
@@ -208,10 +244,12 @@ export class ModulosService {
   readonly favoritos = computed(() =>
     this.idsFavoritos()
       .map(buscarModulo)
-      .filter((m): m is Modulo => !!m),
+      .filter((m): m is Modulo => !!m && this.visibles().includes(m)),
   );
   /** Los de los filtros elegidos; la búsqueda busca dentro de ellos. */
-  readonly resultados = computed(() => filtrarModulos(modulosDelFiltro(this.filtros(), this.favoritos()), this.busqueda()));
+  readonly resultados = computed(() =>
+    filtrarModulos(modulosDelFiltro(this.filtros(), this.favoritos(), this.visibles()), this.busqueda()),
+  );
   readonly buscando = computed(() => this.busqueda().trim() !== '');
 
   /** Activados y Favoritos se combinan; "Todos" quita los demás y marcar otro lo quita a él. */
@@ -227,10 +265,15 @@ export class ModulosService {
 
 /**
  * Las páginas de módulos no activados no se abren ni escribiendo la dirección: llevan al aviso de /modulos/:id.
- * Cada ruta indica su módulo en `data.modulo`.
+ * Las de un módulo o una página para los que el rol del usuario no da permiso, tampoco: llevan a /inicio (el backend
+ * además rechaza sus datos). Cada ruta indica su módulo en `data.modulo`.
  */
-export const moduloActivoGuard: CanActivateFn = (ruta) => {
+export const moduloActivoGuard: CanActivateFn = (ruta, estado) => {
   const id = ruta.data['modulo'] as IdModulo | undefined;
   const modulo = id ? buscarModulo(id) : undefined;
-  return !modulo || modulo.activo || inject(Router).createUrlTree(['/modulos', modulo.id]);
+  const router = inject(Router);
+  const permisos = inject(AuthService).sesion()?.permisos;
+  if (modulo && !puedeVerModulo(permisos, modulo.id)) return router.createUrlTree(['/inicio']);
+  if (estado?.url && !puedeVerRuta(permisos, estado.url)) return router.createUrlTree(['/inicio']);
+  return !modulo || modulo.activo || router.createUrlTree(['/modulos', modulo.id]);
 };

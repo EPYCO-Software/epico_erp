@@ -37,15 +37,32 @@ public abstract class CrudController<T>(IAppDbContext db, IUsuarioActual yo) : C
     protected Task<bool> PadreVisible<TPadre>(Guid id, CancellationToken ct) where TPadre : class, IEntidad =>
         db.Set<TPadre>().AnyAsync(p => p.Id == id, ct);
 
+    /// <summary>
+    /// Datos que el cliente puede omitir, antes de revisar permisos. Base: organizacionId vacío = la del registro guardado
+    /// (al editar) o la del usuario (al crear).
+    /// </summary>
+    protected virtual void Completar(T x, T? actual)
+    {
+        if (x is not IDeOrganizacion { OrganizacionId: var o } d || o != Guid.Empty) return;
+        if (actual is IDeOrganizacion a) d.OrganizacionId = a.OrganizacionId;
+        else if (yo.OrganizacionId is Guid org) d.OrganizacionId = org;
+    }
+
     /// <summary>Último paso antes de guardar (dentro de la transacción del alta): folios, valores derivados…</summary>
     protected virtual Task AntesDeGuardar(T x, bool nuevo, CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>Filtros de GET lista. Base: igualdad por campo (FiltroQuery); un CRUD puede sumar los suyos (?q=…).</summary>
+    protected virtual IQueryable<T> Filtrar(IQueryable<T> q) => FiltroQuery.Aplicar(q, Request.Query);
+
+    /// <summary>Para impedir el borrado (lanza ReglaException) si el registro está en uso.</summary>
+    protected virtual Task AntesDeBorrar(T x, CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>Lista</summary>
     /// <remarks>Hasta 500 por página (skip/take). Filtra por igualdad con cualquier campo en la query:
     /// <c>?clienteId=…&amp;activo=true&amp;estado=por_cobrar</c>; un campo que no existe da 400.</remarks>
     [HttpGet]
     public async Task<List<T>> Lista([FromQuery, Range(0, int.MaxValue)] int skip = 0, [FromQuery, Range(1, 500)] int take = 100, CancellationToken ct = default) =>
-        await FiltroQuery.Aplicar(Consulta().AsNoTracking(), Request.Query).OrderBy(x => x.Id).Skip(skip).Take(take).ToListAsync(ct);
+        await Filtrar(Consulta().AsNoTracking()).OrderBy(x => x.Id).Skip(skip).Take(take).ToListAsync(ct);
 
     /// <summary>Uno por id</summary>
     [HttpGet("{id:guid}")]
@@ -59,7 +76,7 @@ public abstract class CrudController<T>(IAppDbContext db, IUsuarioActual yo) : C
     {
         x.Id = Guid.Empty; // lo genera EF
         if (x is BaseEntity b) b.IsDeleted = false;
-        if (x is IDeOrganizacion { OrganizacionId: var o } d && o == Guid.Empty && yo.OrganizacionId is Guid org) d.OrganizacionId = org;
+        Completar(x, null);
         if (!await PermitidoAsync(x, ct)) return SinAcceso();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await AntesDeGuardar(x, true, ct);
@@ -76,7 +93,7 @@ public abstract class CrudController<T>(IAppDbContext db, IUsuarioActual yo) : C
     {
         var actual = await Consulta().FirstOrDefaultAsync(r => r.Id == id, ct);
         if (actual is null) return NotFound();
-        if (x is IDeOrganizacion { OrganizacionId: var o } d && o == Guid.Empty) d.OrganizacionId = ((IDeOrganizacion)actual).OrganizacionId;
+        Completar(x, actual);
         if (!await PermitidoAsync(actual, ct) || !await PermitidoAsync(x, ct)) return SinAcceso();
 
         var entry = db.Entry(actual);
@@ -96,6 +113,7 @@ public abstract class CrudController<T>(IAppDbContext db, IUsuarioActual yo) : C
         var actual = await Consulta().FirstOrDefaultAsync(r => r.Id == id, ct);
         if (actual is null) return NotFound();
         if (!await PermitidoAsync(actual, ct)) return SinAcceso();
+        await AntesDeBorrar(actual, ct);
         db.Set<T>().Remove(actual);
         await db.SaveChangesAsync(ct);
         return NoContent();
@@ -104,7 +122,7 @@ public abstract class CrudController<T>(IAppDbContext db, IUsuarioActual yo) : C
     static readonly HashSet<string> Base = [.. typeof(BaseEntity).GetProperties().Select(p => p.Name)];
 
     /// <summary>Lo que el cliente puede cambiar: ni la base, ni lo oculto ([JsonIgnore]), ni lo de solo lectura.</summary>
-    static bool Editable(PropertyInfo p) =>
+    internal static bool Editable(PropertyInfo p) =>
         !Base.Contains(p.Name) && p.CanWrite &&
         p.GetCustomAttribute<JsonIgnoreAttribute>() is null &&
         p.GetCustomAttribute<EditableAttribute>() is not { AllowEdit: false };

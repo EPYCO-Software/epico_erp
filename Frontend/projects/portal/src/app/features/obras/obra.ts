@@ -1,12 +1,9 @@
 import { Component, computed, inject, input, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Lock, PencilLine, Phone } from 'lucide';
-import { ContactoObra, EstadoCobroEtiqueta, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, Mapa } from 'ui';
+import { Avatar, ContactoObra, EstadoCobroEtiqueta, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, Mapa, mensajeError, ObraForm, telefonoEnlace, telefonoVisible } from 'ui';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
 import { PedidosService, enCurso } from '../../core/services/pedidos.service';
-import { Avatar } from './avatar';
-import { ObraForm } from './obra-form';
-import { telefonoEnlace, telefonoVisible } from './telefono';
 
 /** Página de una obra: datos de entrega, responsable, contactos y sus pedidos. No se edita con pedidos en curso. */
 @Component({
@@ -55,7 +52,7 @@ import { telefonoEnlace, telefonoVisible } from './telefono';
       <p class="sr-only" aria-live="polite">{{ mensaje() }}</p>
 
       @if (editando()) {
-        <app-obra-form
+        <ui-obra-form
           class="mb-5 block"
           prefijo="editar"
           [nivelTitulo]="2"
@@ -72,7 +69,7 @@ import { telefonoEnlace, telefonoVisible } from './telefono';
             <section aria-labelledby="responsable-titulo" class="glass p-4 sm:p-5">
               <h2 id="responsable-titulo" class="text-lg font-bold">Responsable y contactos</h2>
               <div class="mt-3 flex items-center gap-4">
-                <app-avatar class="size-16 text-2xl" [nombre]="o.responsable.nombre" [foto]="o.responsable.foto" />
+                <ui-avatar-obra class="size-16 text-2xl" [nombre]="o.responsable.nombre" [foto]="o.responsable.foto" />
                 <p>
                   <span class="block text-xs text-texto-suave">Responsable de la obra</span>
                   <span class="block text-lg font-semibold">{{ o.responsable.nombre }}</span>
@@ -149,10 +146,14 @@ export default class ObraDetalle {
     setTimeout(() => this.formulario()?.enfocar());
   }
 
-  protected guardar(datos: NuevaObra): void {
+  protected async guardar(datos: NuevaObra): Promise<void> {
     if (this.bloqueada()) return; // por si entró un pedido mientras editaba
-    this.obras.actualizar(this.id(), datos);
-    this.editando.set(false);
-    this.mensaje.set('Cambios guardados.');
+    try {
+      await this.obras.actualizar(this.id(), datos);
+      this.editando.set(false);
+      this.mensaje.set('Cambios guardados.');
+    } catch (e) {
+      this.mensaje.set(mensajeError(e));
+    }
   }
 }

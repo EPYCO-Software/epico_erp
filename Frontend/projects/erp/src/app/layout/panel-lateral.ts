@@ -34,14 +34,18 @@ export const CAJAS_LISTA = {
   contenedor: 'flex flex-col gap-4 lg:h-full lg:flex-row',
   /** La columna de la tabla. */
   columna: COLUMNA + ' lg:min-w-0 lg:flex-1',
-  /** La caja de la tabla. */
-  tabla: 'glass min-w-0 px-2 pb-2 sm:px-3',
+  /**
+   * La caja de la tabla, sin relleno a los lados: los títulos (fondo blanco) y las filas van de orilla a orilla, y
+   * overflow-hidden recorta las esquinas de arriba con el redondeo de la caja (si no, se ve un cuadro blanco cortado).
+   * El relleno lo dan las celdas (la primera con pl-4).
+   */
+  tabla: 'glass min-w-0 overflow-hidden pb-2',
   /**
    * La tabla, que se desplaza de lado si no cabe (sin barra en escritorio; tabindex="0" para el teclado). Hacia abajo
    * se desplaza la columna, con todo y títulos.
    */
   region:
-    'overflow-x-auto rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico lg:sin-barra',
+    'overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-epico lg:sin-barra',
   /** Títulos de las columnas. */
   titulos: 'bg-white/95 shadow-[0_1px_0_var(--color-acero)]',
 };

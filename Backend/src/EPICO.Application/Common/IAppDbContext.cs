@@ -23,6 +23,10 @@ public interface IUsuarioActual
     Guid? SesionId { get; }
     Guid? OrganizacionId { get; }
     IReadOnlyList<Guid> EmpresaIds { get; }
+    /// <summary>Empresas en las que el usuario solo entra a algunas plantas (en las demás, a todas).</summary>
+    IReadOnlyList<Guid> EmpresasPorPlanta { get; }
+    /// <summary>Las plantas a las que entra dentro de <see cref="EmpresasPorPlanta"/>.</summary>
+    IReadOnlyList<Guid> SucursalIds { get; }
     /// <summary>Permiso "*": ve todas las empresas y puede todo.</summary>
     bool EsRoot { get; }
     bool Tiene(string permiso);

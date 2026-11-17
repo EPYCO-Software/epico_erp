@@ -35,7 +35,10 @@ export interface DocumentoFiscal {
   tipo: TipoDocumentoFiscal;
   tamano: number;
   fechaCarga: string;
-  archivo: File;
+  /** El archivo recién elegido (sin backend) … */
+  archivo?: File;
+  /** … o su id en el backend (GET /portal/archivos/{id}). */
+  archivoId?: string;
 }
 
 /** Un receptor fiscal del cliente (Facturación en el portal). */

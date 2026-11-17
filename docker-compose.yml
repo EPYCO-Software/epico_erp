@@ -31,6 +31,13 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # Atrapa los correos de desarrollo (SMTP localhost:1025); se ven en http://localhost:8025. Nunca salen a internet.
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   pgdata:
   

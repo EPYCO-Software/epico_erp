@@ -5,6 +5,7 @@ import { Historial } from '../../layout/historial';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
 import { VentasService, registro } from './datos';
 import { DetalleCotizacion } from './detalle-cotizacion';
+import { permisosSesion } from '../../core/permisos';
 
 /**
  * Vista completa de una cotización (/ventas/cotizaciones/:id), como el formulario de Odoo: en la barra del encabezado
@@ -17,7 +18,9 @@ import { DetalleCotizacion } from './detalle-cotizacion';
   template: `
     <ng-template appEnEncabezado>
       <div class="flex min-h-9 items-center gap-4">
-        <a routerLink="/ventas/cotizaciones/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+        @if (puede('ventas.cotizaciones.crear')) {
+          <a routerLink="/ventas/cotizaciones/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+        }
         <app-ruta-navegacion lista="Cotizaciones" ruta="/ventas/cotizaciones" [actual]="c()?.folio ?? id()" />
       </div>
     </ng-template>
@@ -45,12 +48,14 @@ import { DetalleCotizacion } from './detalle-cotizacion';
   `,
 })
 export default class CotizacionCompleta {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   /** De la ruta /ventas/cotizaciones/:id */
   readonly id = input.required<string>();
 
   private readonly ventas = inject(VentasService);
   protected readonly c = computed(() => this.ventas.cotizaciones().find((x) => x.id === this.id()));
-  protected readonly obras = this.ventas.obras;
+  protected readonly obras = this.ventas.destinos;
   protected readonly registro = registro;
   protected readonly cajas = CAJAS_VISTA;
 }

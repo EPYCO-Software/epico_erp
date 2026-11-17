@@ -20,7 +20,9 @@ import { Icon } from './icon';
       <section [attr.aria-label]="'Entrega en ' + g.obra.nombre">
         <p role="heading" [attr.aria-level]="nivel()" class="flex flex-wrap items-center gap-1.5 font-semibold">
           <ui-icon [icono]="iconoObra" [tamano]="16" class="text-epico" />{{ g.obra.nombre }}
-          <span class="font-normal text-texto-suave">· {{ g.obra.direccion }}, {{ g.obra.municipio }}</span>
+          @if (g.obra.direccion || g.obra.municipio) {
+            <span class="font-normal text-texto-suave">· {{ [g.obra.direccion, g.obra.municipio].filter((x) => !!x).join(', ') }}</span>
+          }
         </p>
         <ul class="mt-2 space-y-2">
           @for (p of g.partidas; track p.id) {

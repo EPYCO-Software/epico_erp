@@ -27,11 +27,15 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/publish .
 
+# Archivos subidos: carpeta escribible por la API (corre como $APP_UID). Monta aquí un volumen para no perderlos.
+RUN mkdir -p /data/archivos && chown $APP_UID /data/archivos
+
 LABEL org.opencontainers.image.source="https://github.com/EPYCO-Software/epico_erp"
 LABEL org.opencontainers.image.description="API de EPICO ERP"
 
 ENV ASPNETCORE_HTTP_PORTS=8080 \
-    ASPNETCORE_ENVIRONMENT=Production
+    ASPNETCORE_ENVIRONMENT=Production \
+    Archivos__Ruta=/data/archivos
 
 EXPOSE 8080
 USER $APP_UID

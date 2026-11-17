@@ -1,9 +1,9 @@
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormField, form, min, submit, validate } from '@angular/forms/signals';
-import { ConfigConcreto, FieldError, ProductoTarifa, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, TipoProducto, UNIDADES_PRODUCTO, pesos } from 'ui';
+import { ConfigConcreto, FieldError, ProductoTarifa, SOLUCIONES, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, TipoProducto, UNIDADES_PRODUCTO, pesos } from 'ui';
 import {
-  EQUIPOS,
+  equipos,
   NuevoProducto,
   OPCIONES_CONCRETO,
   TIPOS_EQUIPO,
@@ -38,10 +38,13 @@ interface Datos {
   tipoEquipo: TipoEquipo | 'otro' | '';
   unidades: string[];
   sinConectar: boolean;
+  /** Concretos: las soluciones del cotizador para las que sirve. */
+  soluciones: string[];
 }
 
 const PARA: Record<TipoProducto, string> = {
   concreto: 'Elige su configuración y el código interno se arma solo, como en la lista de planta.',
+  aditivo: 'Se agrega al concreto y suma su precio por m³ (impermeabilizante, fibra…). Se ofrece al cotizar en el ERP y en el portal.',
   servicio: 'Bombeo, renta de equipo, fletes, laboratorio…',
   general: 'Extras que se venden aparte: sacos de cemento, aditivos sueltos, varilla… Con control de existencias.',
 };
@@ -109,11 +112,11 @@ const opcion = (lista: readonly string[], valor: string) => (lista.includes(valo
           <h1 [id]="formId() + '-titulo'" class="text-2xl font-bold tracking-[-0.02em]">Nuevo producto</h1>
           <div class="flex items-center gap-3">
             <span id="producto-tipo-etiqueta" [class]="etiqueta" aria-hidden="true">Tipo</span>
-            <div role="radiogroup" aria-labelledby="producto-tipo-etiqueta" class="relative hidden grid-cols-3 rounded-xl bg-carbon/5 p-1 text-sm @xl:grid">
+            <div role="radiogroup" aria-labelledby="producto-tipo-etiqueta" class="relative hidden grid-cols-4 rounded-xl bg-carbon/5 p-1 text-sm @xl:grid">
               <!-- El indicador se desliza a la opción elegida -->
               <span
                 aria-hidden="true"
-                class="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/3)] rounded-lg bg-white shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none"
+                class="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/4)] rounded-lg bg-white shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none"
                 [style.transform]="'translateX(' + indice() * 100 + '%)'"
               ></span>
               @for (t of listaTipos; track t.id) {
@@ -230,6 +233,22 @@ const opcion = (lista: readonly string[], valor: string) => (lista.includes(valo
                 }
               </div>
             </section>
+          }
+
+          @if (conSoluciones()) {
+            <fieldset class="py-6" aria-describedby="producto-soluciones-nota">
+              <legend [class]="seccion">Soluciones</legend>
+              <p id="producto-soluciones-nota" class="mt-1 mb-3 text-sm text-texto-suave">
+                Para qué sirve este concreto al cotizar (ERP y portal). Una solución sin concretos no se ofrece.
+              </p>
+              <div class="flex flex-wrap gap-2">
+                @for (s of solucionesCatalogo; track s.id) {
+                  <label [class]="chip">
+                    <input type="checkbox" class="casilla" [checked]="modelo().soluciones.includes(s.id)" (change)="alternarSolucion(s.id)" />{{ s.nombre }}
+                  </label>
+                }
+              </div>
+            </fieldset>
           }
 
           @if (modelo().tipo === 'servicio') {
@@ -429,6 +448,7 @@ export class FormProducto implements OnInit {
     tipoEquipo: '',
     unidades: [],
     sinConectar: false,
+    soluciones: [],
   });
 
   protected readonly tarifario = computed(() => !!this.producto() && delTarifario(this.producto()!));
@@ -440,7 +460,7 @@ export class FormProducto implements OnInit {
   /** Los códigos de los demás productos (al editar, el propio no cuenta). */
   private readonly otros = computed(() => this.ventas.productos().filter((p) => p.id !== this.producto()?.id));
   private readonly usados = computed(() => this.otros().map((p) => p.codigo));
-  protected readonly disponibles = computed(() => EQUIPOS.filter((e) => e.tipo === this.modelo().tipoEquipo));
+  protected readonly disponibles = computed(() => equipos().filter((e) => e.tipo === this.modelo().tipoEquipo));
 
   /** La configuración con lo personalizado ya puesto en su lugar. */
   private readonly config = computed<ConfigConcreto>(() => {
@@ -472,7 +492,8 @@ export class FormProducto implements OnInit {
       if (this.mismaConfig()) return p!.codigo;
       return this.duplicado() && m.variante ? this.variante() : this.codigoBase();
     }
-    if (p && m.nombre.trim() === p.nombre) return p.codigo;
+    // Un aditivo conserva su código: su clave está en las cotizaciones que lo llevan
+    if (p && (m.tipo === 'aditivo' || m.nombre.trim() === p.nombre)) return p.codigo;
     return m.nombre.trim() ? codigoSugerido(m.tipo, m.nombre, this.usados()) : '';
   });
   protected readonly nombreFinal = computed(() => this.modelo().nombre.trim() || (this.conConfig() && this.codigoBase() ? this.nombreSugerido() : ''));
@@ -570,6 +591,7 @@ export class FormProducto implements OnInit {
         precio: p.precio,
         descripcion: p.descripcion,
         minimoExistencias: p.minimoExistencias ?? null,
+        soluciones: [...(p.soluciones ?? [])],
         renta: p.equipo ? 'si' : 'no',
         tipoEquipo: (p.equipo?.tipo as TipoEquipo | 'otro') ?? '',
         unidades: p.equipo?.unidades ?? [],
@@ -591,6 +613,14 @@ export class FormProducto implements OnInit {
 
   protected alternarUnidad(id: string): void {
     this.modelo.update((m) => ({ ...m, unidades: m.unidades.includes(id) ? m.unidades.filter((x) => x !== id) : [...m.unidades, id] }));
+  }
+
+  protected readonly solucionesCatalogo = SOLUCIONES;
+  /** Solo los concretos f´c y MR del tarifario: son los que el cotizador ofrece por solución (no los ajustes AJ-…). */
+  protected readonly conSoluciones = computed(() => ['concreto-fc', 'concreto-mr'].includes(this.producto()?.categoria ?? ''));
+
+  protected alternarSolucion(id: string): void {
+    this.modelo.update((m) => ({ ...m, soluciones: m.soluciones.includes(id) ? m.soluciones.filter((x) => x !== id) : [...m.soluciones, id] }));
   }
 
   protected marcarTodas(todas: boolean): void {
@@ -616,6 +646,7 @@ export class FormProducto implements OnInit {
         ...(m.tipo === 'general' ? { existencias: m.existencias ?? 0, minimoExistencias: m.minimoExistencias ?? 0 } : {}),
         ...(this.conConfig() ? { configuracion: this.config() } : {}),
         ...(equipo ? { equipo } : {}),
+        ...(this.conSoluciones() ? { soluciones: m.soluciones } : {}),
       });
       this.inicial = JSON.stringify(m);
       return undefined;

@@ -128,7 +128,7 @@
           <button
             type="button"
             class="min-h-11 rounded text-sm font-semibold text-epico hover:text-epico-oscuro hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico sm:text-[0.9375rem] lg:min-h-6 lg:text-[max(13px,calc(var(--u)*15))]"
-            (click)="aviso.set(avisos.recuperar)"
+            (click)="auth.conServidor ? router.navigateByUrl('/restablecer') : aviso.set(avisos.recuperar)"
           >
             ¿Olvidaste tu contraseña?
           </button>

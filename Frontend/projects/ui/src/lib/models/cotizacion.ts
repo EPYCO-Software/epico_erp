@@ -1,3 +1,4 @@
+import { LugarDeEntrega } from './obra';
 /** Cómo se lleva el concreto del camión al elemento. */
 export type Colocacion = 'directa' | 'bombeo';
 
@@ -7,7 +8,8 @@ export type Exposicion = 'normal' | 'humedad' | 'marina';
 /** RS = resistente a sulfatos (recomendado en ambiente marino). */
 export type TipoCemento = 'CPC 30R' | 'CPC 40' | 'CPC 30R RS';
 
-export type Aditivo = 'acelerante' | 'retardante' | 'impermeabilizante' | 'fibra-sintetica' | 'fibra-metalica';
+/** Clave del aditivo: la de su producto AJ-ADT-… en minúsculas (acelerante, fibra-sintetica…). Se dan de alta en Productos. */
+export type Aditivo = string;
 
 export type ServicioObra =
   | 'bomba-estacionaria'
@@ -61,6 +63,11 @@ export interface PartidaCotizacion extends ConfiguracionConcreto {
   precioM3?: number;
   /** Cargo por distancia que fija la concretera (ERP): sin él, la entrega está dentro del radio de la planta. */
   traslado?: Traslado;
+  /**
+   * Pedido especial: configuración manual que no está en los productos. Sin precioM3 su precio está por confirmar (lo
+   * pone Ventas en el ERP; no se envía ni se confirma sin él).
+   */
+  especial?: boolean;
 }
 
 /**
@@ -119,6 +126,8 @@ export type EstadoCotizacion = 'recibida' | 'borrador' | 'enviada' | 'pedido' | 
 export interface Cotizacion extends CotizacionGuardada {
   clienteId: string;
   plantaId: string;
+  /** Sin obra: el lugar de entrega capturado para esta cotización (sus partidas apuntan a idLugar(id)). */
+  lugar?: LugarDeEntrega;
   vendedorId: string;
   estado: EstadoCotizacion;
   /** Último envío al cliente: a su cuenta del portal si está conectado; si no, a un correo. */

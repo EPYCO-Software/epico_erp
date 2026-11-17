@@ -22,392 +22,56 @@ import {
   kmExtra,
   precioConcreto,
 } from 'ui';
-import { Cambio, EventoHistorial } from '../../core/historial';
-import type { CambiosCliente, CambiosPedido, ClienteExpress, LugarEntrega, NuevaCotizacion, NuevoProducto, CambiosProducto } from './datos';
-import { isoEnZona } from './datos';
+import { Actividad, Cambio, EventoHistorial, NuevaActividad, TipoActividad } from '../../core/historial';
+import { tiene } from '../../core/permisos';
+import type { CambiosCliente, CambiosPedido, ClienteExpress, Equipo, LugarEntrega, NuevoProducto, CambiosProducto, TipoEquipo } from './datos';
+import {
+  type ApiCategoria,
+  type ApiCliente,
+  type ApiContacto,
+  type ApiCotizacion,
+  type ApiDatoFiscal,
+  type ApiEvento,
+  type ApiExistencia,
+  type ApiObra,
+  type ApiPedido,
+  type ApiPedidoLinea,
+  type ApiProducto,
+  type ApiUnidad,
+  type Contexto,
+  type NuevaCotizacion,
+  type NuevaObra,
+  claveSat,
+  todos,
+  aCliente,
+  aCotizacion,
+  aObra,
+  aPedido,
+  aProducto,
+  aUtc,
+  contexto,
+  cotizacionApi,
+  isoEnZona,
+  redondear,
+  sucursalDe,
+} from 'ui';
 
-/**
- * El backend de Ventas (/api/v1): lo que responde tiene la forma del esquema (dbml) y aquí se traduce a los modelos del
- * front (ui/models), que es lo que leen las pantallas. Las funciones de mapeo son puras (probadas en ventas-api.spec);
- * VentasApi hace las llamadas.
- *
- * Diferencias que resuelve:
- * - Plantas: el front usa el código (ESC); la API el id de la sucursal (de la sesión: empresas[].plantas[]).
- * - Productos: el front usa los ids del tarifario (fc-300, servicio-bomba-estacionaria) porque de ellos sale el cálculo
- *   de formato.ts; la API, uuid. Se cruzan por el código (CON-FC-300). Los dados de alta conservan su uuid.
- * - Servicios y maquinaria: en el front son claves; en la API, líneas con producto (SRV-…, REN-…).
- * - Fechas: la API en UTC; el front, ISO con el offset de la planta (lo que se muestra y se edita).
- * - Descuento: en el front %, en la API el importe (se manda descuentoPct).
- */
+// Las conversiones puras viven en ui (las comparte el portal); se reexportan para quien ya las importaba de aquí.
+export type { ApiCategoria, ApiCliente, ApiContacto, ApiCotizacion, ApiDatoFiscal, ApiEvento, ApiExistencia, ApiObra, ApiPedido, ApiPedidoLinea, ApiProducto, ApiUnidad, Contexto } from 'ui';
+export { aCliente, aCotizacion, aObra, aPedido, aProducto, contexto, cotizacionApi, idFront, pedidoApi } from 'ui';
 
-// ---------- Forma de la API ----------
-
-interface Base {
-  id: string;
-  createdAt: string;
-  updatedAt: string | null;
-}
-export interface ApiCliente extends Base {
-  nombre: string;
-  giro: string | null;
-  correo: string | null;
-  telefono: string | null;
-  sitioWeb: string | null;
-  esPublicoGeneral: boolean;
-}
-export interface ApiContacto extends Base {
-  clienteId: string;
-  nombre: string;
-  apellidos: string | null;
-  puesto: string | null;
-  correo: string | null;
-  telefono: string | null;
-  principal: boolean;
-  usuarioId: string | null;
-}
-export interface ApiDatoFiscal extends Base {
-  clienteId: string;
-  alias: string;
-  razonSocial: string;
-  rfc: string;
-  regimenFiscal: string;
-  usoCfdi: string;
-  codigoPostal: string;
-  correo: string | null;
-  direccionFiscal: string | null;
-  predeterminado: boolean;
-}
-export interface ApiObra extends Base {
-  clienteId: string;
-  nombre: string;
-  direccion: string;
-  municipio: string | null;
-  referencias: string | null;
-  lat: number | null;
-  lng: number | null;
-  responsableNombre: string | null;
-  contactos: { nombre: string; lada: string; numero: string }[] | null;
-}
-export interface ApiProducto extends Base {
-  categoriaId: string;
-  tipo: 'concreto' | 'servicio' | 'general';
-  codigo: string;
-  nombre: string;
-  descripcion: string;
-  unidadId: string;
-  precioLista: number;
-  minimoCobro: number | null;
-  controlaExistencias: boolean;
-  minimoExistencias: number | null;
-  concretoFc: string | null;
-  concretoEdadDias: number | null;
-  concretoRevenimientoCm: number | null;
-  concretoSuministro: string | null;
-  equipoTipo: string | null;
-  activo: boolean;
-}
-export interface ApiCategoria {
-  id: string;
-  clave: string;
-}
-export interface ApiUnidad {
-  id: string;
-  clave: string;
-  nombre: string;
-}
-export interface ApiExistencia {
-  productoId: string;
-  sucursalId: string;
-  cantidad: number;
-}
-export interface ApiLinea {
-  id: string;
-  productoId: string;
-  concepto: string;
-  cantidad: number;
-  dias: number | null;
-  precioUnitario: number;
-  importe: number;
-}
-export interface ApiPartida extends Base {
-  orden: number;
-  nombre: string;
-  solucionId: string | null;
-  tipoResistencia: 'fc' | 'mr';
-  resistenciaKgCm2: number;
-  edadDias: number;
-  revenimientoCm: number;
-  tmaMm: number;
-  cemento: string;
-  exposicion: string;
-  colocacion: string;
-  aditivos: string[];
-  volumenM3: number;
-  precioM3: number;
-  entrega: string | null;
-  trasladoDistanciaKm: number | null;
-  trasladoIncluidosKm: number | null;
-  trasladoPrecioKm: number | null;
-  lineas: ApiLinea[];
-}
-export interface ApiCotizacion extends Base {
-  sucursalId: string;
-  clienteId: string | null;
-  obraId: string | null;
-  vendedorId: string | null;
-  folio: string;
-  serie: string;
-  revision: number;
-  baseId: string | null;
-  estado: EstadoCotizacion;
-  origen: 'erp' | 'portal';
-  ocultaAlCliente: boolean;
-  fecha: string;
-  descuento: number;
-  subtotal: number;
-  total: number;
-  partidas: ApiPartida[];
-}
-export interface ApiPedidoLinea {
-  id: string;
-  productoId: string;
-  descripcion: string;
-  cantidad: number;
-  precioUnitario: number;
-  importe: number;
-}
-export interface ApiPedido extends Base {
-  sucursalId: string;
-  clienteId: string;
-  obraId: string;
-  cotizacionId: string | null;
-  partidaId: string | null;
-  vendedorId: string | null;
-  folio: string;
-  fechaHoraEntrega: string;
-  estado: EstadoPedido;
-  cobro: EstadoCobro;
-  metodoPago: MetodoPago;
-  estatusPlanta: EstatusPlanta;
-  solicitudPlantaFecha: string | null;
-  solicitudPlantaNota: string | null;
-  descuento: number;
-  subtotal: number;
-  total: number;
-  lineas: ApiPedidoLinea[];
-}
-export interface ApiEvento {
-  id: string;
-  registroTipo: string;
-  registroId: string;
-  fecha: string;
-  autorId: string | null;
-  tipo: 'creado' | 'cambio' | 'eliminado' | 'restaurado' | 'nota' | 'mensaje' | 'actividad' | 'sistema';
-  texto: string;
-  detalles: string[] | null;
-  cambios: { etiqueta: string; tipoDato: string; valorAnterior: string | null; valorNuevo: string | null }[];
-}
-
-// ---------- Contexto para traducir ----------
-
-/** Lo que hace falta para traducir: plantas de la sesión y catálogos de productos. */
-export interface Contexto {
-  /** sucursalId → { código, zona } */
-  plantas: Map<string, { codigo: string; zona: string }>;
-  /** id de producto en la API → id en el front, y al revés. */
-  productoFront: Map<string, string>;
-  productoApi: Map<string, string>;
-  /** código del producto (SRV-BOMBA-PLUMA) por id de la API. */
-  codigoDe: Map<string, string>;
-}
-
-const ZONA_POR_OMISION = 'America/Mexico_City';
-const enZona = (utc: string | null, zona: string) => (utc ? isoEnZona(zona, new Date(utc)) : '');
-const aUtc = (iso: string | undefined) => (iso ? new Date(iso).toISOString() : null);
-const redondear = (n: number) => Math.round(n * 100) / 100;
-
-/** El id del tarifario del front que tiene ese código (CON-FC-300 → fc-300); si no hay, el uuid. */
-export function idFront(p: Pick<ApiProducto, 'id' | 'codigo'>): string {
-  return PRODUCTOS.find((x) => x.codigo === p.codigo)?.id ?? p.id;
-}
-
-export function contexto(empresas: { plantas: { id: string; codigo: string; zonaHoraria: string }[] }[], productos: ApiProducto[]): Contexto {
-  const productoFront = new Map(productos.map((p) => [p.id, idFront(p)]));
-  return {
-    plantas: new Map(empresas.flatMap((e) => e.plantas).map((p) => [p.id, { codigo: p.codigo, zona: p.zonaHoraria }])),
-    productoFront,
-    productoApi: new Map([...productoFront].map(([api, front]) => [front, api])),
-    codigoDe: new Map(productos.map((p) => [p.id, p.codigo])),
-  };
-}
-
-const planta = (ctx: Contexto, sucursalId: string) => ctx.plantas.get(sucursalId) ?? { codigo: sucursalId, zona: ZONA_POR_OMISION };
-const sucursalDe = (ctx: Contexto, codigo: string) => [...ctx.plantas].find(([, p]) => p.codigo === codigo)?.[0] ?? codigo;
-const productoApi = (ctx: Contexto, frontId: string) => ctx.productoApi.get(frontId) ?? frontId;
-const porCodigo = (ctx: Contexto, codigo: string) => [...ctx.codigoDe].find(([, c]) => c === codigo)?.[0] ?? codigo;
-
-// ---------- API → front ----------
-
-export function aCliente(c: ApiCliente, contactos: ApiContacto[], fiscales: ApiDatoFiscal[]): Cliente {
-  const contacto = contactos.find((x) => x.principal) ?? contactos[0];
-  const df = fiscales.find((x) => x.predeterminado) ?? fiscales[0];
-  return {
-    id: c.id,
-    nombre: c.nombre,
-    empresa: {
-      razonSocial: df?.razonSocial ?? '',
-      nombreComercial: c.nombre,
-      rfc: df?.rfc ?? '',
-      giro: c.giro ?? '',
-      correo: c.correo ?? '',
-      telefono: c.telefono ?? '',
-      sitioWeb: c.sitioWeb ?? '',
-      domicilioFiscal: df?.direccionFiscal ?? '',
-      cargoRepresentante: contacto?.puesto ?? '',
-    },
-    contacto: {
-      nombre: contacto?.nombre ?? '',
-      apellidos: contacto?.apellidos ?? '',
-      correo: contacto?.correo ?? '',
-      telefono: contacto?.telefono ?? '',
-      puesto: contacto?.puesto ?? '',
-    },
-    facturacion: fiscales.map((d) => ({
-      id: d.id,
-      alias: d.alias,
-      razonSocial: d.razonSocial,
-      rfc: d.rfc,
-      regimenFiscal: d.regimenFiscal,
-      codigoPostal: d.codigoPostal,
-      usoCfdi: d.usoCfdi,
-      correo: d.correo ?? '',
-      direccionFiscal: d.direccionFiscal ?? '',
-      predeterminado: d.predeterminado,
-      documentos: [],
-    })),
-    portal: contactos.some((x) => x.usuarioId),
-  };
-}
-
-export function aObra(o: ApiObra): Obra {
-  return {
-    id: o.id,
-    clienteId: o.clienteId,
-    nombre: o.nombre,
-    direccion: o.direccion,
-    municipio: o.municipio ?? '',
-    ...(o.referencias ? { referencias: o.referencias } : {}),
-    ...(o.lat != null && o.lng != null ? { ubicacion: { lat: o.lat, lng: o.lng } } : {}),
-    responsable: { nombre: o.responsableNombre ?? '' },
-    contactos: o.contactos ?? [],
-  };
-}
-
-export function aProducto(p: ApiProducto, categorias: Map<string, string>, unidades: Map<string, string>, existencias: number | undefined): ProductoTarifa {
-  return {
-    id: idFront(p),
-    codigo: p.codigo,
-    nombre: p.nombre,
-    categoria: (categorias.get(p.categoriaId) ?? p.tipo) as CategoriaProducto,
-    unidad: unidades.get(p.unidadId) ?? '',
-    precio: p.precioLista,
-    ...(p.minimoCobro != null ? { minimo: p.minimoCobro } : {}),
-    descripcion: p.descripcion,
-    ...(p.controlaExistencias ? { existencias: existencias ?? 0, minimoExistencias: p.minimoExistencias ?? 0 } : {}),
-    // Solo los dados de alta (los del tarifario conservan su id del front y no se configuran).
-    ...(p.concretoFc && p.concretoRevenimientoCm != null && p.concretoSuministro && idFront(p) === p.id
-      ? { configuracion: { fc: p.concretoFc, edad: String(p.concretoEdadDias ?? 28), rev: String(p.concretoRevenimientoCm), suministro: p.concretoSuministro } }
-      : {}),
-    // shortcut: las unidades conectadas (producto-equipos) aún no se leen: se muestra el tipo, sin unidades.
-    ...(p.equipoTipo ? { equipo: { tipo: p.equipoTipo.replace(/_/g, '-'), unidades: [] } } : {}),
-  };
-}
-
-/** Partida de la API → la del front: especificación anidada, servicios y maquinaria como claves, entrega en la planta. */
-export function aPartida(p: ApiPartida, obraId: string, zona: string, ctx: Contexto): PartidaCotizacion {
-  const servicios: ServicioObra[] = [];
-  const maquinaria: { tipo: Maquinaria; dias: number }[] = [];
-  for (const l of p.lineas) {
-    const codigo = ctx.codigoDe.get(l.productoId) ?? '';
-    if (codigo.startsWith('REN-')) maquinaria.push({ tipo: codigo.slice(4).toLowerCase() as Maquinaria, dias: l.dias ?? l.cantidad });
-    else if (codigo.startsWith('SRV-') && codigo !== 'SRV-TRASLADO') servicios.push(codigo.slice(4).toLowerCase() as ServicioObra);
-  }
-  if (maquinaria.length) servicios.push('renta-maquinaria');
-  const partida: PartidaCotizacion = {
-    id: p.id,
-    nombre: p.nombre,
-    solucionId: p.solucionId ?? '',
-    especificacion: {
-      tipoResistencia: p.tipoResistencia,
-      resistenciaKgCm2: p.resistenciaKgCm2,
-      edadDias: p.edadDias,
-      revenimientoCm: p.revenimientoCm,
-      tmaMm: p.tmaMm,
-      cemento: p.cemento as PartidaCotizacion['especificacion']['cemento'],
-      exposicion: p.exposicion as PartidaCotizacion['especificacion']['exposicion'],
-      colocacion: p.colocacion as PartidaCotizacion['especificacion']['colocacion'],
-      aditivos: p.aditivos as PartidaCotizacion['especificacion']['aditivos'],
-    },
-    volumenM3: p.volumenM3,
-    servicios,
-    maquinaria,
-    obraId,
-    entrega: enZona(p.entrega, zona),
-    ...(p.trasladoDistanciaKm != null
-      ? { traslado: { distanciaKm: p.trasladoDistanciaKm, incluidosKm: p.trasladoIncluidosKm ?? 0, precioKm: p.trasladoPrecioKm ?? 0 } }
-      : {}),
-  };
-  // La API siempre devuelve el precio; en el front solo va si es especial (distinto del de tarifa).
-  return p.precioM3 !== precioConcreto(partida) ? { ...partida, precioM3: p.precioM3 } : partida;
-}
-
-export function aCotizacion(c: ApiCotizacion, ctx: Contexto): Cotizacion {
-  const { codigo, zona } = planta(ctx, c.sucursalId);
-  return {
-    id: c.id,
-    folio: c.folio,
-    fecha: enZona(c.fecha, zona),
-    serie: c.serie,
-    revision: c.revision,
-    ...(c.baseId ? { baseId: c.baseId } : {}),
-    // El front guarda el % (la API, el importe)
-    ...(c.descuento && c.subtotal ? { descuento: redondear((c.descuento / c.subtotal) * 100) } : {}),
-    partidas: [...c.partidas].sort((a, b) => a.orden - b.orden).map((p) => aPartida(p, c.obraId ?? '', zona, ctx)),
-    plantaId: codigo,
-    clienteId: c.clienteId ?? '',
-    vendedorId: c.vendedorId ?? '',
-    estado: c.estado,
-    ...(c.origen === 'portal' ? { origen: 'portal' as const } : {}),
-    ...(c.ocultaAlCliente ? { ocultaAlCliente: true } : {}),
-  };
-}
-
-export function aPedido(p: ApiPedido, ctx: Contexto): Pedido {
-  const { codigo, zona } = planta(ctx, p.sucursalId);
-  // La línea del concreto es la de m³ que no es servicio (la primera de concreto)
-  const concreto = p.lineas.find((l) => (ctx.codigoDe.get(l.productoId) ?? '').startsWith('CON-')) ?? p.lineas[0];
-  return {
-    id: p.id,
-    folio: p.folio,
-    clienteId: p.clienteId,
-    plantaId: codigo,
-    obraId: p.obraId,
-    producto: concreto?.descripcion ?? '',
-    volumenM3: concreto?.cantidad ?? 0,
-    fechaHoraEntrega: enZona(p.fechaHoraEntrega, zona),
-    estado: p.estado,
-    ...(p.cotizacionId ? { cotizacionId: p.cotizacionId } : {}),
-    ...(p.partidaId ? { partidaId: p.partidaId } : {}),
-    importe: p.total,
-    cobro: p.cobro,
-    metodoPago: p.metodoPago,
-    estatusPlanta: p.estatusPlanta,
-    ...(p.solicitudPlantaFecha || p.solicitudPlantaNota
-      ? { solicitudPlanta: { ...(p.solicitudPlantaFecha ? { fecha: enZona(p.solicitudPlantaFecha, zona) } : {}), nota: p.solicitudPlantaNota ?? '' } }
-      : {}),
-    ...(p.descuento && p.subtotal ? { descuento: redondear((p.descuento / p.subtotal) * 100) } : {}),
-  };
-}
+/** Lo que se quitó, dicho como en el ERP (el backend solo dice "Eliminado"). */
+const ELIMINADO: Record<string, string> = {
+  Cotizacion: 'Cotización eliminada',
+  CotizacionPartida: 'Producto quitado',
+  CotizacionLinea: 'Servicio quitado',
+  Pedido: 'Orden de venta eliminada',
+  PedidoLinea: 'Línea quitada',
+  ClienteContacto: 'Contacto quitado',
+  ClienteDatoFiscal: 'Datos de facturación quitados',
+  Obra: 'Obra quitada',
+  Producto: 'Producto dado de baja',
+};
 
 const CREADO: Record<string, string> = {
   Cotizacion: 'Cotización creada',
@@ -423,101 +87,68 @@ const CREADO: Record<string, string> = {
 };
 
 /** Un evento de la API → el del historial del front. `nombre` traduce ids (cliente, obra, usuario…) a lo que se lee. */
+/** Los detalles de un evento como lista (texto JSON, lista o nada). */
+function detallesDe(d: ApiEvento['detalles']): string[] {
+  if (Array.isArray(d)) return d;
+  if (!d) return [];
+  try {
+    const v: unknown = JSON.parse(d);
+    return Array.isArray(v) ? v.map(String) : [String(v)];
+  } catch {
+    return [d];
+  }
+}
+
 export function aEvento(e: ApiEvento, registro: string, nombre: (id: string) => string | undefined): EventoHistorial {
+  const detalles = detallesDe(e.detalles);
   const valor = (v: string | null) => (v == null || v === '' ? '—' : (nombre(v) ?? v));
   const cambios: Cambio[] = e.cambios.map((c) => ({ campo: c.etiqueta, antes: valor(c.valorAnterior), despues: valor(c.valorNuevo) }));
   return {
     id: e.id,
     registro,
     fecha: e.fecha,
-    autor: (e.autorId && nombre(e.autorId)) || 'Sistema',
-    texto: e.tipo === 'creado' ? (CREADO[e.registroTipo] ?? e.texto) : e.texto,
-    ...(e.detalles?.length ? { detalles: e.detalles } : {}),
+    // Los usuarios internos están todos en los nombres (/usuarios/resumen): uno que no está es del portal del cliente
+    autor: e.autorId ? (nombre(e.autorId) ?? 'Cliente (portal)') : 'Sistema',
+    texto: e.tipo === 'creado' ? (CREADO[e.registroTipo] ?? e.texto) : e.tipo === 'eliminado' ? (ELIMINADO[e.registroTipo] ?? e.texto) : e.texto,
+    ...(detalles.length ? { detalles } : {}),
     ...(cambios.length ? { cambios } : {}),
     ...(e.tipo === 'nota' ? { nota: true } : {}),
     ...(e.tipo === 'actividad' ? { actividad: true } : {}),
   };
 }
 
-// ---------- front → API ----------
-
-/** Servicios y maquinaria de la partida como líneas con su producto (cantidad en m³ si el servicio va por m³). */
-export function lineasDe(p: PartidaCotizacion, ctx: Contexto, unidadDe: (frontId: string) => string) {
-  return [
-    ...p.servicios
-      .filter((s) => s !== 'renta-maquinaria')
-      .map((s) => {
-        const id = `servicio-${s}`;
-        return { productoId: productoApi(ctx, id), cantidad: unidadDe(id) === 'M³' ? p.volumenM3 : 1 };
-      }),
-    ...p.maquinaria.map((m) => ({ productoId: productoApi(ctx, `maquinaria-${m.tipo}`), cantidad: 1, dias: m.dias })),
-  ];
-}
-
-/** `existentes`: ids de las partidas que ya están en el backend (solo esas se mandan con id: se editan). */
-export function partidaApi(p: PartidaCotizacion, i: number, ctx: Contexto, unidadDe: (frontId: string) => string, existentes = new Set<string>()) {
-  const e = p.especificacion;
-  return {
-    ...(existentes.has(p.id) ? { id: p.id } : {}),
-    orden: i,
-    nombre: p.nombre,
-    solucionId: p.solucionId || null,
-    tipoResistencia: e.tipoResistencia,
-    resistenciaKgCm2: e.resistenciaKgCm2,
-    edadDias: e.edadDias,
-    revenimientoCm: e.revenimientoCm,
-    tmaMm: e.tmaMm,
-    cemento: e.cemento,
-    exposicion: e.exposicion,
-    colocacion: e.colocacion,
-    aditivos: e.aditivos,
-    volumenM3: p.volumenM3,
-    precioM3: p.precioM3 ?? null,
-    entrega: aUtc(p.entrega),
-    trasladoDistanciaKm: p.traslado?.distanciaKm ?? null,
-    trasladoIncluidosKm: p.traslado?.incluidosKm ?? null,
-    trasladoPrecioKm: p.traslado?.precioKm ?? null,
-    lineas: lineasDe(p, ctx, unidadDe),
-  };
-}
-
-/** Cuerpo de POST/PUT /cotizaciones. La API tiene una obra por cotización: la de la primera partida. */
-export function cotizacionApi(n: NuevaCotizacion, ctx: Contexto, unidadDe: (frontId: string) => string, extra: object = {}, existentes?: Set<string>) {
-  return {
-    sucursalId: sucursalDe(ctx, n.plantaId),
-    clienteId: n.clienteId || null,
-    obraId: n.partidas.find((p) => p.obraId)?.obraId || null,
-    descuentoPct: n.descuento ?? 0,
-    ...(n.baseId ? { baseId: n.baseId } : {}),
-    partidas: n.partidas.map((p, i) => partidaApi(p, i, ctx, unidadDe, existentes)),
-    ...extra,
-  };
-}
-
-/** Orden directa (sin cotización): la partida como líneas de pedido: concreto, traslado, servicios y maquinaria. */
-export function pedidoApi(n: NuevaCotizacion, p: PartidaCotizacion, metodoPago: MetodoPago, ctx: Contexto, unidadDe: (frontId: string) => string) {
-  const concreto = `${p.especificacion.tipoResistencia}-${p.especificacion.resistenciaKgCm2}`;
-  const extra = p.traslado ? kmExtra(p.traslado) : 0;
-  return {
-    sucursalId: sucursalDe(ctx, n.plantaId),
-    clienteId: n.clienteId,
-    obraId: p.obraId,
-    fechaHoraEntrega: aUtc(p.entrega),
-    metodoPago,
-    descuentoPct: n.descuento ?? 0,
-    lineas: [
-      { productoId: productoApi(ctx, concreto), descripcion: `${p.nombre}: ${conceptoConcreto(p)}`, cantidad: p.volumenM3, precioUnitario: p.precioM3 ?? precioConcreto(p) },
-      ...(p.traslado && extra > 0 && p.traslado.precioKm > 0
-        ? [{ productoId: porCodigo(ctx, 'SRV-TRASLADO'), descripcion: `Traslado adicional: ${extra} km`, cantidad: p.volumenM3, precioUnitario: redondear(extra * p.traslado.precioKm) }]
-        : []),
-      ...lineasDe(p, ctx, unidadDe).map((l) => ({ productoId: l.productoId, cantidad: 'dias' in l ? l.dias : l.cantidad })),
-    ],
-  };
-}
-
 // ---------- Llamadas ----------
 
 const BASE = '/api/v1';
+
+// claveSat vive en ui (también la usa el portal)
+export { claveSat };
+
+export interface ApiActividad {
+  id: string;
+  organizacionId: string;
+  registroTipo: string;
+  registroId: string;
+  tipo: TipoActividad;
+  resumen: string;
+  /** yyyy-MM-dd */
+  fechaLimite: string;
+  asignadaAId: string;
+  nota: string | null;
+  hechaEn: string | null;
+  canceladaEn: string | null;
+}
+
+/** Actividad del backend → la del historial (clave "tipo:id" del front y el nombre de a quién se asignó). */
+export const aActividad = (a: ApiActividad, registro: string, nombre: (id: string) => string | undefined): Actividad => ({
+  id: a.id,
+  registro,
+  tipo: a.tipo,
+  resumen: a.resumen,
+  fechaLimite: a.fechaLimite,
+  asignadaA: nombre(a.asignadaAId) ?? '—',
+  nota: a.nota ?? '',
+});
 
 export interface Datos {
   ctx: Contexto;
@@ -528,8 +159,33 @@ export interface Datos {
   pedidos: Pedido[];
   /** id → nombre de usuarios, clientes, obras, plantas y productos (para el historial y los vendedores). */
   nombres: Map<string, string>;
+  /** Usuarios de la organización (quien está en sesión primero): a quién se asigna una actividad. */
+  usuarios: { id: string; nombre: string }[];
   /** El cliente de mostrador ("Público en general"), si ya existe. */
   publicoGeneralId: string | null;
+  /** Unidades de la flota (para conectar los servicios de renta). */
+  equipos: Equipo[];
+}
+
+interface ApiEquipo {
+  id: string;
+  tipo: string;
+  numeroEconomico: string;
+  descripcion: string | null;
+  activo: boolean;
+}
+interface ApiProductoEquipo {
+  id: string;
+  productoId: string;
+  equipoId: string;
+}
+
+/** Sin permiso de ver ese recurso (403): lista vacía. Cualquier otro error sigue fallando. */
+function vacioSinPermiso<T>(peticion: Promise<T[]>): Promise<T[]> {
+  return peticion.catch((e: unknown) => {
+    if ((e as { status?: number })?.status === 403) return [] as T[];
+    throw e;
+  });
 }
 
 @Service()
@@ -539,6 +195,8 @@ export class VentasApi {
   /** Las líneas de cada pedido, para editarlo (PUT manda el registro completo). */
   private readonly lineasPedido = new Map<string, ApiPedidoLinea[]>();
   private apiPedidos = new Map<string, ApiPedido>();
+  /** Qué unidades atienden cada producto (id de la API), para editar la conexión. */
+  private productoEquipos: ApiProductoEquipo[] = [];
 
   private get<T>(ruta: string): Promise<T> {
     return firstValueFrom(this.http.get<T>(BASE + ruta));
@@ -549,29 +207,46 @@ export class VentasApi {
   private put<T>(ruta: string, cuerpo: unknown): Promise<T> {
     return firstValueFrom(this.http.put<T>(BASE + ruta, cuerpo));
   }
+  /** Todas las páginas de una lista paginada ({ items, total }). */
+  private async paginas<T>(ruta: string): Promise<T[]> {
+    const items: T[] = [];
+    for (let pagina = 1; ; pagina++) {
+      const r = await this.get<{ items: T[]; total: number }>(`${ruta}${ruta.includes('?') ? '&' : '?'}pagina=${pagina}&tamano=500`);
+      items.push(...r.items);
+      if (!r.items.length || items.length >= r.total) return items;
+    }
+  }
 
   /**
    * Todo lo de Ventas de una vez.
-   * shortcut: trae hasta 500 de cada lista y el detalle de cada cotización (N peticiones); con más volumen, paginar y
+   * Cotizaciones y pedidos llegan con su detalle (incluir=partidas / lineas), por páginas.
+   * shortcut: trae todas las cotizaciones y pedidos y hasta 500 de lo demás; con más volumen, pedir por periodo y
    * pedir el detalle al abrirla.
    */
   async cargar(): Promise<Datos> {
-    const [clientes, contactos, fiscales, obras, productos, categorias, unidades, existencias, encabezados, pedidos, usuarios] = await Promise.all([
-      this.get<ApiCliente[]>('/clientes?take=500'),
-      this.get<ApiContacto[]>('/cliente-contactos?take=500'),
-      this.get<ApiDatoFiscal[]>('/cliente-datos-fiscales?take=500'),
-      this.get<ApiObra[]>('/obras?take=500'),
-      this.get<ApiProducto[]>('/productos?take=500'),
-      this.get<ApiCategoria[]>('/categorias-producto?take=500'),
-      this.get<ApiUnidad[]>('/unidades-medida?take=500'),
+    const [clientes, contactos, fiscales, obras, productos, categorias, unidades, existencias, encabezados, pedidos, usuarios, equipos, conexiones, roles] = await Promise.all([
+      // Lo que el rol no puede ver llega vacío (403) y no tumba lo demás: p. ej. quien solo consulta cotizaciones
+      vacioSinPermiso(this.get<ApiCliente[]>('/clientes?take=500')),
+      vacioSinPermiso(this.get<ApiContacto[]>('/cliente-contactos?take=500')),
+      vacioSinPermiso(this.get<ApiDatoFiscal[]>('/cliente-datos-fiscales?take=500')),
+      vacioSinPermiso(todos((r) => this.get<ApiObra[]>(r), '/obras')),
+      vacioSinPermiso(this.get<ApiProducto[]>('/productos?take=500')),
+      vacioSinPermiso(this.get<ApiCategoria[]>('/categorias-producto?take=500')),
+      vacioSinPermiso(this.get<ApiUnidad[]>('/unidades-medida?take=500')),
       this.get<ApiExistencia[]>('/existencias?take=500').catch(() => [] as ApiExistencia[]),
-      this.get<ApiCotizacion[]>('/cotizaciones?take=500'),
-      this.get<ApiPedido[]>('/pedidos?take=500'),
-      // Sin permiso de ver usuarios, los vendedores salen sin nombre
-      this.get<{ id: string; nombre: string; apellidos: string | null }[]>('/usuarios?take=500').catch(() => []),
+      vacioSinPermiso(this.paginas<ApiCotizacion>('/cotizaciones?incluir=partidas')),
+      vacioSinPermiso(this.paginas<ApiPedido>('/pedidos?incluir=lineas')),
+      vacioSinPermiso(this.get<{ id: string; nombre: string; activo: boolean }[]>('/usuarios/resumen')),
+      this.get<ApiEquipo[]>('/equipos?take=500').catch(() => [] as ApiEquipo[]),
+      todos((r) => this.get<ApiProductoEquipo[]>(r), '/producto-equipos').catch(() => [] as ApiProductoEquipo[]),
+      // Para el historial de usuarios (cambio de rol); sin permiso de ver roles no se piden
+      tiene(this.auth.sesion()?.permisos ?? [], 'config.roles.ver')
+        ? this.get<{ id: string; nombre: string }[]>('/roles/resumen').catch(() => [] as { id: string; nombre: string }[])
+        : Promise.resolve([] as { id: string; nombre: string }[]),
     ]);
-    const cotizaciones = await Promise.all(encabezados.map((c) => this.get<ApiCotizacion>(`/cotizaciones/${c.id}`)));
-    const pedidosCompletos = await Promise.all(pedidos.map((p) => this.get<ApiPedido>(`/pedidos/${p.id}`)));
+    this.productoEquipos = conexiones;
+    const cotizaciones = encabezados;
+    const pedidosCompletos = pedidos;
     const ctx = contexto(this.auth.sesion()?.empresas ?? [], productos);
     const cats = new Map(categorias.map((c) => [c.id, c.clave]));
     const uds = new Map(unidades.map((u) => [u.id, u.nombre]));
@@ -580,7 +255,8 @@ export class VentasApi {
     this.apiPedidos = new Map(pedidosCompletos.map((p) => [p.id, p]));
 
     const nombres = new Map<string, string>([
-      ...usuarios.map((u): [string, string] => [u.id, [u.nombre, u.apellidos].filter(Boolean).join(' ')]),
+      ...usuarios.map((u): [string, string] => [u.id, u.nombre]),
+      ...roles.map((r): [string, string] => [r.id, r.nombre]),
       ...clientes.map((c): [string, string] => [c.id, c.nombre]),
       ...obras.map((o): [string, string] => [o.id, o.nombre]),
       ...productos.map((p): [string, string] => [p.id, p.nombre]),
@@ -589,9 +265,14 @@ export class VentasApi {
     const sesion = this.auth.sesion();
     if (sesion?.usuario.id) nombres.set(sesion.usuario.id, sesion.usuario.nombre);
 
+    const yo = sesion?.usuario.id;
+    // A quién se puede asignar: los activos
+    const lista = usuarios.filter((u) => u.activo).map((u) => ({ id: u.id, nombre: u.nombre }));
+    const mio = lista.find((u) => u.id === yo) ?? (yo ? { id: yo, nombre: sesion!.usuario.nombre } : null);
     return {
       ctx,
       nombres,
+      usuarios: mio ? [mio, ...lista.filter((u) => u.id !== yo)] : lista,
       publicoGeneralId: clientes.find((c) => c.esPublicoGeneral)?.id ?? null,
       clientes: clientes.map((c) =>
         aCliente(
@@ -601,7 +282,13 @@ export class VentasApi {
         ),
       ),
       obras: obras.map(aObra),
-      productos: productos.filter((p) => p.activo).map((p) => aProducto(p, cats, uds, stock.get(p.id))),
+      productos: productos
+        .filter((p) => p.activo)
+        .map((p) => aProducto(p, cats, uds, stock.get(p.id), conexiones.filter((x) => x.productoId === p.id).map((x) => x.equipoId))),
+      equipos: equipos
+        .filter((e) => e.activo)
+        .map((e) => ({ id: e.id, tipo: e.tipo.replace(/_/g, '-') as TipoEquipo, numero: e.numeroEconomico, descripcion: e.descripcion ?? '' }))
+        .sort((a, b) => a.numero.localeCompare(b.numero)),
       cotizaciones: cotizaciones.map((c) => aCotizacion(c, ctx)),
       pedidos: pedidosCompletos.map((p) => aPedido(p, ctx)),
     };
@@ -627,6 +314,14 @@ export class VentasApi {
 
   enviar(id: string): Promise<unknown> {
     return this.post(`/cotizaciones/${id}/enviar`);
+  }
+
+  cancelar(id: string): Promise<unknown> {
+    return this.post(`/cotizaciones/${id}/cancelar`);
+  }
+
+  eliminarCliente(id: string): Promise<unknown> {
+    return firstValueFrom(this.http.delete(`${BASE}/clientes/${id}`));
   }
 
   ocultar(id: string, oculta: boolean): Promise<unknown> {
@@ -690,8 +385,60 @@ export class VentasApi {
     return { cliente, contacto };
   }
 
+  /**
+   * Alta completa (Clientes → Nuevo): crea el cliente y le guarda contacto, empresa y datos fiscales con guardarCliente.
+   * shortcut: no es una sola operación; si falla después de crearlo, el cliente queda con solo su nombre y se completa
+   * editándolo. Con un endpoint de alta en el backend, usarlo.
+   */
+  async altaCliente(c: CambiosCliente): Promise<Cliente> {
+    const nuevo = await this.post<ApiCliente>('/clientes', { nombre: c.nombre, esPublicoGeneral: false, diasCredito: 0 });
+    try {
+      return await this.guardarCliente(nuevo.id, c);
+    } catch (e) {
+      // No dejar un cliente a medias: se borra lo que alcanzó a crearse y se avisa el error original
+      await this.borrarCliente(nuevo.id).catch(() => undefined);
+      throw e;
+    }
+  }
+
+  /** Borra el cliente con sus contactos y datos fiscales (solo para deshacer un alta que falló). */
+  private async borrarCliente(id: string): Promise<void> {
+    const [contactos, fiscales] = await Promise.all([
+      this.get<ApiContacto[]>(`/cliente-contactos?clienteId=${id}`),
+      this.get<ApiDatoFiscal[]>(`/cliente-datos-fiscales?clienteId=${id}`),
+    ]);
+    for (const f of fiscales) await firstValueFrom(this.http.delete(`${BASE}/cliente-datos-fiscales/${f.id}`));
+    for (const x of contactos) await firstValueFrom(this.http.delete(`${BASE}/cliente-contactos/${x.id}`));
+    await firstValueFrom(this.http.delete(`${BASE}/clientes/${id}`));
+  }
+
   crearPublicoGeneral(): Promise<ApiCliente> {
     return this.post<ApiCliente>('/clientes', { nombre: 'Público en general', esPublicoGeneral: true, diasCredito: 0 });
+  }
+
+  /**
+   * Alta o edición completa de una obra (Ventas → Obras). clienteId vacío = obra general. PUT manda el registro
+   * completo (se parte del que tiene el backend).
+   */
+  async guardarObra(id: string | null, clienteId: string, d: NuevaObra): Promise<Obra> {
+    const cuerpo = {
+      clienteId: clienteId || null,
+      nombre: d.nombre.trim(),
+      direccion: d.direccion.trim(),
+      municipio: d.municipio.trim() || null,
+      referencias: d.referencias?.trim() || null,
+      lat: d.ubicacion?.lat ?? null,
+      lng: d.ubicacion?.lng ?? null,
+      responsableNombre: d.responsable.nombre.trim() || null,
+      contactos: d.contactos.map((c) => ({ nombre: c.nombre.trim(), lada: c.lada, numero: c.numero.replace(/\D/g, '') })),
+    };
+    if (!id) return aObra(await this.post<ApiObra>('/obras', cuerpo));
+    const antes = await this.get<ApiObra & Record<string, unknown>>(`/obras/${id}`);
+    return aObra(await this.put<ApiObra>(`/obras/${id}`, { ...antes, ...cuerpo }));
+  }
+
+  eliminarObra(id: string): Promise<unknown> {
+    return firstValueFrom(this.http.delete(`${BASE}/obras/${id}`));
   }
 
   async crearObra(clienteId: string, d: LugarEntrega): Promise<Obra> {
@@ -744,8 +491,9 @@ export class VentasApi {
         alias: f.alias,
         razonSocial: f.razonSocial,
         rfc: f.rfc,
-        regimenFiscal: f.regimenFiscal,
-        usoCfdi: f.usoCfdi,
+        // El backend guarda la clave del SAT ("601", "G03"); el front puede traer "G03 · Gastos en general"
+        regimenFiscal: claveSat(f.regimenFiscal),
+        usoCfdi: claveSat(f.usoCfdi),
         codigoPostal: f.codigoPostal,
         correo: f.correo || null,
         direccionFiscal: f.direccionFiscal || null,
@@ -774,13 +522,15 @@ export class VentasApi {
   ): Promise<string> {
     const antes = id ? await this.get<ApiProducto & Record<string, unknown>>(`/productos/${id}`) : null;
     const tipo = n.tipo ?? antes?.tipo ?? 'general';
-    const categoria = catalogos.categorias.find((c) => c.clave === tipo) ?? catalogos.categorias.find((c) => c.id === antes?.categoriaId);
+    // Al editar se queda en su categoría (concreto-fc, ajuste…); al dar de alta, la de su tipo (aditivo es su propia categoría)
+    const categoria = antes ? catalogos.categorias.find((c) => c.id === antes.categoriaId) : catalogos.categorias.find((c) => c.clave === tipo);
     const unidad = catalogos.unidades.find((u) => u.nombre === n.unidad) ?? catalogos.unidades.find((u) => u.id === antes?.unidadId);
     const cfg = n.configuracion;
     const cuerpo = {
       ...(antes ?? {}),
       categoriaId: categoria?.id ?? antes?.categoriaId,
-      tipo,
+      // En la API el aditivo es de tipo concreto (categoría aditivo)
+      tipo: tipo === 'aditivo' ? 'concreto' : tipo,
       codigo: n.codigo,
       nombre: n.nombre,
       descripcion: n.descripcion,
@@ -794,9 +544,17 @@ export class VentasApi {
       concretoRevenimientoCm: cfg ? Number(cfg.rev) : null,
       concretoSuministro: cfg?.suministro ?? null,
       equipoTipo: n.equipo?.tipo ? n.equipo.tipo.replace(/-/g, '_') : null,
+      soluciones: tipo === 'concreto' ? (n.soluciones ?? (antes?.soluciones as string[] | undefined) ?? []) : [],
       activo: true,
     };
     const p = id ? await this.put<ApiProducto>(`/productos/${id}`, cuerpo) : await this.post<ApiProducto>('/productos', cuerpo);
+    // Deja conectadas exactamente las unidades elegidas (ninguna si ya no es renta de equipo)
+    const quiero = n.equipo?.unidades ?? [];
+    const tiene = this.productoEquipos.filter((x) => x.productoId === p.id);
+    await Promise.all([
+      ...tiene.filter((x) => !quiero.includes(x.equipoId)).map((x) => firstValueFrom(this.http.delete(`${BASE}/producto-equipos/${x.id}`))),
+      ...quiero.filter((e) => !tiene.some((x) => x.equipoId === e)).map((equipoId) => this.post('/producto-equipos', { productoId: p.id, equipoId })),
+    ]);
     return p.id;
   }
 
@@ -811,6 +569,34 @@ export class VentasApi {
 
   historial(tipo: string, id: string): Promise<ApiEvento[]> {
     return this.get<ApiEvento[]>(`/historial/${tipo}/${id}`);
+  }
+
+  /** El folio que tendría la siguiente cotización de esa planta (no lo consume). */
+  async folioSiguiente(plantaId: string, ctx: Contexto): Promise<string> {
+    return (await this.get<{ folio: string }>(`/secuencias/siguiente?tipo=cotizacion&sucursalId=${sucursalDe(ctx, plantaId)}`)).folio;
+  }
+
+  actividades(tipo: string, id: string): Promise<ApiActividad[]> {
+    return this.get<ApiActividad[]>(`/actividades/registro/${tipo}/${id}`);
+  }
+
+  crearActividad(tipo: string, id: string, a: NuevaActividad, asignadaAId: string, hecha: boolean): Promise<ApiActividad> {
+    return this.post<ApiActividad>('/actividades', {
+      registroTipo: tipo,
+      registroId: id,
+      tipo: a.tipo,
+      resumen: a.resumen,
+      fechaLimite: a.fechaLimite,
+      asignadaAId,
+      nota: a.nota || null,
+      hechaEn: hecha ? new Date().toISOString() : null,
+    });
+  }
+
+  /** Hecha o cancelada: PUT manda el registro completo. */
+  async cerrarActividad(id: string, como: 'hecha' | 'cancelada'): Promise<void> {
+    const a = await this.get<ApiActividad>(`/actividades/${id}`);
+    await this.put(`/actividades/${id}`, { ...a, [como === 'hecha' ? 'hechaEn' : 'canceladaEn']: new Date().toISOString() });
   }
 
   nota(tipo: string, id: string, texto: string): Promise<unknown> {

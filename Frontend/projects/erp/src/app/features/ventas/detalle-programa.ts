@@ -2,10 +2,11 @@ import { Component, ElementRef, Injector, afterNextRender, computed, inject, inp
 import { RouterLink } from '@angular/router';
 import { Maximize2, PencilLine, X } from 'lucide';
 import { Icon } from 'ui';
-import { VentasService } from './datos';
+import { VentasService, mensajeDe } from './datos';
 import { DatosPrograma, FormPrograma } from './form-programa';
 import { Programa, ProgramasService, plantilla, textoPrograma } from './lealtad';
 import { ProbarPrograma } from './probar-programa';
+import { permisosSesion } from '../../core/permisos';
 
 const fecha = (f: string) => f.split('-').reverse().join('/');
 
@@ -48,9 +49,11 @@ const fecha = (f: string) => f.split('-').reverse().join('/');
     @if (editando()) {
       <app-form-programa class="mt-4 border-t border-acero/60 pt-4" [programa]="p()" (listo)="guardar($event)" (descartar)="terminar('')" />
     } @else {
-      <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
-        <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
-      </button>
+      @if (puede('ventas.programas.editar')) {
+        <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
+          <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
+        </button>
+      }
       <dl class="mt-4 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt class="text-texto-suave">Regla</dt>
         <dd>{{ regla() }}</dd>
@@ -86,14 +89,16 @@ const fecha = (f: string) => f.split('-').reverse().join('/');
               (input)="cantidad.set(+$any($event.target).value || 0)"
             />
           </div>
-          <button type="button" [class]="botonSecundario" (click)="generar()">Generar cupones</button>
+          @if (puede('ventas.programas.editar')) {
+            <button type="button" [class]="botonSecundario" (click)="generar()">Generar cupones</button>
+          }
         </div>
         @if (p().cupones.length) {
           <ul class="mt-3 grid gap-1.5 @container sm:grid-cols-2" aria-label="Cupones">
             @for (c of p().cupones; track c.codigo) {
               <li>
                 <label class="flex items-center gap-2 rounded-lg border border-acero/70 bg-white/70 px-3 py-1.5">
-                  <input type="checkbox" class="casilla" [checked]="c.usado" (change)="servicio.alternarUsado(p().id, c.codigo)" />
+                  <input type="checkbox" class="casilla" [checked]="c.usado" (change)="alternarUsado(c.codigo)" />
                   <span class="font-semibold tracking-wide tabular-nums" [class.line-through]="c.usado">{{ c.codigo }}</span>
                   <span class="text-texto-suave">{{ c.usado ? 'usado' : 'disponible' }}</span>
                 </label>
@@ -108,6 +113,8 @@ const fecha = (f: string) => f.split('-').reverse().join('/');
   `,
 })
 export class DetallePrograma {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   protected readonly servicio = inject(ProgramasService);
   private readonly ventas = inject(VentasService);
   private readonly injector = inject(Injector);
@@ -147,9 +154,13 @@ export class DetallePrograma {
     this.editando.set(true);
   }
 
-  protected guardar(d: DatosPrograma): void {
-    this.servicio.editar(this.p().id, d);
-    this.terminar('Cambios guardados.');
+  protected async guardar(d: DatosPrograma): Promise<void> {
+    try {
+      await this.servicio.editar(this.p().id, d);
+      this.terminar('Cambios guardados.');
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
   }
 
   protected terminar(aviso: string): void {
@@ -158,9 +169,22 @@ export class DetallePrograma {
     afterNextRender(() => this.botonEditar()?.nativeElement.focus(), { injector: this.injector });
   }
 
-  protected generar(): void {
+  protected async alternarUsado(codigo: string): Promise<void> {
+    try {
+      await this.servicio.alternarUsado(this.p().id, codigo);
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
+  }
+
+  protected async generar(): Promise<void> {
     const n = Math.min(Math.max(Math.floor(this.cantidad()), 1), 100);
-    const nuevos = this.servicio.generarCupones(this.p().id, n);
+    let nuevos: string[];
+    try {
+      nuevos = await this.servicio.generarCupones(this.p().id, n);
+    } catch (e) {
+      return this.aviso.set(mensajeDe(e));
+    }
     this.aviso.set(`${nuevos.length} ${nuevos.length === 1 ? 'cupón generado' : 'cupones generados'}: ${nuevos.join(', ')}.`);
   }
 }

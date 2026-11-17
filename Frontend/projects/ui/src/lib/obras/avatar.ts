@@ -2,7 +2,7 @@ import { Component, computed, input } from '@angular/core';
 
 /** Foto del responsable o, si no hay, sus iniciales. Decorativo: el nombre siempre va en texto junto a él. */
 @Component({
-  selector: 'app-avatar',
+  selector: 'ui-avatar-obra',
   host: { class: 'inline-flex shrink-0', 'aria-hidden': 'true' },
   template: `
     @if (foto()) {

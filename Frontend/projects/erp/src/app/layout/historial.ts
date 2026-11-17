@@ -210,14 +210,22 @@ export class Historial {
   }
 
   // Su botón desaparece con la actividad: el foco pasa a "Actividad".
-  protected hecha(a: Actividad): void {
-    this.historial.marcarHecha(a);
+  protected async hecha(a: Actividad): Promise<void> {
+    try {
+      await this.historial.marcarHecha(a);
+    } catch {
+      return this.aviso.set('No se pudo marcar la actividad. Intenta de nuevo.');
+    }
     this.aviso.set('Actividad registrada como hecha.');
     this.botonActividad().nativeElement.focus();
   }
 
-  protected cancelar(a: Actividad): void {
-    this.historial.cancelar(a);
+  protected async cancelar(a: Actividad): Promise<void> {
+    try {
+      await this.historial.cancelar(a);
+    } catch {
+      return this.aviso.set('No se pudo cancelar la actividad. Intenta de nuevo.');
+    }
     this.aviso.set('Actividad cancelada.');
     this.botonActividad().nativeElement.focus();
   }

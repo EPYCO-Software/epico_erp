@@ -1,4 +1,4 @@
-import { ContactoObra } from 'ui';
+import { ContactoObra } from '../models/obra';
 
 /** Ladas disponibles; México va primero y es la de por defecto. */
 export const LADAS = [

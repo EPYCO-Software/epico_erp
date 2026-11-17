@@ -10,17 +10,19 @@ import { apiInterceptor } from './api.interceptor';
 describe('apiInterceptor', () => {
   const sesion = signal<Sesion | null>({ usuario: { nombre: 'Yumil', correo: 'y@e.mx' }, token: 'viejo', refreshToken: 'r1' });
   const refrescar = vi.fn();
+  const sinConexion = signal(false);
   let http: HttpClient;
   let backend: HttpTestingController;
 
   beforeEach(() => {
     refrescar.mockReset();
+    sinConexion.set(false);
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         provideHttpClient(withInterceptors([apiInterceptor])),
         provideHttpClientTesting(),
-        { provide: AuthService, useValue: { sesion, refrescar } },
+        { provide: AuthService, useValue: { sesion, refrescar, sinConexion } },
       ],
     });
     http = TestBed.inject(HttpClient);
@@ -54,6 +56,15 @@ describe('apiInterceptor', () => {
     backend.expectOne('/api/v1/empresas').flush(null, { status: 401, statusText: 'Unauthorized' });
     expect(await p).toBe(401);
     expect(navegar).toHaveBeenCalledWith(['/login'], expect.anything());
+  });
+
+  it('si el servidor no respondió al renovar, conserva la sesión: no manda al login y devuelve el error', async () => {
+    refrescar.mockImplementation(async () => (sinConexion.set(true), null));
+    const navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const p = firstValueFrom(http.get('/api/v1/empresas')).catch((e) => e.status);
+    backend.expectOne('/api/v1/empresas').flush(null, { status: 401, statusText: 'Unauthorized' });
+    expect(await p).toBe(401);
+    expect(navegar).not.toHaveBeenCalled();
   });
 
   it('un 403 (falta permiso) no intenta renovar', async () => {

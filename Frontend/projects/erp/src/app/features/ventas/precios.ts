@@ -1,8 +1,10 @@
-import { Service, inject, signal } from '@angular/core';
-import { CATEGORIAS_PRODUCTO, CategoriaProducto, ProductoTarifa, pesos } from 'ui';
+import { HttpClient } from '@angular/common/http';
+import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { AUTH_API_URL, AuthService, CATEGORIAS_PRODUCTO, todos, CategoriaProducto, ProductoTarifa, pesos } from 'ui';
 import { Cambio, HistorialService } from '../../core/historial';
-import { RAZONES_SOCIALES } from '../../core/plantas';
-import { VentasService, registro } from './datos';
+import { plantasVigentes } from '../../core/plantas';
+import { VentasService, mensajeDe, registro } from './datos';
 
 export type Moneda = 'MXN' | 'USD';
 export const MONEDAS: Record<Moneda, string> = { MXN: 'Peso mexicano', USD: 'Dólar estadounidense' };
@@ -88,12 +90,11 @@ const LISTAS: ListaPrecios[] = [
   },
 ];
 
-const PLANTAS = RAZONES_SOCIALES.flatMap((r) => r.plantas);
 
 /** "Todas las plantas" o "Cancún, Cozumel". */
 export function textoPlantas(ids: string[]): string {
   if (!ids.length) return 'Todas las plantas';
-  return ids.map((id) => PLANTAS.find((p) => p.id === id)?.nombre.replace('Planta ', '') ?? id).join(', ');
+  return ids.map((id) => plantasVigentes().find((p) => p.id === id)?.nombre.replace('Planta ', '') ?? id).join(', ');
 }
 
 /** "$4,700.00", "$230.00 USD". */
@@ -133,23 +134,122 @@ export function filtrarListas(listas: ListaPrecios[], texto: string): ListaPreci
   return q ? listas.filter((l) => n(`${l.nombre} ${l.moneda} ${textoPlantas(l.plantas)}`).includes(q)) : listas;
 }
 
+// ---------- backend ----------
+
+interface ApiLista {
+  id: string;
+  nombre: string;
+  monedaCodigo: string;
+  activa: boolean;
+  empresaRestringidaId: string | null;
+}
+interface ApiRegla {
+  id: string;
+  listaPreciosId: string;
+  aplicarA: 'todos' | 'producto' | 'categoria';
+  productoId: string | null;
+  categoriaId: string | null;
+  tipo: TipoRegla;
+  precioFijo: number | null;
+  descuentoPct: number | null;
+  recargo: number | null;
+  cantidadMinima: number;
+  inicio: string | null;
+  fin: string | null;
+}
+interface ApiListaSucursal {
+  id: string;
+  listaPreciosId: string;
+  sucursalId: string;
+}
+
+const aRegla = (r: ApiRegla, claveDe: Map<string, string>): ReglaPrecio => ({
+  id: r.id,
+  aplicarA: r.aplicarA === 'categoria' ? 'categoria' : 'producto',
+  productoId: r.aplicarA === 'producto' ? (r.productoId ?? '') : '',
+  categoria: ((r.categoriaId && claveDe.get(r.categoriaId)) || '') as CategoriaProducto | '',
+  tipo: r.tipo,
+  precioFijo: r.precioFijo ?? 0,
+  descuento: r.descuentoPct ?? 0,
+  recargo: r.recargo ?? 0,
+  cantidadMinima: r.cantidadMinima ?? 0,
+  inicio: r.inicio?.slice(0, 10) ?? '',
+  fin: r.fin?.slice(0, 10) ?? '',
+});
+
 /**
  * Listas de precios (Ventas → Productos → Listas de precios): alta, edición de nombre, moneda y plantas, y sus reglas.
- * Todo queda en el historial de la lista.
+ * Con backend todo vive allá (/listas-precios, /reglas-precio y /lista-precios-sucursales) y el historial lo escribe
+ * él; sin él (pruebas, demo), en memoria con listas de ejemplo y el historial local.
  * shortcut: aún no se aplican al cotizar (las cotizaciones usan el tarifario); falta elegir la lista según la planta.
  */
 @Service()
 export class ListasPreciosService {
   private readonly historial = inject(HistorialService);
   private readonly ventas = inject(VentasService);
+  private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
+  private readonly base = inject(AUTH_API_URL, { optional: true });
 
-  readonly listas = signal<ListaPrecios[]>(LISTAS);
+  readonly listas = signal<ListaPrecios[]>(this.base ? [] : LISTAS);
+  readonly errorCarga = signal('');
+  /** clave de categoría → id del backend. */
+  private categorias = new Map<string, string>();
+  private ligas: ApiListaSucursal[] = [];
+
+  constructor() {
+    if (!this.base) return;
+    const quien = computed(() => this.auth.sesion()?.usuario.id ?? '');
+    effect(() => {
+      if (quien()) untracked(() => void this.recargar());
+    });
+  }
+
+  private get<T>(ruta: string): Promise<T> {
+    return firstValueFrom(this.http.get<T>(this.base + ruta));
+  }
+
+  async recargar(): Promise<void> {
+    try {
+      const [listas, reglas, ligas, cats] = await Promise.all([
+        this.get<ApiLista[]>('/listas-precios?take=500'),
+        todos((r) => this.get<ApiRegla[]>(r), '/reglas-precio'),
+        todos((r) => this.get<ApiListaSucursal[]>(r), '/lista-precios-sucursales'),
+        this.get<{ id: string; clave: string }[]>('/categorias-producto?take=500'),
+      ]);
+      this.categorias = new Map(cats.map((c) => [c.clave, c.id]));
+      const claveDe = new Map(cats.map((c) => [c.id, c.clave]));
+      this.ligas = ligas;
+      this.listas.set(
+        listas
+          .map((l) => ({
+            id: l.id,
+            nombre: l.nombre,
+            moneda: (l.monedaCodigo === 'USD' ? 'USD' : 'MXN') as Moneda,
+            plantas: ligas.filter((x) => x.listaPreciosId === l.id).map((x) => x.sucursalId),
+            reglas: reglas.filter((r) => r.listaPreciosId === l.id).map((r) => aRegla(r, claveDe)),
+          }))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+      );
+      this.errorCarga.set('');
+    } catch (e) {
+      this.errorCarga.set(mensajeDe(e));
+    }
+  }
 
   lista(id: string): ListaPrecios | undefined {
     return this.listas().find((l) => l.id === id);
   }
 
-  crear(d: DatosLista): ListaPrecios {
+  async crear(d: DatosLista): Promise<ListaPrecios> {
+    if (this.base) {
+      const l = await firstValueFrom(
+        this.http.post<ApiLista>(`${this.base}/listas-precios`, { nombre: d.nombre.trim(), monedaCodigo: d.moneda, activa: true, empresaRestringidaId: null }),
+      );
+      await this.ligarPlantas(l.id, d.plantas);
+      await this.recargar();
+      return this.lista(l.id)!;
+    }
     const lista: ListaPrecios = { id: 'lp-' + crypto.randomUUID().slice(0, 8), nombre: d.nombre.trim(), moneda: d.moneda, plantas: d.plantas, reglas: [] };
     this.listas.update((l) => [...l, lista]);
     this.historial.registrar(registro.lista(lista.id), {
@@ -159,9 +259,16 @@ export class ListasPreciosService {
     return lista;
   }
 
-  editar(id: string, d: DatosLista): void {
+  async editar(id: string, d: DatosLista): Promise<void> {
     const antes = this.lista(id);
     if (!antes) return;
+    if (this.base) {
+      const actual = await this.get<ApiLista>(`/listas-precios/${id}`);
+      await firstValueFrom(this.http.put(`${this.base}/listas-precios/${id}`, { ...actual, nombre: d.nombre.trim(), monedaCodigo: d.moneda }));
+      await this.ligarPlantas(id, d.plantas);
+      await this.recargar();
+      return;
+    }
     const despues = { ...antes, nombre: d.nombre.trim(), moneda: d.moneda, plantas: d.plantas };
     const cambios: Cambio[] = [];
     const campo = (nombre: string, a: string, b: string) => a !== b && cambios.push({ campo: nombre, antes: a, despues: b });
@@ -173,19 +280,57 @@ export class ListasPreciosService {
     this.historial.registrar(registro.lista(id), { texto: 'Lista editada', cambios });
   }
 
+  /** Deja ligadas a la lista exactamente esas plantas (vacío = todas). */
+  private async ligarPlantas(listaId: string, plantas: string[]): Promise<void> {
+    const actuales = this.ligas.filter((x) => x.listaPreciosId === listaId);
+    await Promise.all([
+      ...actuales
+        .filter((x) => !plantas.includes(x.sucursalId))
+        .map((x) => firstValueFrom(this.http.delete(`${this.base}/lista-precios-sucursales/${x.id}`))),
+      ...plantas
+        .filter((p) => !actuales.some((x) => x.sucursalId === p))
+        .map((sucursalId) => firstValueFrom(this.http.post(`${this.base}/lista-precios-sucursales`, { listaPreciosId: listaId, sucursalId }))),
+    ]);
+  }
+
   /** Agrega la regla, o la reemplaza si ya existe (mismo id). */
-  guardarRegla(listaId: string, r: ReglaPrecio): void {
+  async guardarRegla(listaId: string, r: ReglaPrecio): Promise<void> {
     const lista = this.lista(listaId);
     if (!lista) return;
     const existe = lista.reglas.some((x) => x.id === r.id);
+    if (this.base) {
+      const cuerpo = {
+        listaPreciosId: listaId,
+        aplicarA: r.aplicarA === 'categoria' ? 'categoria' : r.productoId ? 'producto' : 'todos',
+        productoId: r.aplicarA === 'producto' && r.productoId ? r.productoId : null,
+        categoriaId: r.aplicarA === 'categoria' ? (this.categorias.get(r.categoria) ?? null) : null,
+        tipo: r.tipo,
+        precioFijo: r.tipo === 'fijo' ? r.precioFijo : null,
+        descuentoPct: r.tipo === 'fijo' ? null : r.descuento,
+        recargo: r.tipo === 'formula' ? r.recargo : null,
+        cantidadMinima: r.cantidadMinima,
+        inicio: r.inicio || null,
+        fin: r.fin || null,
+      };
+      await firstValueFrom(
+        existe ? this.http.put(`${this.base}/reglas-precio/${r.id}`, { ...cuerpo, id: r.id }) : this.http.post(`${this.base}/reglas-precio`, cuerpo),
+      );
+      await this.recargar();
+      return;
+    }
     this.reemplazar({ ...lista, reglas: existe ? lista.reglas.map((x) => (x.id === r.id ? r : x)) : [...lista.reglas, r] });
     this.historial.registrar(registro.lista(listaId), { texto: existe ? 'Línea editada' : 'Línea agregada', detalles: [this.resumen(r, lista.moneda)] });
   }
 
-  quitarRegla(listaId: string, reglaId: string): void {
+  async quitarRegla(listaId: string, reglaId: string): Promise<void> {
     const lista = this.lista(listaId);
     const r = lista?.reglas.find((x) => x.id === reglaId);
     if (!lista || !r) return;
+    if (this.base) {
+      await firstValueFrom(this.http.delete(`${this.base}/reglas-precio/${reglaId}`));
+      await this.recargar();
+      return;
+    }
     this.reemplazar({ ...lista, reglas: lista.reglas.filter((x) => x.id !== reglaId) });
     this.historial.registrar(registro.lista(listaId), { texto: 'Línea quitada', detalles: [this.resumen(r, lista.moneda)] });
   }

@@ -1,5 +1,7 @@
-import { Service, inject, signal } from '@angular/core';
-import { AuthService, DatosFacturacion, DatosFacturacionEntrada, DocumentoFiscal, PerfilUsuario, TipoDocumentoFiscal } from 'ui';
+import { HttpClient } from '@angular/common/http';
+import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { AUTH_API_URL, AuthService, DatosFacturacion, DatosFacturacionEntrada, DocumentoFiscal, PerfilUsuario, TipoDocumentoFiscal, claveSat, mensajeError } from 'ui';
 
 export interface ResultadoCargaDocumentos {
   agregados: number;
@@ -27,10 +29,83 @@ let siguienteDocumento = 1;
 const MAXIMO_DOCUMENTO = 10 * 1024 * 1024;
 const EXTENSIONES_DOCUMENTO = ['pdf', 'png', 'jpg', 'jpeg'];
 
-/** Perfil del cliente y receptores fiscales. En memoria hasta conectar la API. */
+/** La empresa (el cliente) que representa el usuario: la administra la concretera, en el portal solo se lee. */
+export interface ClientePortal {
+  id: string;
+  nombre: string;
+  giro: string | null;
+  correo: string | null;
+  telefono: string | null;
+  sitioWeb: string | null;
+  diasCredito: number | null;
+  limiteCredito: number | null;
+}
+
+interface ApiPerfil {
+  usuario: { nombre: string; apellidos: string | null; correo: string; telefono: string | null; puesto: string | null; fotoArchivoId: string | null };
+  cliente: ClientePortal;
+}
+
+interface ApiDatoFiscal {
+  id: string;
+  alias: string | null;
+  razonSocial: string;
+  rfc: string;
+  regimenFiscal: string | null;
+  usoCfdi: string | null;
+  codigoPostal: string | null;
+  correo: string | null;
+  direccionFiscal: string | null;
+  predeterminado: boolean;
+}
+
+interface ApiArchivo {
+  id: string;
+  nombre: string;
+  tamanoBytes: number;
+  categoria: string | null;
+  createdAt: string;
+}
+
+const TIPOS_DOCUMENTO: TipoDocumentoFiscal[] = ['Constancia de situación fiscal', 'Carátula bancaria', 'Comprobante de domicilio', 'Otro'];
+
+const aDocumento = (a: ApiArchivo): DocumentoFiscal => ({
+  id: a.id,
+  nombre: a.nombre,
+  tipo: TIPOS_DOCUMENTO.find((t) => t === a.categoria) ?? 'Otro',
+  tamano: a.tamanoBytes,
+  fechaCarga: a.createdAt,
+  archivoId: a.id,
+});
+
+const aFacturacion = (f: ApiDatoFiscal, documentos: DocumentoFiscal[]): DatosFacturacion => ({
+  id: f.id,
+  alias: f.alias ?? '',
+  razonSocial: f.razonSocial,
+  rfc: f.rfc,
+  regimenFiscal: f.regimenFiscal ?? '',
+  codigoPostal: f.codigoPostal ?? '',
+  usoCfdi: f.usoCfdi ?? '',
+  correo: f.correo ?? '',
+  direccionFiscal: f.direccionFiscal ?? '',
+  predeterminado: f.predeterminado,
+  documentos,
+});
+
+/**
+ * Perfil del usuario, su empresa y sus receptores fiscales. Con backend: /portal/perfil (la empresa es de solo
+ * lectura: es el cliente que administra la concretera), /portal/datos-fiscales y sus documentos en /portal/archivos.
+ * Sin él (pruebas, demo), en memoria.
+ */
 @Service()
 export class PerfilService {
   private readonly auth = inject(AuthService);
+  private readonly base = inject(AUTH_API_URL, { optional: true });
+  private readonly http = this.base ? inject(HttpClient) : null;
+  readonly conServidor = !!this.base;
+  /** Con backend: la empresa que representa (solo lectura). */
+  readonly cliente = signal<ClientePortal | null>(null);
+  readonly errorCarga = signal('');
   private readonly _usuario = signal<PerfilUsuario>({
     nombre: '',
     apellidos: '',
@@ -50,12 +125,60 @@ export class PerfilService {
       cargoRepresentante: '',
     },
   });
-  private readonly _facturacion = signal<DatosFacturacion[]>(FACTURACION_DEMO);
+  private readonly _facturacion = signal<DatosFacturacion[]>(this.base ? [] : FACTURACION_DEMO);
 
   readonly usuario = this._usuario.asReadonly();
   readonly facturacion = this._facturacion.asReadonly();
 
-  actualizarUsuario(datos: PerfilUsuario): void {
+  constructor() {
+    if (!this.base) return;
+    const cliente = computed(() => this.auth.sesion()?.cliente?.id ?? '');
+    effect(() => {
+      if (cliente()) untracked(() => void this.recargar());
+    });
+  }
+
+  private get<T>(ruta: string): Promise<T> {
+    return firstValueFrom(this.http!.get<T>(this.base + ruta));
+  }
+
+  async recargar(): Promise<void> {
+    try {
+      const [perfil, fiscales] = await Promise.all([this.get<ApiPerfil>('/portal/perfil'), this.get<ApiDatoFiscal[]>('/portal/datos-fiscales')]);
+      const documentos = await Promise.all(fiscales.map((f) => this.get<ApiArchivo[]>(`/portal/archivos/registro/ClienteDatoFiscal/${f.id}`).catch(() => [])));
+      const u = perfil.usuario;
+      this._usuario.set({
+        ...this._usuario(),
+        nombre: u.nombre,
+        apellidos: u.apellidos ?? '',
+        correo: u.correo,
+        telefono: u.telefono ?? '',
+        puesto: u.puesto ?? '',
+        representaEmpresa: false,
+      });
+      this.fotoArchivoId = u.fotoArchivoId;
+      this.cliente.set(perfil.cliente);
+      this._facturacion.set(fiscales.map((f, i) => aFacturacion(f, documentos[i].map(aDocumento))));
+      this.errorCarga.set('');
+    } catch (e) {
+      this.errorCarga.set(mensajeError(e));
+    }
+  }
+
+  private fotoArchivoId: string | null = null;
+
+  async actualizarUsuario(datos: PerfilUsuario): Promise<void> {
+    if (this.base) {
+      await firstValueFrom(
+        this.http!.put(`${this.base}/portal/perfil`, {
+          nombre: datos.nombre.trim(),
+          apellidos: datos.apellidos.trim(),
+          telefono: datos.telefono.replace(/[^\d+]/g, ''),
+          puesto: datos.puesto.trim(),
+          fotoArchivoId: this.fotoArchivoId,
+        }),
+      );
+    }
     this._usuario.set({
       nombre: datos.nombre.trim(),
       apellidos: datos.apellidos.trim(),
@@ -77,9 +200,28 @@ export class PerfilService {
     });
   }
 
-  guardarFacturacion(datos: DatosFacturacionEntrada, id?: string): DatosFacturacion {
+  async guardarFacturacion(datos: DatosFacturacionEntrada, id?: string): Promise<DatosFacturacion> {
     const limpio = this.limpiarFacturacion(datos);
     let guardado: DatosFacturacion;
+
+    if (this.base) {
+      const cuerpo = {
+        ...limpio,
+        regimenFiscal: claveSat(limpio.regimenFiscal),
+        usoCfdi: claveSat(limpio.usoCfdi),
+        correo: limpio.correo || null,
+        direccionFiscal: limpio.direccionFiscal || null,
+        ...(id ? { id } : {}),
+      };
+      const r = await firstValueFrom(
+        id
+          ? this.http!.put<ApiDatoFiscal>(`${this.base}/portal/datos-fiscales/${id}`, cuerpo)
+          : this.http!.post<ApiDatoFiscal>(`${this.base}/portal/datos-fiscales`, cuerpo),
+      );
+      // El predeterminado cambia los demás: se vuelve a leer la lista
+      await this.recargar();
+      return this.buscarFacturacion(r.id) ?? aFacturacion(r, []);
+    }
 
     if (id) {
       const anterior = this._facturacion().find((f) => f.id === id);
@@ -104,7 +246,14 @@ export class PerfilService {
     return this._facturacion().find((f) => f.id === guardado.id)!;
   }
 
-  hacerPredeterminado(id: string): void {
+  async hacerPredeterminado(id: string): Promise<void> {
+    if (this.base) {
+      const f = this.buscarFacturacion(id);
+      if (!f) return;
+      const { documentos: _d, ...datos } = f;
+      await firstValueFrom(this.http!.put(`${this.base}/portal/datos-fiscales/${id}`, { ...datos, predeterminado: true }));
+      return this.recargar();
+    }
     this._facturacion.update((lista) => lista.map((f) => ({ ...f, predeterminado: f.id === id })));
   }
 
@@ -112,17 +261,26 @@ export class PerfilService {
     return this._facturacion().find((f) => f.id === id) ?? null;
   }
 
-  agregarDocumentos(
-    idFiscal: string,
-    tipo: TipoDocumentoFiscal,
-    archivos: File[],
-  ): ResultadoCargaDocumentos {
+  async agregarDocumentos(idFiscal: string, tipo: TipoDocumentoFiscal, archivos: File[]): Promise<ResultadoCargaDocumentos> {
     const aceptados: DocumentoFiscal[] = [];
     const rechazados: string[] = [];
 
     for (const archivo of archivos) {
       if (!this.documentoPermitido(archivo) || archivo.size > MAXIMO_DOCUMENTO) {
         rechazados.push(archivo.name);
+        continue;
+      }
+      if (this.base) {
+        const datos = new FormData();
+        datos.append('archivo', archivo);
+        datos.append('registroTipo', 'ClienteDatoFiscal');
+        datos.append('registroId', idFiscal);
+        datos.append('categoria', tipo);
+        try {
+          aceptados.push(aDocumento(await firstValueFrom(this.http!.post<ApiArchivo>(`${this.base}/portal/archivos`, datos))));
+        } catch {
+          rechazados.push(archivo.name);
+        }
         continue;
       }
       aceptados.push({
@@ -145,7 +303,8 @@ export class PerfilService {
     return { agregados: aceptados.length, rechazados };
   }
 
-  eliminarDocumento(idFiscal: string, idDocumento: string): void {
+  async eliminarDocumento(idFiscal: string, idDocumento: string): Promise<void> {
+    if (this.base) await firstValueFrom(this.http!.delete(`${this.base}/portal/archivos/${idDocumento}`));
     this._facturacion.update((lista) =>
       lista.map((f) =>
         f.id === idFiscal
@@ -153,6 +312,12 @@ export class PerfilService {
           : f,
       ),
     );
+  }
+
+  /** El contenido del documento: el File elegido o, con backend, el que se descarga. */
+  async contenido(d: DocumentoFiscal): Promise<Blob> {
+    if (d.archivo) return d.archivo;
+    return firstValueFrom(this.http!.get(`${this.base}/portal/archivos/${d.archivoId}`, { responseType: 'blob' }));
   }
 
   private limpiarFacturacion(datos: DatosFacturacionEntrada): DatosFacturacionEntrada {

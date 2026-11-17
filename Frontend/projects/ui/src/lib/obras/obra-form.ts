@@ -1,9 +1,11 @@
-import { Component, Injector, afterNextRender, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { Component, Injector, afterNextRender, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormField, applyEach, form, required, submit, validate } from '@angular/forms/signals';
 import { Camera, Check, ChevronDown, ExternalLink, LocateFixed, Plus, Trash2 } from 'lucide';
-import { FieldError, Icon, Mapa, Obra, UbicacionGps } from 'ui';
-import { NuevaObra } from '../../core/services/obras.service';
+import { FieldError } from '../components/field-error';
+import { Icon } from '../components/icon';
+import { Mapa } from '../components/mapa';
+import { NuevaObra, Obra, UbicacionGps } from '../models/obra';
 import { Avatar } from './avatar';
 import { LADAS, LADA_MX, validarTelefono } from './telefono';
 
@@ -27,7 +29,7 @@ function aModelo(o: Obra | null) {
  * teléfono (lada +52 por defecto, se permiten extranjeros). Lo usan el cotizador y Mis obras.
  */
 @Component({
-  selector: 'app-obra-form',
+  selector: 'ui-obra-form',
   imports: [Avatar, DecimalPipe, FormField, FieldError, Icon, Mapa],
   template: `
     <form [id]="id('form')" class="rounded-xl border border-acero/70 bg-white/70 p-4" novalidate [attr.aria-labelledby]="id('titulo')" (submit)="guardar($event)">
@@ -83,7 +85,7 @@ function aModelo(o: Obra | null) {
       <fieldset class="mt-5 border-t border-acero/60 pt-4">
         <legend class="float-left mb-3 w-full font-bold">Responsable de la obra</legend>
         <div class="clear-both flex flex-wrap items-start gap-4">
-          <app-avatar class="size-16 text-2xl" [nombre]="modelo().responsable || '?'" [foto]="modelo().foto" />
+          <ui-avatar-obra class="size-16 text-2xl" [nombre]="modelo().responsable || '?'" [foto]="modelo().foto" />
           <div class="min-w-0 flex-1 basis-60">
             <label [for]="id('responsable')" class="mb-1.5 block text-sm font-medium">Nombre del responsable</label>
             <input [id]="id('responsable')" type="text" autocomplete="name" placeholder="Ej. Ing. Mariana Pech" class="campo h-11 px-3.5" [formField]="f.responsable" [attr.aria-invalid]="f.responsable().touched() && f.responsable().invalid()" [attr.aria-describedby]="id('responsable-error')" />
@@ -118,7 +120,7 @@ function aModelo(o: Obra | null) {
                 <ui-field-error [campo]="c.nombre" [errorId]="id('contacto-' + i + '-nombre-error')" />
               </div>
               <div>
-                <span [id]="id('contacto-' + i + '-tel')" class="mb-1 block text-sm font-medium">Teléfono<span class="sr-only"> del contacto {{ i + 1 }}</span></span>
+                <label [id]="id('contacto-' + i + '-tel')" [for]="id('contacto-' + i + '-numero')" class="mb-1 block text-sm font-medium">Teléfono<span class="sr-only"> del contacto {{ i + 1 }}</span></label>
                 <div class="flex gap-2">
                   <div class="relative w-36 shrink-0">
                     <select class="campo h-11 appearance-none pr-7 pl-3" [formField]="c.lada" [attr.aria-label]="'Lada del contacto ' + (i + 1)">
@@ -136,7 +138,6 @@ function aModelo(o: Obra | null) {
                     placeholder="987 123 4567"
                     class="campo h-11 min-w-0 px-3"
                     [formField]="c.numero"
-                    [attr.aria-labelledby]="id('contacto-' + i + '-tel')"
                     [attr.aria-invalid]="c.numero().touched() && c.numero().invalid()"
                     [attr.aria-describedby]="id('contacto-' + i + '-numero-error')"
                   />
@@ -193,6 +194,10 @@ export class ObraForm {
 
   protected readonly modelo = linkedSignal(() => aModelo(this.inicial()));
   protected readonly ubicacion = linkedSignal<UbicacionGps | null>(() => this.inicial()?.ubicacion ?? null);
+  /** Hay algo distinto de lo que se abrió (quien lo usa pregunta antes de tirarlo). */
+  readonly sinGuardar = computed(
+    () => JSON.stringify([this.modelo(), this.ubicacion()]) !== JSON.stringify([aModelo(this.inicial()), this.inicial()?.ubicacion ?? null]),
+  );
   protected readonly buscando = signal(false);
   protected readonly errorUbicacion = signal('');
   protected readonly errorFoto = signal('');

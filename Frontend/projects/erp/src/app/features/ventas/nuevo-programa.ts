@@ -1,7 +1,8 @@
-import { Component, computed, inject, input, viewChild } from '@angular/core';
+import { Component, computed, inject, input, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
+import { mensajeDe } from './datos';
 import { DatosPrograma, FormPrograma } from './form-programa';
 import { PLANTILLAS, ProgramasService, TipoPrograma } from './lealtad';
 import { PlantillasPrograma } from './plantillas-programa';
@@ -31,6 +32,9 @@ import { PlantillasPrograma } from './plantillas-programa';
         @if (tipo(); as tipo) {
           <!-- Uno por plantilla: con Atrás a otra plantilla, el formulario empieza de nuevo con sus valores -->
           @for (t of [tipo]; track t) {
+            @if (error()) {
+              <p role="alert" class="mb-3 text-sm font-medium text-[#8E332C]">{{ error() }}</p>
+            }
             <app-form-programa formId="nuevo-programa" [nuevoTipo]="t" [class]="cajas.hoja + ' max-w-5xl'" (listo)="crear($event)" />
           }
         } @else {
@@ -57,9 +61,16 @@ export default class NuevoProgramaPagina {
     'inline-flex h-9 items-center rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
   protected readonly tipo = computed(() => PLANTILLAS.find((p) => p.tipo === this.plantilla())?.tipo as TipoPrograma | undefined);
 
-  protected crear(d: DatosPrograma): void {
-    const p = this.servicio.crear({ ...d, cupones: [] });
-    void this.router.navigate(['/ventas/descuentos-y-lealtad', p.id]);
+  protected readonly error = signal('');
+
+  protected async crear(d: DatosPrograma): Promise<void> {
+    this.error.set('');
+    try {
+      const p = await this.servicio.crear({ ...d, cupones: [] });
+      void this.router.navigate(['/ventas/descuentos-y-lealtad', p.id]);
+    } catch (e) {
+      this.error.set(mensajeDe(e));
+    }
   }
 
   protected descartar(): void {

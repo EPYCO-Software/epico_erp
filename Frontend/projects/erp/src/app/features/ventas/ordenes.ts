@@ -2,13 +2,17 @@ import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Search } from 'lucide';
-import { EstadoCobroEtiqueta, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, PedidoVista } from 'ui';
+import { ESTADO_COBRO, ESTADO_PEDIDO, ESTATUS_PLANTA, EstadoCobro, EstadoCobroEtiqueta, EstadoPedido, EstadoPedidoEtiqueta, EstatusPlanta, FechaZonaPipe, PedidoVista, Buscador, FiltrosElegidos, GrupoFiltro, enRango, opcionesDe, pasaFiltro } from 'ui';
 import { PlantasService } from '../../core/plantas';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
 import { VentasService, filtrarPedidos } from './datos';
 import { DetallePedido } from './detalle-pedido';
 import { PlantaFila } from './planta-pedido';
+import { permisosSesion } from '../../core/permisos';
+
+/** La resistencia del concreto de la orden ("f´c 250", "MR 45"): el producto es su descripción completa, única por orden. */
+const concretoDe = (producto: string) => /(f´c|f'c|MR)\s*(\d+)/i.exec(producto)?.slice(1, 3).join(' ').replace("f'c", 'f´c') ?? '';
 
 /**
  * Ventas → Órdenes: las órdenes de venta (un pedido por entrega) que salen de confirmar cotizaciones, como la lista de
@@ -18,13 +22,12 @@ import { PlantaFila } from './planta-pedido';
 @Component({
   selector: 'app-ordenes',
   imports: [
-    DecimalPipe,
+    Buscador, DecimalPipe,
     RouterLink,
     EstadoCobroEtiqueta,
     EstadoPedidoEtiqueta,
     PlantaFila,
     FechaZonaPipe,
-    Icon,
     EnEncabezado,
     PanelLateral,
     DetallePedido,
@@ -35,27 +38,19 @@ import { PlantaFila } from './planta-pedido';
         class="flex items-center gap-3 md:grid md:grid-cols-[minmax(max-content,1fr)_minmax(0,640px)_minmax(max-content,1fr)] md:gap-6"
       >
         <div class="flex items-center gap-3">
-          <a routerLink="/ventas/ordenes/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          @if (puede('ventas.pedidos.crear')) {
+            <a routerLink="/ventas/ordenes/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          }
           <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Órdenes de venta</h1>
         </div>
-        <form role="search" class="relative min-w-0 flex-1" (submit)="$event.preventDefault()">
-          <label for="buscar-orden" class="sr-only">Buscar órdenes por folio, cliente, obra, producto o cotización</label>
-          <ui-icon
-            [icono]="iconoBuscar"
-            [tamano]="17"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texto-suave max-sm:hidden"
-          />
-          <input
-            id="buscar-orden"
-            type="search"
-            autocomplete="off"
-            placeholder="Buscar…"
-            class="campo h-9 rounded-lg bg-white/65! pr-3 pl-3 text-[15px] sm:pl-9"
-            [value]="texto()"
-            (input)="texto.set($any($event.target).value)"
-            (keydown.escape)="texto.set('')"
-          />
-        </form>
+        <ui-buscador
+          class="min-w-0 flex-1"
+          idBuscar="buscar-orden"
+          etiqueta="Buscar órdenes por folio, cliente, obra, producto o cotización"
+          [(texto)]="texto"
+          [grupos]="grupos()"
+          [(filtros)]="filtros"
+        />
         <p class="text-right text-sm text-texto-suave max-md:sr-only" aria-live="polite">{{ conteo() }}</p>
       </div>
     </ng-template>
@@ -170,6 +165,8 @@ import { PlantaFila } from './planta-pedido';
   `,
 })
 export default class Ordenes {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly ventas = inject(VentasService);
   private readonly plantas = inject(PlantasService);
   private readonly router = inject(Router);
@@ -179,7 +176,38 @@ export default class Ordenes {
   protected readonly cajas = CAJAS_LISTA;
   protected readonly texto = signal('');
   protected readonly aviso = signal('');
-  protected readonly filas = computed(() => filtrarPedidos(this.ventas.pedidos(), this.plantas.seleccion(), this.texto()));
+  private readonly base = computed(() => filtrarPedidos(this.ventas.pedidos(), this.plantas.seleccion(), this.texto()));
+  /** Filtros por columna, en el buscador. */
+  protected readonly filtros = signal<FiltrosElegidos>({});
+  protected readonly filas = computed(() => {
+    const f = this.filtros();
+    return this.base().filter(
+      (p) =>
+        enRango(f, 'entrega', p.fechaHoraEntrega) &&
+        pasaFiltro(f, 'concreto', concretoDe(p.producto)) &&
+        enRango(f, 'volumen', p.volumenM3) &&
+        enRango(f, 'importe', p.importe) &&
+        pasaFiltro(f, 'estado', p.estado) &&
+        pasaFiltro(f, 'planta', p.plantaId) &&
+        pasaFiltro(f, 'estatus', p.estatusPlanta ?? 'no_enviado') &&
+        pasaFiltro(f, 'cobro', p.cobro),
+    );
+  });
+  protected readonly grupos = computed<GrupoFiltro[]>(() => {
+    const base = this.base();
+    const plantas = new Map(base.map((p) => [p.plantaId, p.plantaNombre]));
+    const conteo = (fn: (p: PedidoVista) => boolean) => base.filter(fn).length;
+    return [
+      { id: 'entrega', titulo: 'Entrega', rango: 'fecha' },
+      { id: 'concreto', titulo: 'Concreto', opciones: opcionesDe(base, (p) => concretoDe(p.producto)) },
+      { id: 'volumen', titulo: 'Volumen', rango: 'numero', sufijo: ' m³' },
+      { id: 'importe', titulo: 'Importe', rango: 'numero', prefijo: '$' },
+      { id: 'estado', titulo: 'Estado', opciones: (Object.keys(ESTADO_PEDIDO) as EstadoPedido[]).map((id) => ({ id, nombre: ESTADO_PEDIDO[id], n: conteo((p) => p.estado === id) })) },
+      { id: 'planta', titulo: 'Planta', opciones: opcionesDe(base, (p) => p.plantaId, (id) => plantas.get(id) ?? id) },
+      { id: 'estatus', titulo: 'Estatus en planta', opciones: (Object.keys(ESTATUS_PLANTA) as EstatusPlanta[]).map((id) => ({ id, nombre: ESTATUS_PLANTA[id], n: conteo((p) => (p.estatusPlanta ?? 'no_enviado') === id) })) },
+      { id: 'cobro', titulo: 'Cobro', opciones: (Object.keys(ESTADO_COBRO) as EstadoCobro[]).map((id) => ({ id, nombre: ESTADO_COBRO[id], n: conteo((p) => p.cobro === id) })) },
+    ];
+  });
   protected readonly total = computed(() =>
     this.filas().reduce((t, p) => (p.estado === 'cancelado' ? t : t + p.importe), 0),
   );

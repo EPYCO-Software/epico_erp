@@ -1,10 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { form, min, required, submit } from '@angular/forms/signals';
-import { DisenoGuardado, EspecificacionConcreto, Maquinaria, Obra, PERSONALIZADO, RentaMaquinaria, ServicioObra, aIsoConOffset, avisos, buscarSolucion, colocacionParaServicios, deInputLocal, esNocturna, etiquetas, serviciosParaColocacion, validarEntrega } from 'ui';
+import { type ConcretoDisponible, DisenoGuardado, EspecificacionConcreto, concretoExistente, Maquinaria, Obra, PERSONALIZADO, RentaMaquinaria, ServicioObra, aIsoConOffset, avisos, buscarSolucion, colocacionParaServicios, deInputLocal, esNocturna, etiquetas, mensajeError, serviciosParaColocacion, sugeridaDisponible, validarEntrega } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
 
 export type Paso = 1 | 2 | 3 | 'enviar';
+/** Cómo empieza el cliente: un producto del catálogo, una solución o configurando a mano. */
+export type ModoConcreto = 'producto' | 'solucion' | 'manual';
 export const PASOS = ['Solución', 'Especificaciones', 'Servicios'] as const;
 
 /** Estado de una página de cotización; lo comparten los pasos y el resumen (se provee en Catalogo). */
@@ -15,6 +17,8 @@ export class CotizadorState {
 
   readonly paso = signal<Paso>(1);
   readonly pestana = signal<'soluciones' | 'disenos'>('soluciones');
+  /** Se elige antes que todo lo demás; null = aún no elige. */
+  readonly modo = signal<ModoConcreto | null>(null);
   readonly solucionId = signal<string | null>(null);
   readonly solucion = computed(() => buscarSolucion(this.solucionId()));
   /** Nombre de la partida: el de la solución o el del diseño guardado que se usó. */
@@ -64,6 +68,10 @@ export class CotizadorState {
 
   readonly etiquetas = computed(() => etiquetas(this.especificacion()));
   readonly avisos = computed(() => avisos(this.especificacion()));
+  /** El producto del catálogo con esa resistencia (null: no existe). */
+  readonly existente = computed(() => concretoExistente(this.especificacion().tipoResistencia, this.especificacion().resistenciaKgCm2));
+  /** A mano y sin producto con esa resistencia: se solicita como pedido especial (precio por confirmar). */
+  readonly especial = computed(() => this.modo() === 'manual' && this.especificacion().resistenciaKgCm2 > 0 && !this.existente());
   readonly disenos = this.cotizacion.disenos;
   readonly partidas = this.cotizacion.partidas;
   readonly volumenTotal = this.cotizacion.volumenTotal;
@@ -74,7 +82,8 @@ export class CotizadorState {
     if (!s) return;
     this.solucionId.set(s.id);
     this.nombre.set(s.nombre);
-    this.especificacion.set(structuredClone(s.sugerida));
+    // Su especificación sugerida, con un concreto que sí esté en el catálogo para esa solución
+    this.especificacion.set(sugeridaDisponible(s));
     this.servicios.set([...s.servicios]);
     this.maquinaria.set([]);
     this.nocturnoAutomatico = false;
@@ -83,7 +92,28 @@ export class CotizadorState {
     this.mensaje.set('');
   }
 
+  /** Manual va directo a especificaciones (Personalizado); producto y solución eligen en este paso. */
+  elegirModo(modo: ModoConcreto | null): void {
+    this.modo.set(modo);
+    this.solucionId.set(null);
+    this.faltaSolucion.set(false);
+    if (modo === 'manual') {
+      this.elegirSolucion(PERSONALIZADO.id);
+      this.paso.set(2);
+    }
+  }
+
+  /** Un concreto del catálogo: su resistencia sobre la especificación base de Personalizado. */
+  elegirProducto(c: ConcretoDisponible): void {
+    this.elegirSolucion(PERSONALIZADO.id);
+    this.modo.set('producto');
+    this.nombre.set(`Concreto ${c.tipo === 'fc' ? "f'c" : 'MR'} ${c.kg}`);
+    this.especificacion.update((e) => ({ ...e, tipoResistencia: c.tipo, resistenciaKgCm2: c.kg }));
+  }
+
   usarDiseno(d: DisenoGuardado): void {
+    // Un diseño propio (Personalizado) se revisa como configuración manual: si ya no existe, es pedido especial
+    this.modo.set(d.solucionId === PERSONALIZADO.id ? 'manual' : 'solucion');
     this.solucionId.set(d.solucionId);
     this.nombre.set(d.nombre);
     this.especificacion.set(structuredClone(d.especificacion));
@@ -120,7 +150,10 @@ export class CotizadorState {
       this.paso.set(destino);
       return;
     }
-    if (!this.solucion()) this.elegirSolucion(PERSONALIZADO.id);
+    if (!this.solucion()) {
+      this.modo.set('manual');
+      this.elegirSolucion(PERSONALIZADO.id);
+    }
     if (destino === 2) {
       this.paso.set(2);
       return;
@@ -160,8 +193,8 @@ export class CotizadorState {
     this.faltaObra.set(false);
   }
 
-  agregarObra(datos: NuevaObra): Obra {
-    const obra = this.obrasService.agregar(datos);
+  async agregarObra(datos: NuevaObra): Promise<Obra> {
+    const obra = await this.obrasService.agregar(datos);
     this.elegirObra(obra.id);
     return obra;
   }
@@ -186,7 +219,7 @@ export class CotizadorState {
     }
   }
 
-  guardarDiseno(): void {
+  async guardarDiseno(): Promise<void> {
     const nombre = this.modelo().nombreDiseno.trim();
     const solucion = this.solucion();
     if (!nombre || !solucion) {
@@ -194,8 +227,12 @@ export class CotizadorState {
       this.mensaje.set('Escribe un nombre para guardar el diseño.');
       return;
     }
-    this.cotizacion.guardarDiseno(nombre, solucion.id, this.especificacion());
-    this.mensaje.set(`Diseño "${nombre}" guardado en Mis diseños.`);
+    try {
+      await this.cotizacion.guardarDiseno(nombre, solucion.id, this.especificacion());
+      this.mensaje.set(`Diseño "${nombre}" guardado en Mis diseños.`);
+    } catch (e) {
+      this.mensaje.set(mensajeError(e));
+    }
   }
 
   agregar(): void {
@@ -229,8 +266,14 @@ export class CotizadorState {
       maquinaria: this.maquinaria(),
       obraId,
       entrega: aIsoConOffset(entrega),
+      ...(this.especial() ? { especial: true } : {}),
     });
-    this.mensaje.set(`${this.nombre()} agregado a tu cotización. Puedes agregar otro concreto o solicitar precios.`);
+    this.mensaje.set(
+      this.especial()
+        ? `${this.nombre()} agregado como pedido especial: la concretera confirmará su precio.`
+        : `${this.nombre()} agregado a tu cotización. Puedes agregar otro concreto o solicitar precios.`,
+    );
+    this.modo.set(null);
     this.solucionId.set(null);
     this.nombre.set('');
     this.servicios.set([]);

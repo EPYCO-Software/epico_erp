@@ -15,7 +15,10 @@ namespace EPICO.Api.Controllers;
 [Route("api/v1/archivos")]
 public class ArchivosController(IAppDbContext db, IUsuarioActual yo, IConfiguration cfg, IWebHostEnvironment env) : ControllerBase
 {
-    string Carpeta => Path.GetFullPath(cfg["Archivos:Ruta"] ?? "archivos", env.ContentRootPath);
+    string Carpeta => CarpetaDe(cfg, env);
+
+    public static string CarpetaDe(IConfiguration cfg, IWebHostEnvironment env) =>
+        Path.GetFullPath(cfg["Archivos:Ruta"] ?? "archivos", env.ContentRootPath);
 
     IQueryable<Archivo> Visibles() => db.Set<Archivo>().Where(a => yo.EsRoot || a.OrganizacionId == yo.OrganizacionId);
 
@@ -26,8 +29,16 @@ public class ArchivosController(IAppDbContext db, IUsuarioActual yo, IConfigurat
     public async Task<ActionResult<Archivo>> Subir(IFormFile archivo, [FromForm] string? categoria, [FromForm] string? registroTipo,
         [FromForm] Guid? registroId, CancellationToken ct)
     {
+        var a = await Guardar(db, yo, Carpeta, archivo, categoria, registroTipo, registroId, ct);
+        return CreatedAtAction(nameof(Descargar), new { id = a.Id }, a);
+    }
+
+    /// <summary>Escribe el archivo en disco y su renglón en Archivo (también lo usa el portal).</summary>
+    public static async Task<Archivo> Guardar(IAppDbContext db, IUsuarioActual yo, string carpeta, IFormFile archivo,
+        string? categoria, string? registroTipo, Guid? registroId, CancellationToken ct)
+    {
         var ruta = $"{DateTime.UtcNow:yyyy/MM}/{Guid.NewGuid():N}";
-        var destino = Path.Combine(Carpeta, ruta);
+        var destino = Path.Combine(carpeta, ruta);
         Directory.CreateDirectory(Path.GetDirectoryName(destino)!);
         await using (var f = System.IO.File.Create(destino))
             await archivo.CopyToAsync(f, ct);
@@ -48,7 +59,7 @@ public class ArchivosController(IAppDbContext db, IUsuarioActual yo, IConfigurat
         };
         db.Set<Archivo>().Add(a);
         await db.SaveChangesAsync(ct);
-        return CreatedAtAction(nameof(Descargar), new { id = a.Id }, a);
+        return a;
     }
 
     /// <summary>Descargar archivo</summary>

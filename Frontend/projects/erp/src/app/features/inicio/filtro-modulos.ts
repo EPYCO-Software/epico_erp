@@ -71,7 +71,7 @@ export class BotonFiltroModulos {
   protected readonly idPanel = `filtro-modulos-${++instancias}`;
 
   protected conteo(filtro: FiltroModulos): number {
-    return modulosDelFiltro([filtro], this.modulos.favoritos()).length;
+    return modulosDelFiltro([filtro], this.modulos.favoritos(), this.modulos.visibles()).length;
   }
 
   protected alCambiar(e: Event, panel: HTMLElement, boton: HTMLElement): void {

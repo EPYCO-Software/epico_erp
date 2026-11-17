@@ -18,6 +18,11 @@
       "tipo": "concreto"
     },
     {
+      "clave": "aditivo",
+      "nombre": "Aditivo",
+      "tipo": "concreto"
+    },
+    {
       "clave": "concreto",
       "nombre": "Concreto",
       "tipo": "concreto"
@@ -218,7 +223,7 @@
     {
       "codigo": "AJ-ADT-ACELERANTE",
       "nombre": "Aditivo: acelerante",
-      "categoria": "ajuste",
+      "categoria": "aditivo",
       "unidad": "M3",
       "precio": 120,
       "minimo": null,
@@ -229,7 +234,7 @@
     {
       "codigo": "AJ-ADT-RETARDANTE",
       "nombre": "Aditivo: retardante",
-      "categoria": "ajuste",
+      "categoria": "aditivo",
       "unidad": "M3",
       "precio": 100,
       "minimo": null,
@@ -240,7 +245,7 @@
     {
       "codigo": "AJ-ADT-IMPERMEABILIZANTE",
       "nombre": "Aditivo: impermeabilizante integral",
-      "categoria": "ajuste",
+      "categoria": "aditivo",
       "unidad": "M3",
       "precio": 180,
       "minimo": null,
@@ -251,7 +256,7 @@
     {
       "codigo": "AJ-ADT-FIBRA-SINTETICA",
       "nombre": "Aditivo: fibra sintética",
-      "categoria": "ajuste",
+      "categoria": "aditivo",
       "unidad": "M3",
       "precio": 150,
       "minimo": null,
@@ -262,7 +267,7 @@
     {
       "codigo": "AJ-ADT-FIBRA-METALICA",
       "nombre": "Aditivo: fibra metálica",
-      "categoria": "ajuste",
+      "categoria": "aditivo",
       "unidad": "M3",
       "precio": 600,
       "minimo": null,
@@ -357,6 +362,17 @@
       "descripcion": "\"Helicóptero\" para acabado pulido de firmes y pisos.",
       "concretoFc": null,
       "equipoTipo": "allanadora"
+    },
+    {
+      "codigo": "CON-ESPECIAL",
+      "nombre": "Concreto de pedido especial",
+      "categoria": "concreto-fc",
+      "unidad": "M3",
+      "precio": 0,
+      "minimo": null,
+      "descripcion": "Línea de concreto de una partida de pedido especial (configuración fuera del catálogo); el precio sale de la cotización.",
+      "concretoFc": null,
+      "equipoTipo": null
     },
     {
       "codigo": "SRV-TRASLADO",

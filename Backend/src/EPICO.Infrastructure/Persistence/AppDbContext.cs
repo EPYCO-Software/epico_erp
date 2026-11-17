@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using EPICO.Application.Common;
 using EPICO.Domain.Acceso;
 using EPICO.Domain.Common;
+using EPICO.Domain.Correo;
 using EPICO.Domain.Historial;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -19,6 +20,8 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
     public bool VeTodo => usuario.Id is null || usuario.EsRoot;
     public Guid[] EmpresasPermitidas => [.. usuario.EmpresaIds];
     public Guid? OrganizacionPermitida => usuario.OrganizacionId;
+    public Guid[] EmpresasPorPlanta => [.. usuario.EmpresasPorPlanta];
+    public Guid[] SucursalesPermitidas => [.. usuario.SucursalIds];
 
     // Importes en numeric(14,2) salvo que la propiedad diga otra cosa (cantidades, coordenadas, tasas).
     protected override void ConfigureConventions(ModelConfigurationBuilder c) =>
@@ -44,6 +47,8 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
         });
         b.Entity<Sucursal>(e =>
         {
+            // Quien entra solo a ciertas plantas de una empresa no ve (ni cotiza en) las demás.
+            e.HasQueryFilter("planta", x => VeTodo || !EmpresasPorPlanta.Contains(x.EmpresaId) || SucursalesPermitidas.Contains(x.Id));
             e.HasIndex(x => new { x.EmpresaId, x.Codigo }).IsUnique();
             e.Property(x => x.Lat).HasPrecision(9, 6);
             e.Property(x => x.Lng).HasPrecision(9, 6);
@@ -52,6 +57,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
         b.Entity<Usuario>(e =>
         {
             e.HasIndex(x => x.Correo).IsUnique();
+            e.HasOne<Rol>().WithMany().HasForeignKey(x => x.RolId);
             e.HasOne<Archivo>().WithMany().HasForeignKey(x => x.FotoArchivoId);
         });
         b.Entity<Rol>().HasOne<Organizacion>().WithMany().HasForeignKey(x => x.OrganizacionId);
@@ -66,7 +72,6 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
             e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId);
             e.HasOne<Empresa>().WithMany().HasForeignKey(x => x.EmpresaId);
             e.HasOne<Sucursal>().WithMany().HasForeignKey(x => x.SucursalId);
-            e.HasOne<Rol>().WithMany().HasForeignKey(x => x.RolId);
         });
         b.Entity<Sesion>(e =>
         {
@@ -74,6 +79,28 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
             e.HasIndex(x => new { x.UsuarioId, x.CreadaEn });
             e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId);
             e.HasOne<Empresa>().WithMany().HasForeignKey(x => x.EmpresaId);
+        });
+        b.Entity<PreferenciaUsuario>(e =>
+        {
+            e.HasKey(x => x.UsuarioId);
+            e.HasOne<Usuario>().WithOne().HasForeignKey<PreferenciaUsuario>(x => x.UsuarioId);
+        });
+        b.Entity<RestablecimientoPassword>(e =>
+        {
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => new { x.UsuarioId, x.CreadoEn });
+            e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId);
+        });
+        b.Entity<ServidorCorreo>(e =>
+        {
+            e.HasIndex(x => new { x.OrganizacionId, x.Prioridad });
+            e.HasOne<Organizacion>().WithMany().HasForeignKey(x => x.OrganizacionId);
+        });
+        b.Entity<CorreoSaliente>(e =>
+        {
+            e.HasIndex(x => new { x.Estado, x.ProximoIntento });
+            e.HasOne<Organizacion>().WithMany().HasForeignKey(x => x.OrganizacionId);
+            e.HasOne<ServidorCorreo>().WithMany().HasForeignKey(x => x.ServidorId);
         });
         b.Entity<Secuencia>(e =>
         {
@@ -122,6 +149,17 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
             e.HasIndex(x => new { x.RegistroTipo, x.RegistroId });
             e.HasOne<Organizacion>().WithMany().HasForeignKey(x => x.OrganizacionId);
             e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.AsignadaAId);
+        });
+        b.Entity<UsuarioPermiso>(e =>
+        {
+            e.HasIndex(x => new { x.UsuarioId, x.Permiso }).IsUnique();
+            e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId);
+        });
+        b.Entity<Notificacion>(e =>
+        {
+            e.HasIndex(x => new { x.UsuarioId, x.Fecha });
+            e.HasIndex(x => new { x.UsuarioId, x.Clave }).IsUnique().HasFilter("\"Clave\" IS NOT NULL");
+            e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.UsuarioId);
         });
 
         foreach (var t in b.Model.GetEntityTypes().ToList())
@@ -198,6 +236,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
 
             await AnotarHistorial(e, x, ahora, ct);
         }
+        await Notificar(ahora, ct);
         return await base.SaveChangesAsync(acceptAllChangesOnSuccess, ct);
     }
 
@@ -264,7 +303,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
             foreach (var (p, a) in rastreados)
             {
                 var prop = e.Property(p.Name);
-                if (Equals(prop.OriginalValue, prop.CurrentValue)) continue;
+                if (prop.Metadata.GetValueComparer().Equals(prop.OriginalValue, prop.CurrentValue)) continue;
                 var tipoDato = a!.Tipo ?? Deducir(p.PropertyType);
                 ev.Cambios.Add(new EventoCambio
                 {
@@ -307,6 +346,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
         DateTime f => f.ToString("yyyy-MM-dd HH:mm 'UTC'", Mx),
         DateOnly f => f.ToString("yyyy-MM-dd", Mx),
         Enum o => JsonNamingPolicy.SnakeCaseLower.ConvertName(o.ToString()),
+        IEnumerable<string> l => string.Join(", ", l),
         IFormattable n => n.ToString(null, Mx),
         _ => v.ToString(),
     };
@@ -324,7 +364,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options, IUsuar
             RETURNING "Prefijo", "Siguiente" - 1 AS "Numero"
             """).ToListAsync(ct);
         return filas is [var f]
-            ? f.Prefijo + f.Numero.ToString("D3")
+            ? Secuencia.Folio(f.Prefijo, f.Numero)
             : throw new InvalidOperationException($"No hay secuencia '{tipo}' para esa empresa y planta.");
     }
 

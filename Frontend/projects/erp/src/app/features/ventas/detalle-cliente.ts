@@ -10,9 +10,10 @@ import {
   output,
   viewChild,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { Mail, MapPin, Maximize2, MonitorCheck, PencilLine, Phone, X } from 'lucide';
-import { Cliente, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, pesos } from 'ui';
+import { Router, RouterLink } from '@angular/router';
+import { Mail, MapPin, Maximize2, MonitorCheck, PencilLine, Phone, Trash2, X } from 'lucide';
+import { AuthService, Cliente, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, pesos } from 'ui';
+import { TODOS, tiene } from '../../core/permisos';
 import { HistorialService } from '../../core/historial';
 import { CambiosCliente, ESTADOS_COTIZACION, VentasService, mensajeDe, registro, telefono } from './datos';
 import { EditorCliente } from './editor-cliente';
@@ -36,7 +37,9 @@ import { EditorCliente } from './editor-cliente';
         } @else {
           <h2 id="previa-titulo" tabindex="-1" class="text-lg font-bold outline-none">{{ c().nombre }}</h2>
         }
-        <p class="text-sm text-texto-suave">{{ c().empresa.razonSocial }} · RFC {{ c().empresa.rfc }}</p>
+        @if (subtitulo()) {
+          <p class="text-sm text-texto-suave">{{ subtitulo() }}</p>
+        }
         @if (c().portal) {
           <p class="mt-2 inline-flex items-center gap-1.5 rounded-md bg-[#E5F0EA] px-2 py-0.5 text-sm font-semibold text-[#2E5E4A]">
             <ui-icon [icono]="iconos.portal" [tamano]="15" />Conectado al portal
@@ -64,12 +67,30 @@ import { EditorCliente } from './editor-cliente';
       }
     </div>
 
-    @if (!editando()) {
-      <button #botonEditar type="button" [class]="botonSecundario + ' mt-3'" (click)="editar()">
-        <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
-      </button>
+    @if (!editando() && (puedeEditar() || puedeEliminar())) {
+      <div class="mt-3 flex flex-wrap gap-2">
+        @if (puedeEditar()) {
+          <button #botonEditar type="button" [class]="botonSecundario" (click)="editar()">
+            <ui-icon [icono]="iconos.editar" [tamano]="16" />Editar
+          </button>
+        }
+        @if (puedeEliminar()) {
+          <button
+            type="button"
+            [class]="botonSecundario + ' disabled:cursor-not-allowed disabled:opacity-50'"
+            [disabled]="!!enUso()"
+            [attr.aria-describedby]="enUso() ? 'cliente-en-uso' : null"
+            (click)="eliminar()"
+          >
+            <ui-icon [icono]="iconos.eliminar" [tamano]="16" />Eliminar
+          </button>
+        }
+      </div>
+      @if (puedeEliminar() && enUso()) {
+        <p id="cliente-en-uso" class="mt-1 text-xs text-texto-suave">No se puede eliminar: {{ enUso() }}.</p>
+      }
     }
-    <p class="mt-2 text-sm font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ aviso() }}</p>
+    <p class="mt-2 text-sm font-medium empty:hidden" [class]="error() ? 'text-[#8E332C]' : 'text-[#2E5E4A]'" aria-live="polite">{{ aviso() }}</p>
 
     @if (editando()) {
       <app-editor-cliente class="mt-4 border-t border-acero/60 pt-4" [c]="c()" (listo)="guardar($event)" (descartar)="terminar('')" />
@@ -109,7 +130,7 @@ import { EditorCliente } from './editor-cliente';
               }
             </dl>
           } @else {
-            <p class="text-texto-suave">{{ c().empresa.razonSocial }}: sin más datos de empresa.</p>
+            <p class="text-texto-suave">{{ c().empresa.razonSocial ? c().empresa.razonSocial + ": sin" : "Sin" }} más datos de empresa.</p>
           }
         </section>
 
@@ -142,11 +163,13 @@ import { EditorCliente } from './editor-cliente';
           <ul class="space-y-2">
             @for (o of obras(); track o.id) {
               <li class="rounded-xl bg-white/80 p-3">
-                <p class="flex items-center gap-1.5 font-semibold">
+                <a [routerLink]="['/ventas/obras', o.id]" class="flex items-center gap-1.5 font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-epico">
                   <ui-icon [icono]="iconos.obra" [tamano]="15" class="text-epico" />{{ o.nombre }}
-                </p>
-                <p class="text-texto-suave">{{ o.direccion }}, {{ o.municipio }}</p>
-                <p class="mt-1">Responsable: {{ o.responsable.nombre }}</p>
+                </a>
+                <p class="text-texto-suave">{{ lugar(o) }}</p>
+                @if (o.responsable.nombre) {
+                  <p class="mt-1">Responsable: {{ o.responsable.nombre }}</p>
+                }
                 @for (k of o.contactos; track $index) {
                   <p class="text-texto-suave">
                     {{ k.nombre }} ·
@@ -158,6 +181,11 @@ import { EditorCliente } from './editor-cliente';
               <li class="text-texto-suave">Sin obras registradas.</li>
             }
           </ul>
+          @if (puedeCrearObra()) {
+            <a [routerLink]="['/ventas/obras/nueva']" [queryParams]="{ cliente: c().id }" [class]="enlace + ' mt-2 font-semibold text-epico-oscuro'">
+              <ui-icon [icono]="iconos.obra" [tamano]="15" />Agregar obra
+            </a>
+          }
         </section>
 
         <!-- Cotizaciones y pedidos por separado, del editado más recientemente al más antiguo -->
@@ -168,7 +196,7 @@ import { EditorCliente } from './editor-cliente';
               <li class="flex items-center justify-between gap-3 px-3 py-2">
                 <div class="min-w-0">
                   <a [routerLink]="['/ventas/cotizaciones', x.q.id]" [class]="enlace + ' font-semibold'">{{ x.q.folio }}</a>
-                  <p class="text-xs text-texto-suave">Editada {{ x.editada | fechaZona: x.q.zonaHoraria }}</p>
+                  <p class="text-xs text-texto-suave">{{ x.editadaEn ? 'Editada' : 'Creada' }} {{ x.fecha | fechaZona: x.q.zonaHoraria }}</p>
                 </div>
                 <div class="shrink-0 text-right">
                   <span class="inline-block rounded-md px-2 py-0.5 text-xs font-bold {{ estados[x.q.estado].clase }}">{{
@@ -190,7 +218,7 @@ import { EditorCliente } from './editor-cliente';
               <li class="flex items-center justify-between gap-3 px-3 py-2">
                 <div class="min-w-0">
                   <a [routerLink]="['/ventas/ordenes', x.p.folio]" [class]="enlace + ' font-semibold'">{{ x.p.folio }}</a>
-                  <p class="text-xs text-texto-suave">Editado {{ x.editada | fechaZona: x.p.zonaHoraria }}</p>
+                  <p class="text-xs text-texto-suave">{{ x.editadoEn ? 'Editado' : 'Entrega' }} {{ x.fecha | fechaZona: x.p.zonaHoraria }}</p>
                 </div>
                 <div class="shrink-0 text-right">
                   <ui-estado-pedido [estado]="x.p.estado" />
@@ -208,9 +236,11 @@ import { EditorCliente } from './editor-cliente';
 })
 export class DetalleCliente {
   private readonly ventas = inject(VentasService);
+  private readonly auth = inject(AuthService);
   private readonly historial = inject(HistorialService);
   private readonly injector = inject(Injector);
 
+  private readonly router = inject(Router);
   readonly c = input.required<Cliente>();
   readonly vista = input<'panel' | 'completa'>('panel');
   readonly cerrar = output();
@@ -223,6 +253,7 @@ export class DetalleCliente {
     telefono: Phone,
     obra: MapPin,
     editar: PencilLine,
+    eliminar: Trash2,
   };
   protected readonly botonIcono =
     'flex size-9 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-carbon/5 hover:text-carbon focus-visible:outline-2 focus-visible:outline-epico';
@@ -237,6 +268,37 @@ export class DetalleCliente {
   protected readonly estados = ESTADOS_COTIZACION;
 
   protected readonly completa = computed(() => this.vista() === 'completa');
+  /** Sin el permiso de editar clientes (su rol o un quitado) no se ofrece: el backend lo rechazaría. */
+  protected readonly puedeEditar = computed(() => tiene(this.auth.sesion()?.permisos ?? [TODOS], 'ventas.clientes.editar'));
+  /** "Dirección, Municipio" con lo que tenga. */
+  protected lugar(o: { direccion: string; municipio: string }): string {
+    return [o.direccion, o.municipio].filter(Boolean).join(', ');
+  }
+  protected readonly puedeEliminar = computed(
+    () => tiene(this.auth.sesion()?.permisos ?? [TODOS], 'ventas.clientes.eliminar') && !this.ventas.esPublico(this.c().id),
+  );
+  /** Por qué no se puede eliminar (lo que lo usa), o '' si se puede. */
+  protected readonly enUso = computed(() =>
+    [
+      this.cotizaciones().length ? 'tiene cotizaciones' : '',
+      this.pedidos().length ? 'tiene órdenes' : '',
+      this.obras().length ? 'tiene obras' : '',
+    ]
+      .filter(Boolean)
+      .join(', '),
+  );
+  protected async eliminar(): Promise<void> {
+    if (!confirm(`¿Eliminar el cliente "${this.c().nombre}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      await this.ventas.eliminarCliente(this.c().id);
+      if (this.completa()) void this.router.navigateByUrl('/ventas/clientes');
+      else this.cerrar.emit();
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+      this.error.set(true);
+    }
+  }
+  protected readonly puedeCrearObra = computed(() => tiene(this.auth.sesion()?.permisos ?? [TODOS], 'ventas.obras.crear'));
   /** Los títulos de sección, un nivel debajo del título (h2 en el panel, h1 en la vista completa). */
   protected readonly nivel = computed(() => (this.completa() ? 2 : 3));
 
@@ -244,10 +306,19 @@ export class DetalleCliente {
   private readonly id = computed(() => this.c().id);
   protected readonly editando = linkedSignal({ source: this.id, computation: () => false });
   protected readonly aviso = linkedSignal({ source: this.id, computation: () => '' });
+  protected readonly error = linkedSignal({ source: this.id, computation: () => false });
+  /** Para la lista y la vista completa: preguntar antes de dejarlo mientras se edita. */
+  readonly enEdicion = this.editando.asReadonly();
   private readonly editor = viewChild(EditorCliente);
   private readonly botonEditar = viewChild<ElementRef<HTMLButtonElement>>('botonEditar');
   /** Cambios sin guardar en el editor: la lista pregunta antes de cambiar de fila o cerrar. */
   readonly sinGuardar = computed(() => this.editor()?.sinGuardar() ?? false);
+
+  /** "Razón social · RFC …", solo con lo que tenga (el de contado puede no tener ninguno). */
+  protected readonly subtitulo = computed(() => {
+    const e = this.c().empresa;
+    return [e.razonSocial, e.rfc && `RFC ${e.rfc}`].filter(Boolean).join(' · ');
+  });
 
   /** Solo lo que tiene valor (el de mostrador casi no tiene datos). */
   protected readonly empresa = computed(() => {
@@ -281,19 +352,26 @@ export class DetalleCliente {
     this.ventas
       .cotizaciones()
       .filter((q) => q.clienteId === this.c().id)
-      .map((q) => ({ q, editada: this.historial.ultimaEdicion(registro.cotizacion(q.id)) ?? q.fecha }))
-      .sort((a, b) => Date.parse(b.editada) - Date.parse(a.editada)),
+      .map((q) => {
+        const editadaEn = this.historial.ultimaEdicion(registro.cotizacion(q.id));
+        return { q, editadaEn, fecha: editadaEn ?? q.fecha };
+      })
+      .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha)),
   );
   protected readonly pedidos = computed(() =>
     this.ventas
       .pedidos()
       .filter((p) => p.clienteId === this.c().id)
-      .map((p) => ({ p, editada: this.historial.ultimaEdicion(registro.pedido(p.folio)) ?? p.fechaHoraEntrega }))
-      .sort((a, b) => Date.parse(b.editada) - Date.parse(a.editada)),
+      .map((p) => {
+        const editadoEn = this.historial.ultimaEdicion(registro.pedido(p.folio));
+        return { p, editadoEn, fecha: editadoEn ?? p.fechaHoraEntrega };
+      })
+      .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha)),
   );
 
   protected editar(): void {
     this.aviso.set('');
+    this.error.set(false);
     this.editando.set(true);
   }
 
@@ -303,6 +381,7 @@ export class DetalleCliente {
       this.terminar('Cambios guardados.');
     } catch (e) {
       this.aviso.set(mensajeDe(e));
+      this.error.set(true);
     }
   }
 
@@ -310,6 +389,7 @@ export class DetalleCliente {
   protected terminar(aviso: string): void {
     this.editando.set(false);
     this.aviso.set(aviso);
+    this.error.set(false);
     afterNextRender(() => this.botonEditar()?.nativeElement.focus(), { injector: this.injector });
   }
 }

@@ -114,6 +114,9 @@ import { CotizadorState } from './cotizador.state';
                   }
                 </span>
                 <span class="block truncate text-xs text-texto-suave">Entrega: {{ nombreObra(p.obraId) }} · {{ fecha(p.entrega) }}</span>
+                @if (p.especial) {
+                  <span class="mt-1 inline-block rounded bg-[#FAEFD9] px-1.5 py-0.5 text-xs font-medium text-[#5C3D0B]">Pedido especial · precio por confirmar</span>
+                }
               </span>
               <button
                 type="button"

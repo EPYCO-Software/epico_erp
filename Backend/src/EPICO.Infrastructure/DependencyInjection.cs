@@ -13,6 +13,8 @@ public static class DependencyInjection
     {
         s.AddDbContext<AppDbContext>(o => o.UseNpgsql(c.GetConnectionString("Default"), Enums));
         s.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+        s.AddSingleton<Correo.Cifrado>();
+        s.AddHostedService<Correo.EnvioCorreos>();
         return s;
     }
 
@@ -37,5 +39,7 @@ public static class DependencyInjection
         .MapEnum<MetodoPago>()
         .MapEnum<EstatusPlanta>()
         .MapEnum<EstadoViaje>()
-        .MapEnum<TipoImpuesto>();
+        .MapEnum<TipoImpuesto>()
+        .MapEnum<SeguridadSmtp>()
+        .MapEnum<EstadoCorreo>();
 }

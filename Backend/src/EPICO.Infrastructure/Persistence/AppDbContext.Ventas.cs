@@ -39,13 +39,21 @@ public partial class AppDbContext
             e.HasOne<Cliente>().WithMany().HasForeignKey(x => x.ClienteId);
             e.HasQueryFilter("padre", x => VeTodo || Set<Cliente>().Any(p => p.Id == x.ClienteId));
         });
+        b.Entity<DisenoPortal>(e =>
+        {
+            e.HasIndex(x => x.ClienteId);
+            e.HasOne<Cliente>().WithMany().HasForeignKey(x => x.ClienteId);
+        });
         b.Entity<Obra>(e =>
         {
             e.Property(x => x.Lat).HasPrecision(9, 6);
             e.Property(x => x.Lng).HasPrecision(9, 6);
+            e.HasIndex(x => new { x.OrganizacionId, x.Nombre });
+            e.HasOne<Organizacion>().WithMany().HasForeignKey(x => x.OrganizacionId);
+            e.HasOne<Empresa>().WithMany().HasForeignKey(x => x.EmpresaRestringidaId);
             e.HasOne<Cliente>().WithMany().HasForeignKey(x => x.ClienteId);
             e.HasOne<Archivo>().WithMany().HasForeignKey(x => x.ResponsableFotoArchivoId);
-            e.HasQueryFilter("padre", x => VeTodo || Set<Cliente>().Any(p => p.Id == x.ClienteId));
+            e.HasQueryFilter("padre", x => VeTodo || x.ClienteId == null || Set<Cliente>().Any(p => p.Id == x.ClienteId));
         });
         b.Entity<Prospecto>(e =>
         {
@@ -149,6 +157,7 @@ public partial class AppDbContext
 
         b.Entity<Cotizacion>(e =>
         {
+            e.HasQueryFilter("planta", x => VeTodo || !EmpresasPorPlanta.Contains(x.EmpresaId) || SucursalesPermitidas.Contains(x.SucursalId));
             e.HasIndex(x => new { x.EmpresaId, x.Folio }).IsUnique();
             e.HasIndex(x => new { x.ClienteId, x.Fecha });
             e.Property(x => x.MonedaCodigo).IsFixedLength();
@@ -156,6 +165,8 @@ public partial class AppDbContext
             e.HasOne<Sucursal>().WithMany().HasForeignKey(x => x.SucursalId);
             e.HasOne<Cliente>().WithMany().HasForeignKey(x => x.ClienteId);
             e.HasOne<Obra>().WithMany().HasForeignKey(x => x.ObraId);
+            e.Property(x => x.EntregaLat).HasPrecision(9, 6);
+            e.Property(x => x.EntregaLng).HasPrecision(9, 6);
             e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.VendedorId);
             e.HasOne<Cotizacion>().WithMany().HasForeignKey(x => x.BaseId);
             e.HasOne<Moneda>().WithMany().HasForeignKey(x => x.MonedaCodigo);
@@ -176,6 +187,7 @@ public partial class AppDbContext
         });
         b.Entity<Pedido>(e =>
         {
+            e.HasQueryFilter("planta", x => VeTodo || !EmpresasPorPlanta.Contains(x.EmpresaId) || SucursalesPermitidas.Contains(x.SucursalId));
             e.HasIndex(x => new { x.EmpresaId, x.Folio }).IsUnique();
             e.HasIndex(x => new { x.SucursalId, x.FechaHoraEntrega });
             e.HasIndex(x => x.Cobro);
@@ -183,6 +195,8 @@ public partial class AppDbContext
             e.HasOne<Sucursal>().WithMany().HasForeignKey(x => x.SucursalId);
             e.HasOne<Cliente>().WithMany().HasForeignKey(x => x.ClienteId);
             e.HasOne<Obra>().WithMany().HasForeignKey(x => x.ObraId);
+            e.Property(x => x.EntregaLat).HasPrecision(9, 6);
+            e.Property(x => x.EntregaLng).HasPrecision(9, 6);
             e.HasOne<Cotizacion>().WithMany().HasForeignKey(x => x.CotizacionId);
             e.HasOne<CotizacionPartida>().WithMany().HasForeignKey(x => x.PartidaId);
             e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.VendedorId);

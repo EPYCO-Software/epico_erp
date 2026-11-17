@@ -1,8 +1,7 @@
 import { Component, Injector, afterNextRender, inject, signal, viewChild } from '@angular/core';
 import { Check, MapPin, Plus, X } from 'lucide';
-import { Icon, Mapa } from 'ui';
+import { Icon, Mapa, ObraForm, mensajeError } from 'ui';
 import { NuevaObra } from '../../core/services/obras.service';
-import { ObraForm } from '../obras/obra-form';
 import { CotizadorState } from './cotizador.state';
 
 /** Paso 3, al final: a qué obra va el concreto. Elegir una registrada o agregar una nueva con su ubicación. */
@@ -72,7 +71,7 @@ import { CotizadorState } from './cotizador.state';
       }
 
       @if (agregando()) {
-        <app-obra-form id="obra-nueva" class="mt-4 block" (guardada)="guardar($event)" />
+        <ui-obra-form id="obra-nueva" class="mt-4 block" (guardada)="guardar($event)" />
       }
     </section>
   `,
@@ -90,9 +89,13 @@ export class ObraEntrega {
     if (this.agregando()) afterNextRender(() => this.formulario()?.enfocar(), { injector: this.injector });
   }
 
-  protected guardar(datos: NuevaObra): void {
-    const obra = this.s.agregarObra(datos);
-    this.s.mensaje.set(`Obra "${obra.nombre}" agregada y seleccionada.`);
-    this.agregando.set(false);
+  protected async guardar(datos: NuevaObra): Promise<void> {
+    try {
+      const obra = await this.s.agregarObra(datos);
+      this.s.mensaje.set(`Obra "${obra.nombre}" agregada y seleccionada.`);
+      this.agregando.set(false);
+    } catch (e) {
+      this.s.mensaje.set(mensajeError(e));
+    }
   }
 }

@@ -31,21 +31,21 @@ describe('listas de precios: textos', () => {
 });
 
 describe('ListasPreciosService', () => {
-  it('alta, edición y líneas (agregar, reemplazar, quitar), todo en el historial', () => {
+  it('alta, edición y líneas (agregar, reemplazar, quitar), todo en el historial', async () => {
     const s = TestBed.inject(ListasPreciosService);
     const h = TestBed.inject(HistorialService);
-    const l = s.crear({ nombre: ' Planta Escárcega ', moneda: 'MXN', plantas: ['ESC'] });
+    const l = await s.crear({ nombre: ' Planta Escárcega ', moneda: 'MXN', plantas: ['ESC'] });
     expect(s.lista(l.id)).toMatchObject({ nombre: 'Planta Escárcega', reglas: [] });
     expect(filtrarListas(s.listas(), 'escarcega').map((x) => x.id)).toEqual([l.id]);
 
     const regla = { ...REGLA_VACIA, id: 'r1', productoId: 'fc-200', precioFijo: 3550 };
-    s.guardarRegla(l.id, regla);
-    s.guardarRegla(l.id, { ...regla, precioFijo: 3600 });
+    await s.guardarRegla(l.id, regla);
+    await s.guardarRegla(l.id, { ...regla, precioFijo: 3600 });
     expect(s.lista(l.id)!.reglas).toEqual([{ ...regla, precioFijo: 3600 }]);
-    s.quitarRegla(l.id, 'r1');
+    await s.quitarRegla(l.id, 'r1');
     expect(s.lista(l.id)!.reglas).toEqual([]);
 
-    s.editar(l.id, { nombre: 'Planta Escárcega', moneda: 'USD', plantas: ['ESC', 'XPJ'] });
+    await s.editar(l.id, { nombre: 'Planta Escárcega', moneda: 'USD', plantas: ['ESC', 'XPJ'] });
     expect(h.de(registro.lista(l.id)).map((e) => e.texto)).toEqual(['Lista editada', 'Línea quitada', 'Línea editada', 'Línea agregada', 'Lista de precios creada']);
     expect(h.de(registro.lista(l.id))[0].cambios).toEqual([
       { campo: 'Moneda', antes: 'MXN', despues: 'USD' },

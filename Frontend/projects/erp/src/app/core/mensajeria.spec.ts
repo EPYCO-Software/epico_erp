@@ -1,7 +1,11 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { AUTH_API_URL, AUTH_STORAGE_KEY } from 'ui';
 import { MensajeriaService, YO, formatoCuando } from './mensajeria';
 
 describe('MensajeriaService', () => {
+  beforeEach(() => TestBed.configureTestingModule({ providers: [provideHttpClient(), { provide: AUTH_STORAGE_KEY, useValue: 'test.mensajeria' }] }));
   const servicio = () => TestBed.inject(MensajeriaService);
 
   it('cuenta como sin leer los mensajes de chats y canales y las notificaciones no leídas', () => {
@@ -57,5 +61,36 @@ describe('MensajeriaService', () => {
     expect(formatoCuando('2026-11-03T23:30:00-06:00', 'America/Merida', ahora)).toBe('dd/MM');
     // 00:30 en Cancún (UTC−5) sigue siendo el día anterior en Mérida (UTC−6)
     expect(formatoCuando('2026-11-04T00:30:00-05:00', 'America/Merida', ahora)).toBe('dd/MM');
+  });
+});
+
+describe('MensajeriaService con backend', () => {
+  const KEY = 'test.mensajeria.api';
+  beforeEach(() => {
+    localStorage.setItem(KEY, JSON.stringify({ token: 't', refreshToken: 'r', usuario: { id: 'u1', nombre: 'Ana', correo: 'a@x.mx' } }));
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: AUTH_STORAGE_KEY, useValue: KEY }, { provide: AUTH_API_URL, useValue: '/api/v1' }],
+    });
+  });
+  afterEach(() => localStorage.removeItem(KEY));
+
+  it('sin chat ni ejemplos: trae las notificaciones del servidor, cuenta sus no leídas y marca leída allá', async () => {
+    const s = TestBed.inject(MensajeriaService);
+    const http = TestBed.inject(HttpTestingController);
+    expect([s.conChat, s.conversaciones().length, s.personas.length]).toEqual([false, 0, 0]);
+    TestBed.tick();
+    http.expectOne('/api/v1/me/notificaciones?soloNoLeidas=false&skip=0&take=50').flush({
+      items: [{ id: 'n1', modulo: 'ventas', titulo: 'Cotización recibida del portal', texto: 'X', ruta: null, fecha: '2026-11-16T10:00:00Z', leidaEn: null }],
+      total: 1,
+      noLeidas: 4,
+    });
+    await Promise.resolve();
+    expect(s.notificaciones()).toEqual([
+      { id: 'n1', modulo: 'ventas', titulo: 'Cotización recibida del portal', texto: 'X', ruta: '', fecha: '2026-11-16T10:00:00Z', leida: false },
+    ]);
+    expect(s.noLeidos()).toBe(4);
+    s.leerNotificacion('n1');
+    http.expectOne({ method: 'PUT', url: '/api/v1/me/notificaciones/n1/leida' }).flush(null);
+    expect(s.noLeidos()).toBe(3);
   });
 });

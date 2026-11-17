@@ -1,8 +1,8 @@
 import { Component, computed, inject, input, model, output } from '@angular/core';
 import { RotateCcw } from 'lucide';
 import { CATEGORIAS_PRODUCTO, CategoriaProducto, Icon } from 'ui';
-import { RAZONES_SOCIALES } from '../../core/plantas';
-import { VENDEDORES } from './datos';
+import { plantasVigentes } from '../../core/plantas';
+import { vendedores } from './datos';
 import { COMPARAR, Comparar, Filtro, PERIODOS, Periodo, Rango, hoy, rangoAnioAnterior, rangoAnterior, rangoDe } from './reporte-datos';
 import { ReporteFuente } from './reporte-fuente';
 
@@ -63,7 +63,7 @@ type Opcional = 'producto' | 'vendedor' | 'cliente';
           <legend [class]="etiqueta">Plantas</legend>
           <div class="mt-1 flex flex-wrap gap-1">
             <label [class]="chipCasilla"><input type="checkbox" class="sr-only" [checked]="!f().plantas.length" (change)="poner({ plantas: [] })" />Todas</label>
-            @for (p of plantas; track p.id) {
+            @for (p of plantas(); track p.id) {
               <label [class]="chipCasilla">
                 <input type="checkbox" class="sr-only" [checked]="f().plantas.includes(p.id)" (change)="alternarPlanta(p.id)" />{{ p.nombre }}
               </label>
@@ -93,7 +93,7 @@ type Opcional = 'producto' | 'vendedor' | 'cliente';
             <label for="reporte-vendedor" [class]="etiqueta">Vendedor</label>
             <select id="reporte-vendedor" class="campo mt-1 h-9 w-auto px-2 text-sm" (change)="poner({ vendedor: $any($event.target).value })">
               <option value="" [selected]="!f().vendedor">Todos</option>
-              @for (v of vendedores; track v.id) {
+              @for (v of vendedores(); track v.id) {
                 <option [value]="v.id" [selected]="f().vendedor === v.id">{{ v.nombre }}</option>
               }
             </select>
@@ -148,9 +148,13 @@ export class FiltrosReporteBarra {
     'inline-flex h-9 cursor-pointer items-center rounded-lg border border-acero/80 bg-white/80 px-3 text-sm font-semibold transition-colors hover:border-carbon/40 has-checked:border-epico has-checked:bg-epico/8 has-checked:text-epico-oscuro has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-epico';
   protected readonly periodos = (Object.keys(PERIODOS) as Periodo[]).map((id) => ({ id, nombre: PERIODOS[id] }));
   protected readonly comparaciones = (Object.keys(COMPARAR) as Comparar[]).map((id) => ({ id, nombre: COMPARAR[id] }));
-  protected readonly plantas = RAZONES_SOCIALES.flatMap((r) => r.plantas).map((p) => ({ id: p.id, nombre: p.nombre.replace('Planta ', '') }));
+  protected readonly plantas = computed(() => plantasVigentes().map((p) => ({ id: p.id, nombre: p.nombre.replace('Planta ', '') })));
   protected readonly categorias = (Object.keys(CATEGORIAS_PRODUCTO) as CategoriaProducto[]).map((id) => ({ id, nombre: CATEGORIAS_PRODUCTO[id] }));
-  protected readonly vendedores = Object.entries(VENDEDORES).map(([id, nombre]) => ({ id, nombre }));
+  protected readonly vendedores = computed(() =>
+    Object.entries(vendedores())
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+  );
 
   protected readonly hayFiltros = computed(() => {
     const f = this.f();

@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ArrowLeft, CalendarClock, Check, CircleCheck, Download, GitBranch, Info, LoaderCircle, MapPin, Save, Trash2 } from 'lucide';
-import { AuthService, Icon, MAQUINARIA, Mapa, PartidaCotizacion, SERVICIOS, agruparPorObra, descargarCotizacionPdf, etiquetas, fechaHoraCorta, lineasPartida, pesos, plantaPara, totales } from 'ui';
+import { AuthService, Icon, MAQUINARIA, Mapa, PartidaCotizacion, SERVICIOS, agruparPorObra, descargarCotizacionPdf, etiquetas, fechaHoraCorta, lineasPartida, mensajeError, pesos, plantaPara, totales } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { CotizadorState } from './cotizador.state';
 
@@ -227,21 +227,36 @@ export class ResumenCotizacion {
   protected async confirmar(): Promise<void> {
     const accion = this.accion();
     const fecha = new Date();
-    const folio = (this.folio ??= this.cotizacion.nuevoFolio(plantaPara(this.grupos()[0]?.obra).clave, fecha));
     this.error.set('');
     this.aviso.set('');
     this.ocupado.set(true);
+    const usuario = this.auth.sesion()?.usuario ?? { nombre: 'Cliente', correo: '' };
+    const referencia = this.cotizacion.referenciaEdicion() ?? undefined;
+    const partidas = this.s.partidas();
+    const obras = this.s.obras();
     try {
-      if (accion !== 'guardar') {
-        const usuario = this.auth.sesion()?.usuario ?? { nombre: 'Cliente', correo: '' };
-        const referencia = this.cotizacion.referenciaEdicion() ?? undefined;
-        await descargarCotizacionPdf({ folio, fecha, cliente: usuario, partidas: this.s.partidas(), obras: this.s.obras(), referencia });
+      // Con backend el folio lo asigna el servidor al guardar: primero se guarda y el PDF lleva ese folio.
+      if (this.cotizacion.conServidor && accion !== 'descargar') {
+        let guardada;
+        try {
+          guardada = await this.cotizacion.guardarCotizacion('', fecha);
+        } catch (e) {
+          this.error.set(mensajeError(e));
+          return;
+        }
+        if (accion === 'descargar-guardar') await descargarCotizacionPdf({ folio: guardada.folio, fecha, cliente: usuario, partidas, obras, referencia });
+        this.folio = null;
+        this.guardada.set(guardada.folio);
+        setTimeout(() => document.getElementById('paso-titulo')?.focus());
+        return;
       }
+      const folio = (this.folio ??= this.cotizacion.nuevoFolio(plantaPara(this.grupos()[0]?.obra).clave, fecha));
+      if (accion !== 'guardar') await descargarCotizacionPdf({ folio, fecha, cliente: usuario, partidas, obras, referencia });
       if (accion === 'descargar') {
         this.aviso.set(`Descargaste ${folio}.pdf. Aún no está guardada en Mis cotizaciones.`);
         return;
       }
-      this.cotizacion.guardarCotizacion(folio, fecha);
+      await this.cotizacion.guardarCotizacion(folio, fecha);
       this.folio = null;
       this.guardada.set(folio);
       setTimeout(() => document.getElementById('paso-titulo')?.focus());

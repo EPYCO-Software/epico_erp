@@ -5,13 +5,18 @@ namespace EPICO.Domain.Ventas;
 
 // Ventas y operación (docs/esquema.dbml). Importes sin IVA salvo Total; los calcula la API (Ventas/Calculo.cs).
 
-public class Cotizacion : BaseEntity, IDeEmpresa
+public class Cotizacion : BaseEntity, IDeEmpresa, ILugarEntrega
 {
     public Guid EmpresaId { get; set; }
     public Guid SucursalId { get; set; }
     /// <summary>Vacío = sin cliente (se capturan obra y contacto).</summary>
     [Rastreado("Cliente", TipoDatoCambio.Referencia)] public Guid? ClienteId { get; set; }
     [Rastreado("Obra", TipoDatoCambio.Referencia)] public Guid? ObraId { get; set; }
+    [MaxLength(300), Rastreado("Dirección de entrega")] public string? EntregaDireccion { get; set; }
+    [MaxLength(120), Rastreado("Municipio de entrega")] public string? EntregaMunicipio { get; set; }
+    [Rastreado("Referencias de entrega")] public string? EntregaReferencias { get; set; }
+    [Rastreado("Latitud de entrega")] public decimal? EntregaLat { get; set; }
+    [Rastreado("Longitud de entrega")] public decimal? EntregaLng { get; set; }
     [MaxLength(200), Rastreado("Contacto")] public string? ContactoNombre { get; set; }
     [MaxLength(20), Rastreado("Teléfono del contacto")] public string? ContactoTelefono { get; set; }
     [Rastreado("Vendedor", TipoDatoCambio.Referencia)] public Guid? VendedorId { get; set; }
@@ -56,14 +61,17 @@ public class CotizacionPartida : BaseEntity, IDePadre
     [MaxLength(20), Rastreado("Colocación")] public string Colocacion { get; set; } = "";
     public List<string> Aditivos { get; set; } = [];
     [Range(0.01, 99_999_999), Rastreado("Volumen m³")] public decimal VolumenM3 { get; set; }
-    [Range(0, 999_999_999_999), Rastreado("Precio por m³", TipoDatoCambio.Dinero)] public decimal PrecioM3 { get; set; }
+    /// <summary>null = pedido especial aún sin cotizar (cuenta 0; no se puede enviar ni confirmar así).</summary>
+    [Range(0, 999_999_999_999), Rastreado("Precio por m³", TipoDatoCambio.Dinero)] public decimal? PrecioM3 { get; set; }
+    /// <summary>Configuración que no está en el catálogo: va sin producto y el vendedor le pone precio. Se queda true ya cotizada.</summary>
+    [Rastreado("Pedido especial")] public bool Especial { get; set; }
     [Rastreado("Entrega")] public DateTime? Entrega { get; set; }
     [Range(0, 999_999)] public decimal? TrasladoDistanciaKm { get; set; }
     [Range(0, 999_999)] public decimal? TrasladoIncluidosKm { get; set; }
     [Range(0, 99_999_999)] public decimal? TrasladoPrecioKm { get; set; }
     public List<CotizacionLinea> Lineas { get; set; } = [];
-    string IDePadre.PadreTipo => nameof(Cotizacion);
-    Guid IDePadre.PadreId => CotizacionId;
+    string? IDePadre.PadreTipo => nameof(Cotizacion);
+    Guid? IDePadre.PadreId => CotizacionId;
 }
 
 /// <summary>Servicio, maquinaria o producto general de una partida. Importe = Cantidad × PrecioUnitario × (Dias ?? 1).</summary>
@@ -80,12 +88,17 @@ public class CotizacionLinea : IEntidad
     public decimal Importe { get; set; }
 }
 
-public class Pedido : BaseEntity, IDeEmpresa
+public class Pedido : BaseEntity, IDeEmpresa, ILugarEntrega
 {
     public Guid EmpresaId { get; set; }
     public Guid SucursalId { get; set; }
     public Guid ClienteId { get; set; }
-    [Rastreado("Obra", TipoDatoCambio.Referencia)] public Guid ObraId { get; set; }
+    [Rastreado("Obra", TipoDatoCambio.Referencia)] public Guid? ObraId { get; set; }
+    [MaxLength(300), Rastreado("Dirección de entrega")] public string? EntregaDireccion { get; set; }
+    [MaxLength(120), Rastreado("Municipio de entrega")] public string? EntregaMunicipio { get; set; }
+    [Rastreado("Referencias de entrega")] public string? EntregaReferencias { get; set; }
+    [Rastreado("Latitud de entrega")] public decimal? EntregaLat { get; set; }
+    [Rastreado("Longitud de entrega")] public decimal? EntregaLng { get; set; }
     public Guid? CotizacionId { get; set; }
     /// <summary>Un pedido por partida.</summary>
     public Guid? PartidaId { get; set; }
@@ -135,6 +148,6 @@ public class Remision : BaseEntity, IDePadre
     [Rastreado("Llegada")] public DateTime? LlegadaEn { get; set; }
     [Rastreado("Terminada")] public DateTime? TerminadaEn { get; set; }
     public Guid? FirmaArchivoId { get; set; }
-    string IDePadre.PadreTipo => nameof(Pedido);
-    Guid IDePadre.PadreId => PedidoId;
+    string? IDePadre.PadreTipo => nameof(Pedido);
+    Guid? IDePadre.PadreId => PedidoId;
 }

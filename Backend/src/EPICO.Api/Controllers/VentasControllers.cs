@@ -1,6 +1,7 @@
 using EPICO.Api.Auth;
 using EPICO.Application.Common;
 using EPICO.Application.Ventas;
+using EPICO.Contracts.Comun;
 using EPICO.Contracts.Ventas;
 using EPICO.Domain.Acceso;
 using EPICO.Domain.Ventas;
@@ -17,6 +18,16 @@ namespace EPICO.Api.Controllers;
 public class ClientesController(IAppDbContext db, IUsuarioActual yo) : CrudController<Cliente>(db, yo)
 {
     protected override string Recurso => "ventas.clientes";
+
+    protected override async Task AntesDeBorrar(Cliente x, CancellationToken ct)
+    {
+        if (x.EsPublicoGeneral) throw new ReglaException("El cliente público en general no se elimina.", 409);
+        // Sin filtros: cuentan también los de razones sociales que el usuario no ve.
+        if (await Db.Set<Cotizacion>().IgnoreQueryFilters().AnyAsync(c => c.ClienteId == x.Id && !c.IsDeleted, ct)
+            || await Db.Set<Pedido>().IgnoreQueryFilters().AnyAsync(p => p.ClienteId == x.Id && !p.IsDeleted, ct)
+            || await Db.Set<Obra>().IgnoreQueryFilters().AnyAsync(o => o.ClienteId == x.Id && !o.IsDeleted, ct))
+            throw new ReglaException("No se puede eliminar: lo usan cotizaciones, pedidos u obras.", 409);
+    }
 }
 
 [Route("api/v1/cliente-contactos")]
@@ -33,11 +44,34 @@ public class ClienteDatosFiscalesController(IAppDbContext db, IUsuarioActual yo)
     protected override Task<bool> PermitidoAsync(ClienteDatoFiscal x, CancellationToken ct) => PadreVisible<Cliente>(x.ClienteId, ct);
 }
 
+/// <summary>Obras de un cliente o generales (clienteId null) de la organización.</summary>
+/// <remarks>Lista: además de ?clienteId=…, ?sinCliente=true|false y ?q= (nombre, dirección o municipio).</remarks>
 [Route("api/v1/obras")]
 public class ObrasController(IAppDbContext db, IUsuarioActual yo) : CrudController<Obra>(db, yo)
 {
-    protected override string Recurso => "ventas.clientes";
-    protected override Task<bool> PermitidoAsync(Obra x, CancellationToken ct) => PadreVisible<Cliente>(x.ClienteId, ct);
+    protected override string Recurso => "ventas.obras";
+
+    protected override IQueryable<Obra> Filtrar(IQueryable<Obra> q)
+    {
+        if (bool.TryParse(Request.Query["sinCliente"], out var sin)) q = q.Where(o => (o.ClienteId == null) == sin);
+        if (Request.Query["q"].ToString().Trim().ToLower() is { Length: > 0 } t)
+            q = q.Where(o => o.Nombre.ToLower().Contains(t) || o.Direccion.ToLower().Contains(t) || o.Municipio!.ToLower().Contains(t));
+        return FiltroQuery.Aplicar(q, Request.Query, "q", "sinCliente");
+    }
+
+    protected override async Task AntesDeGuardar(Obra x, bool nuevo, CancellationToken ct)
+    {
+        if (x.ClienteId is Guid c && !await Db.Set<Cliente>().AnyAsync(p => p.Id == c && p.OrganizacionId == x.OrganizacionId, ct))
+            throw new ReglaException("El cliente no existe o es de otra organización.");
+    }
+
+    protected override async Task AntesDeBorrar(Obra x, CancellationToken ct)
+    {
+        // Sin filtros: cuentan también las de razones sociales que el usuario no ve.
+        if (await Db.Set<Cotizacion>().IgnoreQueryFilters().AnyAsync(c => c.ObraId == x.Id && !c.IsDeleted, ct)
+            || await Db.Set<Pedido>().IgnoreQueryFilters().AnyAsync(p => p.ObraId == x.Id && !p.IsDeleted, ct))
+            throw new ReglaException("La obra tiene cotizaciones o pedidos", 409);
+    }
 }
 
 [Route("api/v1/prospectos")]
@@ -60,9 +94,27 @@ public class CategoriasProductoController(IAppDbContext db, IUsuarioActual yo) :
 }
 
 [Route("api/v1/productos")]
+/// <remarks>Lista: además de la igualdad por campo, ?solucion=pavimento (productos con esa solución).</remarks>
 public class ProductosController(IAppDbContext db, IUsuarioActual yo) : CrudController<Producto>(db, yo)
 {
     protected override string Recurso => "ventas.productos";
+
+    protected override IQueryable<Producto> Filtrar(IQueryable<Producto> q)
+    {
+        if (Request.Query["solucion"].ToString() is { Length: > 0 } s) q = q.Where(p => p.Soluciones.Contains(s));
+        return FiltroQuery.Aplicar(q, Request.Query, "solucion");
+    }
+
+    protected override async Task AntesDeGuardar(Producto x, bool nuevo, CancellationToken ct)
+    {
+        x.Soluciones = [.. (x.Soluciones ?? []).Select(s => s.Trim().ToLowerInvariant()).Distinct()];
+        if (x.Soluciones.FirstOrDefault(s => !Soluciones.Todas.Contains(s)) is { } mala) throw new ReglaException($"Solución desconocida: {mala}.");
+        if (x.Soluciones.Count > 0 && x.Tipo != Domain.Common.TipoProducto.Concreto) throw new ReglaException("Solo los concretos llevan soluciones.");
+        // El cotizador cobra el aditivo "fibra-sintetica" con el producto AJ-ADT-FIBRA-SINTETICA.
+        if (await Db.Set<CategoriaProducto>().AnyAsync(c => c.Id == x.CategoriaId && c.Clave == "aditivo", ct)
+            && !System.Text.RegularExpressions.Regex.IsMatch(x.Codigo, "^AJ-ADT-[A-Z0-9]+(-[A-Z0-9]+)*$"))
+            throw new ReglaException("El código de un aditivo es AJ-ADT- y su clave en mayúsculas, sin acentos ni espacios (p. ej. AJ-ADT-FIBRA-SINTETICA).");
+    }
 }
 
 [Route("api/v1/unidades-medida")]
@@ -200,11 +252,19 @@ public class SaldosLealtadController(IAppDbContext db, IUsuarioActual yo) : Crud
 public class CotizacionesController(IAppDbContext db, VentasServicio ventas) : ControllerBase
 {
     /// <summary>Lista</summary>
-    /// <remarks>Solo encabezados, del más reciente al más viejo. Filtros: <c>?estado=enviada&amp;clienteId=…&amp;sucursalId=…&amp;serie=…</c></remarks>
+    /// <remarks>Paginada, de la más reciente a la más vieja. <c>incluir=partidas</c> trae partidas y líneas.
+    /// desde/hasta (ISO 8601, hasta exclusivo) filtran por fecha. Filtros por igualdad, repetibles:
+    /// <c>?estado=enviada&amp;clienteId=…&amp;sucursalId=a&amp;sucursalId=b&amp;serie=…</c></remarks>
     [HttpGet, Permiso("ventas.cotizaciones.ver")]
-    public Task<List<Cotizacion>> Lista([FromQuery] int skip = 0, [FromQuery] int take = 100, CancellationToken ct = default) =>
-        FiltroQuery.Aplicar(db.Set<Cotizacion>().AsNoTracking(), Request.Query)
-            .OrderByDescending(c => c.Fecha).Skip(Math.Max(skip, 0)).Take(Math.Clamp(take, 1, 500)).ToListAsync(ct);
+    public async Task<Pagina<Cotizacion>> Lista([FromQuery] string? incluir, [FromQuery] DateTimeOffset? desde, [FromQuery] DateTimeOffset? hasta,
+        [FromQuery] int pagina = 1, [FromQuery] int tamano = 50, CancellationToken ct = default)
+    {
+        var q = FiltroQuery.Aplicar(db.Set<Cotizacion>().AsNoTracking(), Request.Query, Listas.Claves);
+        if (desde is { } d) q = q.Where(c => c.Fecha >= d.UtcDateTime);
+        if (hasta is { } h) q = q.Where(c => c.Fecha < h.UtcDateTime);
+        if (Listas.Incluir(incluir, "partidas")) q = q.Include(c => c.Partidas.OrderBy(p => p.Orden)).ThenInclude(p => p.Lineas).AsSplitQuery();
+        return await Listas.Paginar(q.OrderByDescending(c => c.Fecha).ThenBy(c => c.Id), pagina, tamano, ct);
+    }
 
     /// <summary>Una completa</summary>
     /// <remarks>Con partidas (en orden) y sus líneas.</remarks>
@@ -250,11 +310,19 @@ public class CotizacionesController(IAppDbContext db, VentasServicio ventas) : C
 public class PedidosController(IAppDbContext db, VentasServicio ventas) : ControllerBase
 {
     /// <summary>Lista</summary>
-    /// <remarks>Solo encabezados, por fecha de entrega. Filtros: <c>?cobro=por_cobrar&amp;estado=…&amp;sucursalId=…&amp;cotizacionId=…</c></remarks>
+    /// <remarks>Paginada, por fecha de entrega (la más lejana primero). <c>incluir=lineas</c> trae las líneas.
+    /// desde/hasta (ISO 8601, hasta exclusivo) filtran por entrega. Filtros por igualdad, repetibles:
+    /// <c>?cobro=por_cobrar&amp;estado=…&amp;sucursalId=a&amp;sucursalId=b&amp;cotizacionId=…</c></remarks>
     [HttpGet, Permiso("ventas.pedidos.ver")]
-    public Task<List<Pedido>> Lista([FromQuery] int skip = 0, [FromQuery] int take = 100, CancellationToken ct = default) =>
-        FiltroQuery.Aplicar(db.Set<Pedido>().AsNoTracking(), Request.Query)
-            .OrderByDescending(p => p.FechaHoraEntrega).Skip(Math.Max(skip, 0)).Take(Math.Clamp(take, 1, 500)).ToListAsync(ct);
+    public async Task<Pagina<Pedido>> Lista([FromQuery] string? incluir, [FromQuery] DateTimeOffset? desde, [FromQuery] DateTimeOffset? hasta,
+        [FromQuery] int pagina = 1, [FromQuery] int tamano = 50, CancellationToken ct = default)
+    {
+        var q = FiltroQuery.Aplicar(db.Set<Pedido>().AsNoTracking(), Request.Query, Listas.Claves);
+        if (desde is { } d) q = q.Where(p => p.FechaHoraEntrega >= d.UtcDateTime);
+        if (hasta is { } h) q = q.Where(p => p.FechaHoraEntrega < h.UtcDateTime);
+        if (Listas.Incluir(incluir, "lineas")) q = q.Include(p => p.Lineas).AsSplitQuery();
+        return await Listas.Paginar(q.OrderByDescending(p => p.FechaHoraEntrega).ThenBy(p => p.Id), pagina, tamano, ct);
+    }
 
     /// <summary>Uno completo</summary>
     /// <remarks>Con sus líneas.</remarks>
@@ -321,4 +389,21 @@ public class MonedasController(IAppDbContext db) : ControllerBase
 {
     [HttpGet]
     public Task<List<Moneda>> Lista(CancellationToken ct) => db.Set<Moneda>().AsNoTracking().OrderBy(m => m.Codigo).ToListAsync(ct);
+}
+
+/// <summary>Paginación e "incluir" de las listas de documentos.</summary>
+static class Listas
+{
+    public static readonly string[] Claves = ["incluir", "desde", "hasta", "pagina", "tamano"];
+
+    public static bool Incluir(string? incluir, string valido) =>
+        incluir is null ? false
+        : incluir.Equals(valido, StringComparison.OrdinalIgnoreCase) ? true
+        : throw new ReglaException($"incluir solo acepta «{valido}».");
+
+    public static async Task<Pagina<T>> Paginar<T>(IQueryable<T> q, int pagina, int tamano, CancellationToken ct)
+    {
+        if (pagina < 1 || tamano is < 1 or > 500) throw new ReglaException("pagina empieza en 1 y tamano va de 1 a 500.");
+        return new(await q.Skip((pagina - 1) * tamano).Take(tamano).ToListAsync(ct), await q.CountAsync(ct));
+    }
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using EPICO.Domain.Common;
 
@@ -46,6 +47,9 @@ public class Sucursal : BaseEntity, IDeEmpresa
     public decimal? Lng { get; set; }
     [MaxLength(20), Rastreado("Teléfono")] public string? Telefono { get; set; }
     [Rastreado("Activa")] public bool Activa { get; set; } = true;
+    /// <summary>Traslado: km sin costo desde la planta; después se cobra PrecioKm por km y por m³.</summary>
+    [Range(0, 9_999), Rastreado("Km incluidos")] public decimal KmIncluidos { get; set; } = 20;
+    [Range(0, 99_999), Rastreado("Precio por km", TipoDatoCambio.Dinero)] public decimal PrecioKm { get; set; } = 12;
 }
 
 public class Usuario : BaseEntity
@@ -55,6 +59,8 @@ public class Usuario : BaseEntity
     string _correo = "";
     [JsonIgnore] public string PasswordHash { get; set; } = "";
     [Rastreado("Tipo", TipoDatoCambio.Opcion)] public TipoUsuario Tipo { get; set; }
+    /// <summary>Su perfil: la plantilla de sus permisos en todas sus empresas (más sus ajustes en UsuarioPermiso).</summary>
+    [Rastreado("Rol", TipoDatoCambio.Referencia)] public Guid? RolId { get; set; }
     [MaxLength(120), Rastreado("Nombre")] public string Nombre { get; set; } = "";
     [MaxLength(120), Rastreado("Apellidos")] public string? Apellidos { get; set; }
     [MaxLength(20), Rastreado("Teléfono")] public string? Telefono { get; set; }
@@ -69,8 +75,8 @@ public class Usuario : BaseEntity
 
 public class Rol : BaseEntity
 {
-    /// <summary>Vacío = rol del sistema (Administrador, Ventas…).</summary>
-    public Guid? OrganizacionId { get; set; }
+    /// <summary>Vacío = rol del sistema (Administrador, Ventas…); esos solo los crea el seed. No cambia al editar.</summary>
+    [Editable(false)] public Guid? OrganizacionId { get; set; }
     [MaxLength(100), Rastreado("Nombre")] public string Nombre { get; set; } = "";
     public string? Descripcion { get; set; }
 }
@@ -83,6 +89,16 @@ public class RolPermiso : IEntidad
     [MaxLength(100)] public string Permiso { get; set; } = "";
 }
 
+/// <summary>Ajuste de permisos de un usuario sobre lo que le da su rol, en todas sus empresas. Quitado admite comodín.</summary>
+public class UsuarioPermiso : IEntidad
+{
+    public Guid Id { get; set; }
+    public Guid UsuarioId { get; set; }
+    [MaxLength(100)] public string Permiso { get; set; } = "";
+    /// <summary>false = agregado; true = quitado.</summary>
+    public bool Quitado { get; set; }
+}
+
 public class UsuarioAcceso : IEntidad, IDeEmpresa
 {
     public Guid Id { get; set; }
@@ -90,7 +106,6 @@ public class UsuarioAcceso : IEntidad, IDeEmpresa
     public Guid EmpresaId { get; set; }
     /// <summary>Vacío = todas las plantas de la empresa.</summary>
     public Guid? SucursalId { get; set; }
-    public Guid RolId { get; set; }
     public bool Predeterminado { get; set; }
 }
 
@@ -107,6 +122,17 @@ public class Sesion : IEntidad
     public string? Agente { get; set; }
 }
 
+/// <summary>Enlace de "olvidé mi contraseña": se guarda solo el hash del token; de un uso y con vencimiento.</summary>
+public class RestablecimientoPassword : IEntidad
+{
+    public Guid Id { get; set; }
+    public Guid UsuarioId { get; set; }
+    public string TokenHash { get; set; } = "";
+    public DateTime CreadoEn { get; set; }
+    public DateTime ExpiraEn { get; set; }
+    public DateTime? UsadoEn { get; set; }
+}
+
 public class Secuencia : IEntidad, IDeEmpresa
 {
     public Guid Id { get; set; }
@@ -117,6 +143,16 @@ public class Secuencia : IEntidad, IDeEmpresa
     /// <summary>EPI-PRES-ESC-</summary>
     [MaxLength(30)] public string Prefijo { get; set; } = "";
     public long Siguiente { get; set; } = 1;
+
+    public static string Folio(string prefijo, long numero) => prefijo + numero.ToString("D3");
+}
+
+/// <summary>Preferencias libres del usuario (plantas elegidas, favoritos, calendario…); el formato lo decide el front.</summary>
+public class PreferenciaUsuario
+{
+    public Guid UsuarioId { get; set; }
+    public JsonDocument Datos { get; set; } = JsonDocument.Parse("{}");
+    public DateTime? UpdatedAt { get; set; }
 }
 
 public class Moneda

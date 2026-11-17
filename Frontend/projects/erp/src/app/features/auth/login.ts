@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormField, email, form, required, submit } from '@angular/forms/signals';
 import {
   ArrowRight,
@@ -26,7 +26,7 @@ interface LoginErp {
 
 @Component({
   selector: 'app-login',
-  imports: [NgOptimizedImage, FormField, FieldError, Icon, CapasGlass],
+  imports: [NgOptimizedImage, FormField, FieldError, Icon, CapasGlass, RouterLink],
   templateUrl: './login.html',
 })
 export default class Login {
@@ -46,7 +46,10 @@ export default class Login {
     escudo: Shield,
   };
   protected readonly verPassword = signal(false);
-  protected readonly error = signal('');
+  // Hay una sesión guardada pero el servidor no respondió al validarla (authGuard/guestGuard).
+  protected readonly error = signal(
+    this.auth.sinConexion() ? 'No pudimos validar tu sesión: no hay conexión con el servidor. Intenta de nuevo en un momento.' : '',
+  );
   protected readonly aviso = signal('');
 
   protected readonly modelo = signal<LoginErp>({ correo: '', password: '', recordar: true });
@@ -62,6 +65,12 @@ export default class Login {
     await submit(this.f, async () => {
       try {
         await this.auth.login(this.modelo());
+        // Una cuenta del portal de clientes (la sesión trae su cliente) no entra al ERP
+        if (this.auth.sesion()?.cliente) {
+          this.auth.logout();
+          this.error.set('Esta cuenta es del portal de clientes: entra desde el portal.');
+          return undefined;
+        }
         await this.router.navigateByUrl(destinoSeguro(this.route.snapshot.queryParamMap.get('returnUrl'), '/inicio'));
       } catch (e) {
         // Credenciales malas: mensaje genérico (no revelar si falló el correo o la contraseña). Bloqueo, sin acceso o

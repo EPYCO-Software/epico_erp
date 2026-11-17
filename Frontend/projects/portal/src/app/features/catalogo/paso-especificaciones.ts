@@ -1,7 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { FormField } from '@angular/forms/signals';
 import { ChevronDown, Info, TriangleAlert } from 'lucide';
-import { ADITIVOS, Aditivo, CEMENTO_LABEL, Colocacion, EXPOSICIONES, EspecificacionConcreto, Exposicion, FieldError, Icon, OPCIONES, TipoCemento } from 'ui';
+import { aditivosDisponibles, Aditivo, CEMENTO_LABEL, Colocacion, EXPOSICIONES, EspecificacionConcreto, Exposicion, FieldError, Icon, OPCIONES, TipoCemento, resistenciasDe } from 'ui';
 import { CotizadorState } from './cotizador.state';
 
 const EDAD_LABEL: Record<number, string> = { 28: '28 días (estándar)', 14: '14 días', 7: '7 días (rápido)', 3: '3 días (muy rápido)' };
@@ -33,24 +33,71 @@ const EDAD_LABEL: Record<number, string> = { 28: '28 días (estándar)', 14: '14
           <ui-field-error [campo]="s.f.volumenM3" errorId="volumen-error" />
         </div>
 
+        @if (s.modo() === 'manual') {
+        <div>
+          <span id="resistencia-label" class="mb-1.5 block text-sm font-medium">Resistencia</span>
+          <div role="group" aria-labelledby="resistencia-label" class="flex gap-2">
+            <div class="relative w-28 shrink-0">
+              <select id="tipo-resistencia" aria-label="Tipo de resistencia" class="campo h-11 appearance-none pr-9 pl-4" (change)="s.actualizar({ tipoResistencia: $any($event.target).value })">
+                <option value="fc" [selected]="e().tipoResistencia === 'fc'">f'c</option>
+                <option value="mr" [selected]="e().tipoResistencia === 'mr'">MR</option>
+              </select>
+              <ui-icon [icono]="iconos.abajo" [tamano]="18" class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-texto-suave" />
+            </div>
+            <input
+              id="resistencia"
+              type="number"
+              min="1"
+              aria-label="Resistencia en kg/cm²"
+              aria-describedby="resistencia-existe"
+              class="campo h-11 min-w-0 px-4 text-right tabular-nums"
+              [value]="e().resistenciaKgCm2 || ''"
+              (input)="s.actualizar({ resistenciaKgCm2: +$any($event.target).value })"
+            />
+          </div>
+          <div id="resistencia-existe" role="status">
+            @if (e().resistenciaKgCm2 > 0) {
+              @if (s.existente()) {
+                <p class="mt-2 flex flex-wrap items-center gap-x-2 rounded-xl bg-[#E4EFF4] px-3 py-2 text-sm text-[#22495A]">
+                  Este producto ya existe en el catálogo.
+                  <button type="button" class="min-h-9 font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-epico" (click)="s.elegirProducto(s.existente()!)">
+                    Usar el producto
+                  </button>
+                </p>
+              } @else {
+                <p class="mt-2 flex items-start gap-2 rounded-xl bg-[#FAEFD9] px-3 py-2 text-sm text-[#5C3D0B]">
+                  <ui-icon [icono]="iconos.aviso" [tamano]="18" class="mt-px shrink-0 text-[#7E5410]" />
+                  No está en el catálogo: se hará la solicitud como pedido especial y la concretera te confirmará su precio.
+                </p>
+              }
+            }
+          </div>
+        </div>
+        } @else {
         <div>
           <label for="resistencia" class="mb-1.5 block text-sm font-medium">Resistencia</label>
           <div class="relative">
             <select id="resistencia" class="campo h-11 appearance-none pr-10 pl-4" (change)="resistencia($any($event.target).value)">
-              <optgroup label="Compresión f'c">
-                @for (v of opciones.fc; track v) {
-                  <option [value]="'fc-' + v" [selected]="e().tipoResistencia === 'fc' && e().resistenciaKgCm2 === v">f'c {{ v }} kg/cm²</option>
-                }
-              </optgroup>
-              <optgroup label="Módulo de ruptura MR (pavimentos)">
-                @for (v of opciones.mr; track v) {
-                  <option [value]="'mr-' + v" [selected]="e().tipoResistencia === 'mr' && e().resistenciaKgCm2 === v">MR {{ v }} kg/cm²</option>
-                }
-              </optgroup>
+              @let r = resistencias();
+              @if (r.fc.length) {
+                <optgroup label="Compresión f'c">
+                  @for (v of r.fc; track v) {
+                    <option [value]="'fc-' + v" [selected]="e().tipoResistencia === 'fc' && e().resistenciaKgCm2 === v">f'c {{ v }} kg/cm²</option>
+                  }
+                </optgroup>
+              }
+              @if (r.mr.length) {
+                <optgroup label="Módulo de ruptura MR (pavimentos)">
+                  @for (v of r.mr; track v) {
+                    <option [value]="'mr-' + v" [selected]="e().tipoResistencia === 'mr' && e().resistenciaKgCm2 === v">MR {{ v }} kg/cm²</option>
+                  }
+                </optgroup>
+              }
             </select>
             <ui-icon [icono]="iconos.abajo" [tamano]="18" class="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-texto-suave" />
           </div>
         </div>
+        }
 
         <div>
           <label for="edad" class="mb-1.5 block text-sm font-medium">Edad de diseño</label>
@@ -125,7 +172,7 @@ const EDAD_LABEL: Record<number, string> = { 28: '28 días (estándar)', 14: '14
         <div class="md:col-span-2">
           <span id="aditivos-label" class="mb-1.5 block text-sm font-medium">Aditivos <span class="font-normal text-texto-suave">(opcional)</span></span>
           <div role="group" aria-labelledby="aditivos-label" class="flex flex-wrap gap-2">
-            @for (a of aditivos; track a.id) {
+            @for (a of aditivos(); track a.id) {
               <label
                 class="flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border border-acero-oscuro bg-white px-3 text-sm transition-colors hover:border-carbon has-checked:border-epico has-checked:bg-[#FDF6F6] has-checked:font-semibold has-checked:text-epico-oscuro has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-epico"
               >
@@ -167,10 +214,13 @@ export class PasoEspecificaciones {
   protected readonly s = inject(CotizadorState);
   protected readonly e = this.s.especificacion;
   protected readonly opciones = OPCIONES;
+  /** Las resistencias de los concretos de la solución elegida (los que sí están en el catálogo). */
+  protected readonly resistencias = computed(() => resistenciasDe(this.s.solucionId()));
   protected readonly cementoLabel: Record<TipoCemento, string> = CEMENTO_LABEL;
   protected readonly edadLabel = EDAD_LABEL;
   protected readonly exposiciones = EXPOSICIONES;
-  protected readonly aditivos = ADITIVOS;
+  /** Los aditivos del catálogo de la concretera. */
+  protected readonly aditivos = aditivosDisponibles;
   protected readonly colocaciones: { id: Colocacion; label: string }[] = [
     { id: 'directa', label: 'Directa' },
     { id: 'bombeo', label: 'Bombeo' },

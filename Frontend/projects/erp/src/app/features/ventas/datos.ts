@@ -2,6 +2,18 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
 import {
   AUTH_API_URL,
+  type ConcretoDisponible,
+  concretoDe,
+  concretosServidor,
+  aditivoDe,
+  aditivosServidor,
+  type AditivoDisponible,
+  type LugarDeEntrega,
+  type NuevaCotizacion,
+  idLugar,
+  obraDelLugar,
+  type NuevaObra,
+  isoEnZona,
   AuthService,
   Cliente,
   Cotizacion,
@@ -40,10 +52,10 @@ import {
   totalesCotizacion,
   UbicacionGps,
 } from 'ui';
-import { Cambio, EventoHistorial, HistorialService } from '../../core/historial';
+import { Actividad, Cambio, EventoHistorial, HistorialService, NuevaActividad } from '../../core/historial';
 import { normalizar } from '../../core/modulos';
-import { PlantasService, RAZONES_SOCIALES } from '../../core/plantas';
-import { Contexto, VentasApi, aCliente, aEvento, pedidoApi } from './ventas-api';
+import { PlantasService, plantasVigentes } from '../../core/plantas';
+import { Contexto, VentasApi, aActividad, aCliente, aEvento, pedidoApi } from './ventas-api';
 
 /** En el orden del panel de filtros. Tinte + texto oscurecido (AA en texto pequeño), como los estados del dashboard. */
 export const ESTADOS_COTIZACION: Record<EstadoCotizacion, { nombre: string; clase: string }> = {
@@ -63,6 +75,8 @@ const LUIS = 'luis.canche@epicoconcretos.mx';
 const MARIA = 'maria.dzul@epicoconcretos.mx';
 const JORGE = 'jorge.may@epicoconcretos.mx';
 export const VENDEDORES: Record<string, string> = { [YO]: 'Operaciones', [ANA]: 'Ana Pech', [LUIS]: 'Luis Canché', [MARIA]: 'María Dzul', [JORGE]: 'Jorge May' };
+/** Vendedores de filtros y reportes (id → nombre): con backend, los usuarios de la organización; sin él, los de ejemplo. */
+export const vendedores = signal<Record<string, string>>(VENDEDORES);
 
 const MORAL = '601 · General de Ley Personas Morales';
 
@@ -391,7 +405,6 @@ const partida = (
   servicios: ServicioObra[] = [],
 ): PartidaCotizacion => ({ id, nombre, solucionId, especificacion, volumenM3, servicios, maquinaria: [], obraId, entrega });
 
-const PLANTAS = RAZONES_SOCIALES.flatMap((r) => r.plantas);
 
 /** Vista con los nombres resueltos y el neto calculado como en el portal (totalesCotizacion: líneas y descuento). */
 /** Dónde buscar nombres de clientes y obras: los de ejemplo o, en VentasService, los vigentes (con las altas rápidas). */
@@ -403,14 +416,20 @@ interface Catalogo {
 }
 const EJEMPLO: Catalogo = { clientes: CLIENTES, obras: OBRAS };
 
+/** "Lugar de entrega: Calle 5, Mérida" para mostrar dónde va una cotización o pedido sin obra. */
+export const textoLugar = (l: LugarDeEntrega) => `Lugar de entrega: ${[l.direccion, l.municipio].filter(Boolean).join(', ')}`;
+
 function vista(c: Cotizacion, cat: Catalogo = EJEMPLO): CotizacionVista {
-  const planta = PLANTAS.find((p) => p.id === c.plantaId) ?? { nombre: c.plantaId, zonaHoraria: 'America/Mexico_City' };
-  const obras = [...new Set(c.partidas.map((p) => p.obraId))].map((id) => cat.obras.find((o) => o.id === id)?.nombre ?? '').filter(Boolean);
+  const planta = plantasVigentes().find((p) => p.id === c.plantaId) ?? { nombre: c.plantaId, zonaHoraria: 'America/Mexico_City' };
+  const obras = c.lugar
+    ? [textoLugar(c.lugar)]
+    : [...new Set(c.partidas.map((p) => p.obraId))].map((id) => cat.obras.find((o) => o.id === id)?.nombre ?? '').filter(Boolean);
   return {
     ...c,
     plantaNombre: planta.nombre,
     zonaHoraria: planta.zonaHoraria,
-    clienteNombre: cat.clientes.find((x) => x.id === c.clienteId)?.nombre ?? 'Sin cliente',
+    // Sin cliente = público en general; uno que no está en la lista es que el rol no puede ver clientes
+    clienteNombre: cat.clientes.find((x) => x.id === c.clienteId)?.nombre ?? (c.clienteId ? 'Cliente (sin permiso para ver clientes)' : 'Sin cliente'),
     vendedorNombre: VENDEDORES[c.vendedorId] ?? cat.nombres?.get(c.vendedorId) ?? '',
     obrasNombre: obras.join(', '),
     total: totalesCotizacion(c).neto,
@@ -551,39 +570,12 @@ export const pedidoEditable = (p: Pedido) => p.estado === 'programado';
 export const modificable = (c: Cotizacion) => c.estado === 'recibida' || c.estado === 'borrador' || c.estado === 'enviada';
 
 /** Las plantas de la concretera (ESC, XPJ, CZM, CUN) con su zona horaria. */
-export const PLANTAS_ERP = RAZONES_SOCIALES.flatMap((r) => r.plantas);
+export const PLANTAS_ERP = plantasVigentes;
 
 /** La planta que atiende un municipio (la misma del portal: plantaPara de ui); null si ninguna. */
 export function plantaDeMunicipio(municipio: string): string | null {
   const clave = plantaPara({ municipio }).clave;
-  return PLANTAS_ERP.some((p) => p.id === clave) ? clave : null;
-}
-
-/** "-06:00": el offset de una zona IANA en esa fecha. */
-export function offsetEn(zona: string, fecha: Date): string {
-  const n = new Intl.DateTimeFormat('en-US', { timeZone: zona, timeZoneName: 'longOffset' })
-    .formatToParts(fecha)
-    .find((p) => p.type === 'timeZoneName')!.value;
-  return n === 'GMT' ? '+00:00' : n.slice(3);
-}
-
-/** ISO 8601 con el offset de la zona, p. ej. 2026-11-05T10:20:00-06:00 (la hora que se muestra es la de la planta). */
-export function isoEnZona(zona: string, fecha = new Date()): string {
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: zona,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(fecha)
-      .map((x) => [x.type, x.value]),
-  );
-  return `${p['year']}-${p['month']}-${p['day']}T${p['hour']}:${p['minute']}:${p['second']}${offsetEn(zona, fecha)}`;
+  return PLANTAS_ERP().some((p) => p.id === clave) ? clave : null;
 }
 
 /** Siguiente folio de la planta en el año: EPI-PRES-ESC-26092 → EPI-PRES-ESC-26093; el primero del año, …-26001. */
@@ -595,21 +587,25 @@ export function siguienteFolio(folios: string[], plantaId: string, fechaIso: str
 }
 
 /** `baseId`: la cotización de la que se partió ("Nueva basada en esta"), para comparar precios. */
-export type NuevaCotizacion = Pick<Cotizacion, 'clienteId' | 'plantaId' | 'partidas' | 'descuento' | 'baseId'>;
+export type { NuevaCotizacion } from 'ui';
+export { isoEnZona, offsetEn } from 'ui';
 
 /** Km incluidos en el precio y $ por km adicional por m³ con que empieza una cotización. */
-// shortcut: tarifa de ejemplo (20 km, como dice el PDF); con backend, la de la configuración de la concretera.
+// Sin backend, la de ejemplo (20 km, como dice el PDF); con él, la de cada planta (Sucursal.kmIncluidos y precioKm).
 export const TRASLADO_POR_OMISION = { incluidosKm: 20, precioKm: 12 };
+
+/** El traslado con que empieza una cotización de esa planta. */
+export const trasladoDe = (plantaId: string) => ({ ...(plantasVigentes().find((p) => p.id === plantaId)?.traslado ?? TRASLADO_POR_OMISION) });
 
 /** Pedido con los nombres resueltos (cliente, obra y planta) y la zona de su planta. */
 function vistaPedido(p: Pedido, cat: Catalogo): PedidoVista {
-  const planta = PLANTAS.find((x) => x.id === p.plantaId) ?? { nombre: p.plantaId, zonaHoraria: 'America/Mexico_City' };
+  const planta = plantasVigentes().find((x) => x.id === p.plantaId) ?? { nombre: p.plantaId, zonaHoraria: 'America/Mexico_City' };
   return {
     metodoPago: 'sin_metodo',
     estatusPlanta: 'no_enviado',
     ...p,
     clienteNombre: cat.clientes.find((x) => x.id === p.clienteId)?.nombre ?? '',
-    obraNombre: cat.obras.find((o) => o.id === p.obraId)?.nombre ?? '',
+    obraNombre: p.lugar ? textoLugar(p.lugar) : (cat.obras.find((o) => o.id === p.obraId)?.nombre ?? ''),
     plantaNombre: planta.nombre,
     zonaHoraria: planta.zonaHoraria,
   };
@@ -655,6 +651,7 @@ export const registro = {
   cotizacion: (id: string) => 'cotizacion:' + id,
   pedido: (folio: string) => 'pedido:' + folio,
   cliente: (id: string) => 'cliente:' + id,
+  obra: (id: string) => 'obra:' + id,
   producto: (id: string) => 'producto:' + id,
   lista: (id: string) => 'lista-precios:' + id,
   programa: (id: string) => 'programa:' + id,
@@ -672,11 +669,13 @@ export interface NuevoProducto {
   descripcion: string;
   existencias?: number;
   minimoExistencias?: number;
+  /** Concretos: soluciones del cotizador. */
+  soluciones?: string[];
 }
 
 /** "CON-", "SRV-" o "GEN-" + el nombre en mayúsculas sin acentos (p. ej. GEN-SACO-CEMENTO-50KG), sin repetirse. */
 export function codigoSugerido(tipo: TipoProducto, nombre: string, usados: string[]): string {
-  const prefijo = { concreto: 'CON', servicio: 'SRV', general: 'GEN' }[tipo];
+  const prefijo = { concreto: 'CON', aditivo: 'AJ-ADT', servicio: 'SRV', general: 'GEN' }[tipo];
   const base = `${prefijo}-${normalizar(nombre).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'PRODUCTO'}`;
   let codigo = base;
   for (let n = 2; usados.includes(codigo); n++) codigo = `${base}-${n}`;
@@ -738,10 +737,13 @@ export const EQUIPOS: Equipo[] = [
   { id: 'al-01', tipo: 'allanadora', numero: 'AL-01', descripcion: 'Allanadora de 36 pulgadas' },
 ];
 
+/** Unidades de la flota: con backend, las de /equipos; sin él, las de ejemplo. */
+export const equipos = signal<Equipo[]>(EQUIPOS);
+
 /** "Camión revolvedor · ECO-09, ECO-11" o "… · sin conectar". */
 export function textoEquipo(e: EquipoServicio): string {
   const tipo = TIPOS_EQUIPO[e.tipo as TipoEquipo] ?? 'Otro equipo';
-  const unidades = e.unidades.map((id) => EQUIPOS.find((x) => x.id === id)?.numero ?? id);
+  const unidades = e.unidades.map((id) => equipos().find((x) => x.id === id)?.numero ?? id);
   return `${tipo} · ${unidades.length ? unidades.join(', ') : 'sin conectar'}`;
 }
 
@@ -772,11 +774,12 @@ export function nombreConcreto(c: ConfigConcreto): string {
 /** Lo que se edita de un producto (el tipo y las existencias no: las existencias van con entradas y salidas). */
 export type CambiosProducto = Pick<
   ProductoTarifa,
-  'codigo' | 'nombre' | 'unidad' | 'precio' | 'descripcion' | 'minimoExistencias' | 'configuracion' | 'equipo'
+  'codigo' | 'nombre' | 'unidad' | 'precio' | 'descripcion' | 'minimoExistencias' | 'configuracion' | 'equipo' | 'soluciones'
 >;
 
 /** Los del tarifario: su precio y su unidad los usa el cotizador, así que aquí no se cambian. */
-export const delTarifario = (p: ProductoTarifa) => PRODUCTOS.some((x) => x.id === p.id);
+// Los aditivos no: su precio es el que suma el cotizador, así que se administra aquí.
+export const delTarifario = (p: ProductoTarifa) => p.categoria !== 'aditivo' && PRODUCTOS.some((x) => x.id === p.id);
 
 /** Productos generales con existencias en su mínimo o por debajo. */
 export const existenciasBajas = (p: ProductoTarifa) =>
@@ -924,6 +927,7 @@ export class VentasService {
   private readonly api = inject(AUTH_API_URL, { optional: true }) ? inject(VentasApi) : null;
   private ctx: Contexto | null = null;
   private nombres = new Map<string, string>();
+  private usuarios: { id: string; nombre: string }[] = [];
   private publicoGeneralId: string | null = null;
 
   constructor() {
@@ -931,12 +935,20 @@ export class VentasService {
       this.historial.agregar(historialDemo());
       return;
     }
+    vendedores.set({});
+    equipos.set([]);
     this.cotizaciones.set([]);
     this.pedidos.set([]);
     this.clientes.set([]);
     this.productos.set([]);
     this.obras.set([]);
-    this.historial.remoto = { cargar: (r) => this.historialDe(r), nota: (r, t) => this.notaEn(r, t) };
+    this.historial.remoto = {
+      cargar: (r) => this.historialDe(r),
+      nota: (r, t) => this.notaEn(r, t),
+      actividades: (r) => this.actividadesDe(r),
+      programar: (a, hecha) => this.programarEn(a, hecha),
+      cerrar: (a, como) => this.api!.cerrarActividad(a.id, como),
+    };
     // Al entrar, o al cambiar de usuario o de empresa, se trae todo de nuevo (no al renovar el token)
     const quien = computed(() => {
       const s = this.auth.sesion();
@@ -956,10 +968,18 @@ export class VentasService {
       const d = await this.api.cargar();
       this.ctx = d.ctx;
       this.nombres = d.nombres;
+      this.usuarios = d.usuarios;
+      vendedores.set(Object.fromEntries(d.usuarios.map((u) => [u.id, u.nombre])));
+      equipos.set(d.equipos);
+      this.historial.personas.set(d.usuarios.map((u) => u.nombre));
       this.publicoGeneralId = d.publicoGeneralId;
       this.clientes.set(d.clientes);
       this.obras.set(d.obras);
       this.productos.set(d.productos);
+      // El cotizador ofrece solo estos concretos y sus soluciones, con su precio de lista
+      concretosServidor.set(d.productos.map(concretoDe).filter((c): c is ConcretoDisponible => !!c));
+      // Y los aditivos de Productos (AJ-ADT-…)
+      aditivosServidor.set(d.productos.map(aditivoDe).filter((a): a is AditivoDisponible => !!a));
       const cat = this.catalogo();
       this.cotizaciones.set(d.cotizaciones.map((c) => vista(c, cat)).sort(porFecha));
       this.pedidos.set(d.pedidos.map((p) => vistaPedido(p, cat)).sort((a, b) => b.folio.localeCompare(a.folio)));
@@ -978,7 +998,8 @@ export class VentasService {
   async guardar(id: string, cambios: Pick<Cotizacion, 'partidas' | 'descuento'>): Promise<CotizacionVista> {
     const antes = this.buscar(id)!;
     if (this.api) {
-      const n: NuevaCotizacion = { clienteId: antes.clienteId, plantaId: antes.plantaId, partidas: cambios.partidas, descuento: cambios.descuento };
+      // El destino no cambia al editar: su obra (en las partidas) o su lugar de entrega
+      const n: NuevaCotizacion = { clienteId: antes.clienteId, plantaId: antes.plantaId, partidas: cambios.partidas, descuento: cambios.descuento, lugar: antes.lugar };
       const c =
         antes.estado === 'enviada'
           ? await this.api.crearCotizacion(n, this.contexto(), this.unidadDe, { revisionDeId: id })
@@ -1011,6 +1032,18 @@ export class VentasService {
     });
   }
 
+  /** Cancelar una cotización (no pedida): ya no se envía ni se confirma; queda en la lista como Cancelada. */
+  async cancelar(id: string): Promise<void> {
+    if (this.api) {
+      await this.api.cancelar(id);
+      this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      return;
+    }
+    const antes = this.buscar(id)!;
+    this.cambiar(id, (c) => ({ ...c, estado: 'cancelada' }));
+    this.historial.registrar(registro.cotizacion(id), { texto: 'Cotización cancelada', cambios: cambioEstado(antes.estado, 'cancelada') });
+  }
+
   /**
    * Como "Confirmar" en Odoo: la cotización pasa a pedido y genera un pedido por partida (cada entrega es una orden de
    * venta, como al aceptarla en el portal). Devuelve los pedidos nuevos; si ya no se podía confirmar, ninguno.
@@ -1041,6 +1074,65 @@ export class VentasService {
   }
 
   private readonly catalogo = (): Catalogo => ({ clientes: this.clientes(), obras: this.obras(), nombres: this.nombres });
+
+  /**
+   * Alta o edición de una obra (Ventas → Obras): de un cliente o general (clienteId vacío). Queda en su historial.
+   * Devuelve la obra guardada.
+   */
+  async guardarObra(id: string | null, clienteId: string, d: NuevaObra): Promise<Obra> {
+    let obra: Obra;
+    if (this.api) obra = await this.api.guardarObra(id, clienteId, d);
+    else obra = { ...d, id: id ?? 'o-' + crypto.randomUUID().slice(0, 8), clienteId };
+    this.obras.update((l) => (l.some((o) => o.id === obra.id) ? l.map((o) => (o.id === obra.id ? obra : o)) : [...l, obra]));
+    this.nombres.set(obra.id, obra.nombre);
+    if (this.api) void this.historial.cargar(registro.obra(obra.id));
+    else this.historial.registrar(registro.obra(obra.id), { texto: id ? 'Obra editada' : 'Obra dada de alta' });
+    return obra;
+  }
+
+  /**
+   * Las obras y, además, los lugares de entrega de las cotizaciones y pedidos (como obras de solo lectura): lo que
+   * usan las vistas para mostrar el destino de cada partida. La sección Obras y los conteos usan solo `obras`.
+   */
+  readonly destinos = computed(() => {
+    const lugares = [
+      ...this.cotizaciones().flatMap((c) => (c.lugar ? [obraDelLugar(idLugar(c.id), c.clienteId, c.lugar)] : [])),
+      ...this.pedidos().flatMap((p) => (p.lugar ? [obraDelLugar(idLugar(p.id), p.clienteId, p.lugar)] : [])),
+    ];
+    return [...this.obras(), ...lugares];
+  });
+
+  /** Cotizaciones y pedidos que la usan (una obra usada no se borra). */
+  usosDeObra(id: string): { cotizaciones: CotizacionVista[]; pedidos: PedidoVista[] } {
+    return {
+      cotizaciones: this.cotizaciones().filter((c) => c.partidas.some((p) => p.obraId === id)),
+      pedidos: this.pedidos().filter((p) => p.obraId === id),
+    };
+  }
+
+  /** Solo uno sin cotizaciones, pedidos ni obras (el botón lo explica); el de mostrador nunca. */
+  async eliminarCliente(id: string): Promise<void> {
+    if (this.api) await this.api.eliminarCliente(id);
+    this.clientes.update((l) => l.filter((c) => c.id !== id));
+  }
+
+  async eliminarObra(id: string): Promise<void> {
+    if (this.api) await this.api.eliminarObra(id);
+    this.obras.update((l) => l.filter((o) => o.id !== id));
+  }
+
+  /** Alta completa desde Clientes → Nuevo (contacto, empresa y datos fiscales). Queda sin cuenta del portal. */
+  async altaCliente(cambios: CambiosCliente): Promise<Cliente> {
+    const limpio = limpiarCliente(cambios);
+    const nuevo: Cliente = this.api
+      ? await this.api.altaCliente(limpio)
+      : { id: 'c-' + crypto.randomUUID().slice(0, 8), ...limpio, portal: false };
+    this.clientes.update((lista) => [...lista, nuevo]);
+    this.nombres.set(nuevo.id, nuevo.nombre);
+    if (this.api) void this.historial.cargar(registro.cliente(nuevo.id));
+    else this.historial.registrar(registro.cliente(nuevo.id), { texto: 'Cliente dado de alta' });
+    return nuevo;
+  }
 
   /** Alta rápida al cotizar: queda sin cuenta del portal y sin datos fiscales, y así lo dice su historial. */
   async crearCliente(d: ClienteExpress): Promise<Cliente> {
@@ -1144,7 +1236,7 @@ export class VentasService {
       const c = await this.api.crearCotizacion({ ...n, clienteId: await this.clienteApi(n.clienteId) }, this.contexto(), this.unidadDe);
       return this.ponerCotizacion(c);
     }
-    const planta = PLANTAS_ERP.find((p) => p.id === n.plantaId)!;
+    const planta = PLANTAS_ERP().find((p) => p.id === n.plantaId)!;
     const fecha = isoEnZona(planta.zonaHoraria);
     const folio = siguienteFolio(
       this.cotizaciones().map((c) => c.serie),
@@ -1152,6 +1244,8 @@ export class VentasService {
       fecha,
     );
     const { baseId, ...datos } = n;
+    // Sin API: las partidas de un lugar de entrega apuntan al de esta cotización
+    if (datos.lugar) datos.partidas = datos.partidas.map((p) => ({ ...p, obraId: idLugar(folio) }));
     const c = vista(
       { ...datos, ...(baseId ? { baseId } : {}), id: folio, folio, fecha, serie: folio, revision: 0, vendedorId, estado: 'borrador' },
       this.catalogo(),
@@ -1288,6 +1382,7 @@ export class VentasService {
       ...(!fijo && c.configuracion ? { configuracion: c.configuracion } : {}),
       ...(c.equipo ? { equipo: c.equipo } : {}),
       ...(antes.existencias != null && c.minimoExistencias != null ? { minimoExistencias: c.minimoExistencias } : {}),
+      ...(c.soluciones ? { soluciones: c.soluciones } : {}),
     };
     const cambios: Cambio[] = [];
     const campo = (nombre: string, a: string, d: string) => a !== d && cambios.push({ campo: nombre, antes: a, despues: d });
@@ -1491,8 +1586,18 @@ export class VentasService {
   /** "Público en general" del front → el cliente de mostrador de la API (se crea la primera vez). */
   private async clienteApi(clienteId: string): Promise<string> {
     if (clienteId !== PUBLICO_GENERAL || !this.api) return clienteId;
-    this.publicoGeneralId ??= (await this.api.crearPublicoGeneral()).id;
+    if (!this.publicoGeneralId) {
+      const nuevo = await this.api.crearPublicoGeneral();
+      this.publicoGeneralId = nuevo.id;
+      // A la lista, como al cargar: las vistas de su cotización lo buscan ahí (sin él, Enviar fallaba hasta recargar)
+      this.clientes.update((l) => [...l, aCliente(nuevo, [], [])]);
+    }
     return this.publicoGeneralId;
+  }
+
+  /** "Público en general": el del front o el de la API (el cliente de mostrador). */
+  esPublico(clienteId: string): boolean {
+    return clienteId === PUBLICO_GENERAL || clienteId === this.publicoGeneralId;
   }
 
   /** Pone (o reemplaza) la cotización en la lista y trae su historial. */
@@ -1525,6 +1630,12 @@ export class VentasService {
         return { tipo: 'Cliente', id: id === PUBLICO_GENERAL ? (this.publicoGeneralId ?? id) : id };
       case 'producto':
         return { tipo: 'Producto', id: this.productoApi(id) };
+      case 'obra':
+        return { tipo: 'Obra', id };
+      case 'usuario':
+        return { tipo: 'Usuario', id };
+      case 'rol':
+        return { tipo: 'Rol', id };
       default:
         return null;
     }
@@ -1543,6 +1654,29 @@ export class VentasService {
       (ESTATUS_PLANTA as Record<string, string>)[id] ??
       (METODO_PAGO as Record<string, string>)[id];
     return (await this.api.historial(r.tipo, r.id)).map((e) => aEvento(e, clave, nombre));
+  }
+
+  /** El folio que tendría la siguiente cotización de la planta (para el PDF de un borrador sin guardar). */
+  async folioSiguiente(plantaId: string): Promise<string> {
+    const local = () => siguienteFolio(this.cotizaciones().map((c) => c.serie), plantaId, isoEnZona(plantasVigentes().find((p) => p.id === plantaId)!.zonaHoraria));
+    return this.api ? this.api.folioSiguiente(plantaId, this.contexto()).catch(local) : local();
+  }
+
+  /** Pendientes (ni hechas ni canceladas) del registro en el backend. */
+  private async actividadesDe(clave: string): Promise<Actividad[] | null> {
+    const r = this.registroApi(clave);
+    if (!r || !this.api) return null;
+    return (await this.api.actividades(r.tipo, r.id))
+      .filter((a) => !a.hechaEn && !a.canceladaEn)
+      .map((a) => aActividad(a, clave, (id) => this.nombres.get(id)));
+  }
+
+  private async programarEn(a: NuevaActividad, hecha: boolean): Promise<Actividad | null> {
+    const r = this.registroApi(a.registro);
+    if (!r || !this.api) return null;
+    const asignada = this.usuarios.find((u) => u.nombre === a.asignadaA)?.id ?? this.auth.sesion()?.usuario.id;
+    if (!asignada) throw new Error('Sin usuario para asignar');
+    return aActividad(await this.api.crearActividad(r.tipo, r.id, a, asignada, hecha), a.registro, (id) => this.nombres.get(id));
   }
 
   private async notaEn(clave: string, texto: string): Promise<boolean> {

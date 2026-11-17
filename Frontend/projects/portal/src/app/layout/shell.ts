@@ -1,8 +1,8 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Building2, FileText, Menu, Package, Store } from 'lucide';
-import { Drawer, Icon, UserMenu } from 'ui';
+import { AUTH_API_URL, Drawer, Icon, UserMenu } from 'ui';
 import { ChatFlotante } from './chat-flotante';
 
 const NAV = [
@@ -99,11 +99,15 @@ const NAV = [
       <router-outlet />
     </main>
 
-    <app-chat-flotante />
+    @if (!conServidor) {
+      <!-- shortcut: el chat con el asesor aún no existe en el backend: se oculta. -->
+      <app-chat-flotante />
+    }
   `,
 })
 export class Shell {
   protected readonly nav = NAV;
   protected readonly menuOpen = signal(false);
   protected readonly iconoMenu = Menu;
+  protected readonly conServidor = !!inject(AUTH_API_URL, { optional: true });
 }

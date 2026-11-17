@@ -7,7 +7,8 @@ namespace EPICO.Contracts.Ventas;
 
 /// <summary>
 /// Cotización completa. RevisionDeId = nueva revisión de una ya enviada ({Serie}-R1…);
-/// BaseId = nueva basada en otra (folio nuevo, para comparar precios).
+/// BaseId = nueva basada en otra (folio nuevo, para comparar precios). Entrega: obraId o un lugar (entregaDireccion y
+/// entregaMunicipio obligatorios; referencias y GPS opcionales), no los dos; puede faltar mientras se arma.
 /// </summary>
 public record CotizacionRequest(
     Guid SucursalId,
@@ -22,9 +23,15 @@ public record CotizacionRequest(
     string? Notas,
     Guid? BaseId,
     Guid? RevisionDeId,
-    [MinLength(1)] List<PartidaRequest> Partidas);
+    [MinLength(1)] List<PartidaRequest> Partidas,
+    [MaxLength(300)] string? EntregaDireccion = null,
+    [MaxLength(120)] string? EntregaMunicipio = null,
+    string? EntregaReferencias = null,
+    [Range(-90, 90)] decimal? EntregaLat = null,
+    [Range(-180, 180)] decimal? EntregaLng = null);
 
-/// <summary>Id = partida existente que se edita; sin Id = nueva; las que no vengan se borran. PrecioM3 vacío = tarifa.</summary>
+/// <summary>Id = partida existente que se edita; sin Id = nueva; las que no vengan se borran. PrecioM3 vacío = tarifa.
+/// Especial = pedido especial: sin tarifa se guarda sin producto y con precioM3 null (por cotizar).</summary>
 public record PartidaRequest(
     Guid? Id,
     [MaxLength(200)] string Nombre,
@@ -36,8 +43,8 @@ public record PartidaRequest(
     short RevenimientoCm,
     short TmaMm,
     [MaxLength(20)] string Cemento,
-    [MaxLength(20)] string Exposicion,
-    [MaxLength(20)] string Colocacion,
+    [RegularExpression("^(normal|humedad|marina)$")] string Exposicion,
+    [RegularExpression("^(directa|bombeable)$")] string Colocacion,
     List<string>? Aditivos,
     [Range(0.01, 99_999_999)] decimal VolumenM3,
     [Range(0, 999_999_999_999)] decimal? PrecioM3,
@@ -45,7 +52,8 @@ public record PartidaRequest(
     [Range(0, 999_999)] decimal? TrasladoDistanciaKm,
     [Range(0, 999_999)] decimal? TrasladoIncluidosKm,
     [Range(0, 99_999_999)] decimal? TrasladoPrecioKm,
-    List<LineaRequest>? Lineas);
+    List<LineaRequest>? Lineas,
+    bool Especial = false);
 
 /// <summary>Servicio, maquinaria o producto. Concepto y precio vacíos = los del producto; los de m³ cobran su mínimo.</summary>
 public record LineaRequest(
@@ -56,16 +64,21 @@ public record LineaRequest(
     [Range(1, 366)] short? Dias,
     [Range(0, 999_999_999_999)] decimal? PrecioUnitario);
 
-/// <summary>Orden de venta directa (sin cotización) o edición de una programada.</summary>
+/// <summary>Orden de venta directa (sin cotización) o edición de una programada. Entrega: obraId o lugar, no los dos (obligatorio).</summary>
 public record PedidoRequest(
     Guid SucursalId,
     Guid ClienteId,
-    Guid ObraId,
+    Guid? ObraId,
     Guid? VendedorId,
     DateTime FechaHoraEntrega,
     [RegularExpression("^(sin_metodo|transferencia)$")] string MetodoPago,
     [Range(0, 100)] decimal DescuentoPct,
-    [MinLength(1)] List<PedidoLineaRequest> Lineas);
+    [MinLength(1)] List<PedidoLineaRequest> Lineas,
+    [MaxLength(300)] string? EntregaDireccion = null,
+    [MaxLength(120)] string? EntregaMunicipio = null,
+    string? EntregaReferencias = null,
+    [Range(-90, 90)] decimal? EntregaLat = null,
+    [Range(-180, 180)] decimal? EntregaLng = null);
 
 public record PedidoLineaRequest(
     Guid ProductoId,

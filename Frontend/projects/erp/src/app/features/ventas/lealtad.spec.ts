@@ -70,14 +70,14 @@ describe('evaluar: cada tipo de programa', () => {
 });
 
 describe('ProgramasService', () => {
-  it('alta, cupones únicos y marcar usado, con historial', () => {
+  it('alta, cupones únicos y marcar usado, con historial', async () => {
     const s = TestBed.inject(ProgramasService);
     const h = TestBed.inject(HistorialService);
-    const p = s.crear({ ...desdePlantilla('cupones'), nombre: ' Cupones obra ' });
-    const nuevos = s.generarCupones(p.id, 3);
+    const p = await s.crear({ ...desdePlantilla('cupones'), nombre: ' Cupones obra ' });
+    const nuevos = await s.generarCupones(p.id, 3);
     expect(new Set(nuevos).size).toBe(3);
     expect(nuevos.every((c) => /^[A-Z2-9]{8}$/.test(c))).toBe(true);
-    s.alternarUsado(p.id, nuevos[0]);
+    await s.alternarUsado(p.id, nuevos[0]);
     expect(s.programa(p.id)!.cupones.filter((c) => c.usado).map((c) => c.codigo)).toEqual([nuevos[0]]);
     expect(s.programa(p.id)!.nombre).toBe('Cupones obra');
     expect(h.de(registro.programa(p.id)).map((e) => e.texto)).toEqual([`Cupón ${nuevos[0]} marcado como usado`, '3 cupones generados', 'Programa creado']);

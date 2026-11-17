@@ -1,7 +1,7 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ClipboardCheck, Info } from 'lucide';
-import { Icon, Pipeline } from 'ui';
+import { Icon, Pipeline, mensajeError } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { PedidosService } from '../../core/services/pedidos.service';
 import { etapasFlujo } from '../pedidos/flujo';
@@ -41,7 +41,7 @@ import { CotizacionFila } from './cotizacion-fila';
       } @else if (!pedidos().length) {
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/80 px-4 py-3 shadow-sm">
           <p class="text-sm"><span class="font-semibold">¿Todo listo?</span> Al aceptar se genera un pedido por producto, ligado a esta cotización.</p>
-          <button type="button" class="boton-primario h-11 w-auto px-5" (click)="aceptar()">
+          <button type="button" class="boton-primario h-11 w-auto px-5" [disabled]="aceptando()" [attr.aria-busy]="aceptando()" (click)="aceptar()">
             <ui-icon [icono]="iconos.pedido" [tamano]="18" />Aceptar y generar pedido
           </button>
         </div>
@@ -79,9 +79,25 @@ export default class Cotizacion {
   protected readonly pedidos = computed(() => (this.cot() ? this.pedidosService.deCotizacion(this.cot()!.id) : []));
   protected readonly etapas = computed(() => etapasFlujo(this.cot(), this.pedidos(), 'cotizacion'));
 
-  protected aceptar(): void {
-    const nuevos = this.pedidosService.generarDesdeCotizacion(this.cot()!);
-    this.cotizaciones.aceptada(this.cot()!.id);
-    this.aviso.set(`Cotización aceptada. ${nuevos.length === 1 ? 'Se generó el pedido' : 'Se generaron los pedidos'} ${nuevos.map((p) => p.folio).join(', ')}.`);
+  protected readonly aceptando = signal(false);
+
+  protected async aceptar(): Promise<void> {
+    let folios: string[];
+    if (this.cotizaciones.conServidor) {
+      this.aceptando.set(true);
+      try {
+        folios = await this.cotizaciones.aceptar(this.cot()!.id);
+        await this.pedidosService.recargar();
+      } catch (e) {
+        this.aviso.set(mensajeError(e));
+        return;
+      } finally {
+        this.aceptando.set(false);
+      }
+    } else {
+      folios = this.pedidosService.generarDesdeCotizacion(this.cot()!).map((p) => p.folio);
+      this.cotizaciones.aceptada(this.cot()!.id);
+    }
+    this.aviso.set(`Cotización aceptada. ${folios.length === 1 ? 'Se generó el pedido' : 'Se generaron los pedidos'} ${folios.join(', ')}.`);
   }
 }

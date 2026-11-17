@@ -1,9 +1,10 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import {
   FormField,
   applyWhen,
   email,
   form,
+  readonly,
   required,
   schema,
   submit,
@@ -12,11 +13,13 @@ import {
 import { Building2, Check, PencilLine, Plus, ReceiptText, Star, UserRound } from 'lucide';
 import {
   DatosEmpresaRepresentada,
+  DatosFacturacion,
   DatosFacturacionEntrada,
   FieldError,
   Icon,
   PageHeader,
   PerfilUsuario,
+  mensajeError,
   rfcValido,
 } from 'ui';
 import { PerfilService } from '../../core/services/perfil.service';
@@ -168,7 +171,26 @@ const empresaSchema = schema<DatosEmpresaRepresentada>((p) => {
             </div>
           </div>
 
-          <div class="mt-6 border-t border-acero/45 pt-5">
+          @if (perfil.conServidor) {
+            <section aria-labelledby="empresa-titulo" class="mt-6 border-t border-acero/45 pt-5">
+              <h3 id="empresa-titulo" class="font-bold">Empresa que representas</h3>
+              <p class="mt-1 text-sm text-texto-suave">Estos datos los actualiza tu asesor comercial de EPICO.</p>
+              @if (perfil.cliente(); as c) {
+                <dl class="mt-3 grid gap-x-5 gap-y-2 text-sm sm:grid-cols-2">
+                  <div><dt class="text-texto-suave">Nombre</dt><dd class="font-semibold">{{ c.nombre }}</dd></div>
+                  <div><dt class="text-texto-suave">Giro</dt><dd>{{ c.giro || '—' }}</dd></div>
+                  <div><dt class="text-texto-suave">Correo</dt><dd>{{ c.correo || '—' }}</dd></div>
+                  <div><dt class="text-texto-suave">Teléfono</dt><dd>{{ c.telefono || '—' }}</dd></div>
+                  <div><dt class="text-texto-suave">Sitio web</dt><dd>{{ c.sitioWeb || '—' }}</dd></div>
+                  <div>
+                    <dt class="text-texto-suave">Crédito</dt>
+                    <dd>{{ c.diasCredito ? c.diasCredito + ' días' : 'De contado' }}</dd>
+                  </div>
+                </dl>
+              }
+            </section>
+          }
+          <div class="mt-6 border-t border-acero/45 pt-5" [class.hidden]="perfil.conServidor">
             <label class="flex cursor-pointer items-start gap-3 rounded-xl bg-white/55 px-4 py-3.5">
               <input type="checkbox" class="casilla mt-0.5" [formField]="f.representaEmpresa" />
               <span>
@@ -482,7 +504,7 @@ const empresaSchema = schema<DatosEmpresaRepresentada>((p) => {
   `,
 })
 export default class Perfil {
-  private readonly perfil = inject(PerfilService);
+  protected readonly perfil = inject(PerfilService);
   protected readonly seccion = signal<SeccionPerfil>('informacion');
   protected readonly mensaje = signal('');
   protected readonly iconos = {
@@ -505,13 +527,25 @@ export default class Perfil {
     required(p.correo, { message: 'Escribe tu correo.' });
     email(p.correo, { message: 'Escribe un correo válido.' });
     required(p.telefono, { message: 'Escribe un teléfono de contacto.' });
+    // Con backend el correo es el de la cuenta (con el que entra): no se cambia aquí
+    readonly(p.correo, () => this.perfil.conServidor);
     applyWhen(p.empresa, ({ valueOf }) => valueOf(p.representaEmpresa), empresaSchema);
   });
 
+  /** Con backend el perfil llega después: se pone en el formulario mientras no se haya editado. */
+  private readonly alCargar = effect(() => {
+    const u = this.perfil.usuario();
+    untracked(() => {
+      if (!this.f().dirty()) this.modelo.set({ ...u, empresa: { ...u.empresa } });
+    });
+  });
+
   protected readonly facturacion = this.perfil.facturacion;
-  protected readonly fiscalSeleccionadoId = signal<string | null>(
-    this.facturacion()[0]?.id ?? null,
-  );
+  /** El elegido, mientras exista; si no (o al llegar la lista del servidor), el primero. */
+  protected readonly fiscalSeleccionadoId = linkedSignal<DatosFacturacion[], string | null>({
+    source: this.facturacion,
+    computation: (lista, previo) => (previo?.value && lista.some((f) => f.id === previo.value) ? previo.value : (lista[0]?.id ?? null)),
+  });
   protected readonly fiscalSeleccionado = computed(() =>
     this.perfil.buscarFacturacion(this.fiscalSeleccionadoId()),
   );
@@ -524,8 +558,12 @@ export default class Perfil {
   protected async guardarUsuario(event: Event): Promise<void> {
     event.preventDefault();
     await submit(this.f, async () => {
-      this.perfil.actualizarUsuario(this.modelo());
-      this.mensaje.set('Información personal guardada.');
+      try {
+        await this.perfil.actualizarUsuario(this.modelo());
+        this.mensaje.set('Información personal guardada.');
+      } catch (e) {
+        this.mensaje.set(mensajeError(e));
+      }
       return undefined;
     });
   }
@@ -545,15 +583,23 @@ export default class Perfil {
     this.editandoFiscal.set(true);
   }
 
-  protected guardarFiscal(datos: DatosFacturacionEntrada): void {
-    const guardado = this.perfil.guardarFacturacion(datos, this.idFiscalEdicion() ?? undefined);
-    this.fiscalSeleccionadoId.set(guardado.id);
-    this.editandoFiscal.set(false);
-    this.mensaje.set(`Datos fiscales "${guardado.alias}" guardados.`);
+  protected async guardarFiscal(datos: DatosFacturacionEntrada): Promise<void> {
+    try {
+      const guardado = await this.perfil.guardarFacturacion(datos, this.idFiscalEdicion() ?? undefined);
+      this.fiscalSeleccionadoId.set(guardado.id);
+      this.editandoFiscal.set(false);
+      this.mensaje.set(`Datos fiscales "${guardado.alias}" guardados.`);
+    } catch (e) {
+      this.mensaje.set(mensajeError(e));
+    }
   }
 
-  protected hacerPredeterminado(id: string): void {
-    this.perfil.hacerPredeterminado(id);
-    this.mensaje.set('Datos fiscales predeterminados actualizados.');
+  protected async hacerPredeterminado(id: string): Promise<void> {
+    try {
+      await this.perfil.hacerPredeterminado(id);
+      this.mensaje.set('Datos fiscales predeterminados actualizados.');
+    } catch (e) {
+      this.mensaje.set(mensajeError(e));
+    }
   }
 }

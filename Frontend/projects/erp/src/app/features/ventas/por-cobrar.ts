@@ -2,7 +2,7 @@ import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { Search } from 'lucide';
-import { FechaZonaPipe, Icon, METODO_PAGO, PedidoVista } from 'ui';
+import { ESTATUS_PLANTA, EstatusPlanta, FechaZonaPipe, METODO_PAGO, MetodoPago, PedidoVista, Buscador, FiltrosElegidos, GrupoFiltro, enRango, opcionesDe, pasaFiltro } from 'ui';
 import { PlantasService } from '../../core/plantas';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
@@ -19,31 +19,21 @@ import { PlantaFila } from './planta-pedido';
  */
 @Component({
   selector: 'app-por-cobrar',
-  imports: [DecimalPipe, DetallePedido, EnEncabezado, FechaZonaPipe, Icon, PanelLateral, PlantaFila],
+  imports: [Buscador, DecimalPipe, DetallePedido, EnEncabezado, FechaZonaPipe, PanelLateral, PlantaFila],
   template: `
     <ng-template appEnEncabezado>
       <div
         class="flex items-center gap-3 md:grid md:grid-cols-[minmax(max-content,1fr)_minmax(0,640px)_minmax(max-content,1fr)] md:gap-6"
       >
         <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Por cobrar</h1>
-        <form role="search" class="relative min-w-0 flex-1" (submit)="$event.preventDefault()">
-          <label for="buscar-por-cobrar" class="sr-only">Buscar órdenes por cobrar por folio, cliente u obra</label>
-          <ui-icon
-            [icono]="iconoBuscar"
-            [tamano]="17"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texto-suave max-sm:hidden"
-          />
-          <input
-            id="buscar-por-cobrar"
-            type="search"
-            autocomplete="off"
-            placeholder="Buscar…"
-            class="campo h-9 rounded-lg bg-white/65! pr-3 pl-3 text-[15px] sm:pl-9"
-            [value]="texto()"
-            (input)="texto.set($any($event.target).value)"
-            (keydown.escape)="texto.set('')"
-          />
-        </form>
+        <ui-buscador
+          class="min-w-0 flex-1"
+          idBuscar="buscar-por-cobrar"
+          etiqueta="Buscar órdenes por cobrar por folio, cliente u obra"
+          [(texto)]="texto"
+          [grupos]="grupos()"
+          [(filtros)]="filtros"
+        />
         <p class="text-right text-sm text-texto-suave max-md:sr-only" aria-live="polite">{{ conteo() }}</p>
       </div>
     </ng-template>
@@ -52,7 +42,7 @@ import { PlantaFila } from './planta-pedido';
       <div [class]="cajas.columna">
         <div [class]="cajas.tabla">
           <!-- Las marcadas que aún no van a planta: enviarlas de una vez. El cobro se cambia en la orden abierta. -->
-          <div class="flex flex-wrap items-center justify-between gap-2 px-1 pt-3 pb-2">
+          <div class="flex flex-wrap items-center justify-between gap-2 px-3 pt-3 pb-2">
             <p class="text-sm text-texto-suave">
               {{ casillas.marcadas().length ? conteo() : 'Abre una orden para cambiar su cobro.' }}
             </p>
@@ -167,8 +157,32 @@ export default class PorCobrar {
   protected readonly metodos = METODO_PAGO;
   protected readonly texto = signal('');
   protected readonly aviso = signal('');
-  protected readonly filas = computed(() =>
+  private readonly base = computed(() =>
     filtrarPedidos(this.ventas.pedidos(), this.plantas.seleccion(), this.texto()).filter((p) => p.cobro === 'por_cobrar'),
+  );
+  /** Filtros por columna, en el buscador. */
+  protected readonly filtros = signal<FiltrosElegidos>({});
+  protected readonly grupos = computed<GrupoFiltro[]>(() => {
+    const base = this.base();
+    const plantas = new Map(base.map((p) => [p.plantaId, p.plantaNombre]));
+    const conteo = (fn: (p: PedidoVista) => boolean) => base.filter(fn).length;
+    return [
+      { id: 'entrega', titulo: 'Entrega', rango: 'fecha' },
+      { id: 'importe', titulo: 'Importe', rango: 'numero', prefijo: '$' },
+      { id: 'metodo', titulo: 'Método de pago', opciones: (Object.keys(METODO_PAGO) as MetodoPago[]).map((id) => ({ id, nombre: METODO_PAGO[id], n: conteo((p) => (p.metodoPago ?? 'sin_metodo') === id) })) },
+      { id: 'planta', titulo: 'Planta', opciones: opcionesDe(base, (p) => p.plantaId, (id) => plantas.get(id) ?? id) },
+      { id: 'estatus', titulo: 'Estatus en planta', opciones: (Object.keys(ESTATUS_PLANTA) as EstatusPlanta[]).map((id) => ({ id, nombre: ESTATUS_PLANTA[id], n: conteo((p) => (p.estatusPlanta ?? 'no_enviado') === id) })) },
+    ];
+  });
+  protected readonly filas = computed(() =>
+    this.base().filter(
+      (p) =>
+        enRango(this.filtros(), 'entrega', p.fechaHoraEntrega) &&
+        enRango(this.filtros(), 'importe', p.importe) &&
+        pasaFiltro(this.filtros(), 'metodo', p.metodoPago ?? 'sin_metodo') &&
+        pasaFiltro(this.filtros(), 'planta', p.plantaId) &&
+        pasaFiltro(this.filtros(), 'estatus', p.estatusPlanta ?? 'no_enviado'),
+    ),
   );
   protected readonly total = computed(() => this.filas().reduce((t, p) => (p.estado === 'cancelado' ? t : t + p.importe), 0));
 

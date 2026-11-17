@@ -10,10 +10,10 @@ describe('ObrasService', () => {
     expect(s.buscar(null)).toBeNull();
   });
 
-  it('agregar limpia espacios, omite referencias vacías y le da un id nuevo', () => {
+  it('agregar limpia espacios, omite referencias vacías y le da un id nuevo', async () => {
     const s = TestBed.inject(ObrasService);
     const antes = s.obras().length;
-    const o = s.agregar({ nombre: '  Plaza Centro ', direccion: ' Calle 5 #20 ', municipio: ' Mérida, Yuc. ', referencias: '   ', ubicacion: { lat: 20.97, lng: -89.62 },
+    const o = await s.agregar({ nombre: '  Plaza Centro ', direccion: ' Calle 5 #20 ', municipio: ' Mérida, Yuc. ', referencias: '   ', ubicacion: { lat: 20.97, lng: -89.62 },
       responsable: { nombre: ' Ana Pérez ', foto: '' }, contactos: [{ nombre: ' Ana ', lada: '+52', numero: '999 123-4567' }] });
     expect(o).toMatchObject({ nombre: 'Plaza Centro', direccion: 'Calle 5 #20', municipio: 'Mérida, Yuc.', referencias: undefined });
     expect(o.ubicacion).toEqual({ lat: 20.97, lng: -89.62 });
@@ -23,10 +23,10 @@ describe('ObrasService', () => {
     expect(s.obras().filter((x) => x.id === o.id)).toHaveLength(1);
   });
 
-  it('actualizar reemplaza los datos y conserva id y cliente', () => {
+  it('actualizar reemplaza los datos y conserva id y cliente', async () => {
     const s = TestBed.inject(ObrasService);
     const o = s.buscar('o2')!;
-    s.actualizar('o2', { ...o, nombre: 'Bodega Escárcega II', contactos: [{ nombre: 'Luis', lada: '+52', numero: '9821187643' }] });
+    await s.actualizar('o2', { ...o, nombre: 'Bodega Escárcega II', contactos: [{ nombre: 'Luis', lada: '+52', numero: '9821187643' }] });
     expect(s.buscar('o2')).toMatchObject({ id: 'o2', clienteId: 'c1', nombre: 'Bodega Escárcega II' });
     expect(s.buscar('o2')!.contactos).toHaveLength(1);
   });

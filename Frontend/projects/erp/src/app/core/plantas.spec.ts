@@ -1,7 +1,19 @@
 import { TestBed } from '@angular/core/testing';
-import { PlantasService, RAZONES_SOCIALES, alternarGrupo, alternarPlanta, estadoGrupo } from './plantas';
+import { AUTH_STORAGE_KEY } from 'ui';
+import { PlantasService, RAZONES_SOCIALES, alternarGrupo, alternarPlanta, estadoGrupo, razonesDeSesion } from './plantas';
 
 describe('selección de plantas', () => {
+  it('razonesDeSesion: plantas del backend por código, con ubicación si la hay; sin plantas, la razón no aparece', () => {
+    const r = razonesDeSesion([
+      { id: 'e1', nombre: 'Sureste', plantas: [{ id: 'uuid-esc', codigo: 'ESC', nombre: 'Planta Escárcega', zonaHoraria: 'America/Merida', lat: 18.6, lng: -90.7 }] },
+      { id: 'e2', nombre: 'Nueva', plantas: [{ id: 'uuid-mid', codigo: 'MID', nombre: 'Planta Mérida', zonaHoraria: 'America/Merida', lat: null, lng: null }] },
+      { id: 'e3', nombre: 'Sin plantas', plantas: [] },
+    ]);
+    expect(r.map((x) => x.id)).toEqual(['e1', 'e2']);
+    expect(r[0].plantas[0]).toEqual({ id: 'ESC', nombre: 'Planta Escárcega', zonaHoraria: 'America/Merida', ubicacion: { lat: 18.6, lng: -90.7 } });
+    expect(r[1].plantas[0].ubicacion).toBeUndefined();
+  });
+
   it('alternarPlanta agrega y quita, pero nunca deja la selección vacía', () => {
     expect(alternarPlanta(['ESC'], 'CZM')).toEqual(['ESC', 'CZM']);
     expect(alternarPlanta(['ESC', 'CZM'], 'ESC')).toEqual(['CZM']);
@@ -23,6 +35,7 @@ describe('selección de plantas', () => {
   });
 
   describe('PlantasService', () => {
+    beforeEach(() => TestBed.configureTestingModule({ providers: [{ provide: AUTH_STORAGE_KEY, useValue: 'test.plantas' }] }));
     const servicio = () => TestBed.inject(PlantasService);
     const [sureste, caribe] = RAZONES_SOCIALES;
 

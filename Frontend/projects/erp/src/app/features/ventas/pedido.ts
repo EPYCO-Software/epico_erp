@@ -6,6 +6,7 @@ import { Historial } from '../../layout/historial';
 import { BotonRelacion, CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
 import { VentasService, registro } from './datos';
 import { DetallePedido } from './detalle-pedido';
+import { permisosSesion } from '../../core/permisos';
 
 /**
  * Vista completa de una orden de venta (/ventas/ordenes/:folio), como el formulario de Odoo: en la barra "Nuevo", la
@@ -18,7 +19,9 @@ import { DetallePedido } from './detalle-pedido';
   template: `
     <ng-template appEnEncabezado>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <a routerLink="/ventas/ordenes/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+        @if (puede('ventas.pedidos.crear')) {
+          <a routerLink="/ventas/ordenes/nueva" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+        }
         <app-ruta-navegacion lista="Órdenes de venta" ruta="/ventas/ordenes" [actual]="folio()" />
         @if (cotizacion(); as c) {
           <app-boton-relacion
@@ -54,6 +57,8 @@ import { DetallePedido } from './detalle-pedido';
   `,
 })
 export default class PedidoVenta {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   /** De la ruta /ventas/ordenes/:folio */
   readonly folio = input.required<string>();
 

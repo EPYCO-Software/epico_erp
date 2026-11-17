@@ -35,7 +35,7 @@ type Grupo = 'concreto' | 'servicios' | 'todo';
 type Modo = 'resistencias' | 'mezcla' | 'tendencia';
 
 const GRUPOS: { id: Grupo; nombre: string; categorias: CategoriaProducto[] | null }[] = [
-  { id: 'concreto', nombre: 'Concreto', categorias: ['concreto-fc', 'concreto-mr', 'concreto', 'ajuste'] },
+  { id: 'concreto', nombre: 'Concreto', categorias: ['concreto-fc', 'concreto-mr', 'concreto', 'ajuste', 'aditivo'] },
   { id: 'servicios', nombre: 'Servicios', categorias: ['servicio', 'maquinaria'] },
   { id: 'todo', nombre: 'Todo', categorias: null },
 ];

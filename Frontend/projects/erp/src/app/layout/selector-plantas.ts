@@ -40,7 +40,7 @@ import { colocarBajo } from './popover';
       <p id="selector-plantas-titulo" class="px-3 pt-1.5 pb-2 text-xs font-semibold tracking-[0.12em] text-texto-suave uppercase">
         Plantas
       </p>
-      @for (r of plantas.razones; track r.id) {
+      @for (r of plantas.razones(); track r.id) {
         <div role="group" [attr.aria-label]="r.nombre" class="mb-1">
           <div class="flex items-center rounded-lg" [class.bg-epico/8]="plantas.estado(r) === 'todas'">
             <input

@@ -90,7 +90,8 @@ export class EnviarCotizacion {
   readonly enviada = output<string>();
 
   protected readonly iconos = { cerrar: X, enviar: Send, portal: MonitorCheck };
-  protected readonly cliente = computed(() => this.ventas.cliente(this.c().clienteId)!);
+  /** Su cliente; sin él en la lista (aún no carga o sin permiso de ver clientes), como uno sin portal ni correo. */
+  protected readonly cliente = computed(() => this.ventas.cliente(this.c().clienteId) ?? { portal: false, contacto: { correo: '' } });
   protected readonly f = form(signal({ correo: '' }), (m) => {
     required(m.correo, { message: 'Escribe el correo del cliente.' });
     email(m.correo, { message: 'Escribe un correo válido, por ejemplo compras@empresa.mx.' });

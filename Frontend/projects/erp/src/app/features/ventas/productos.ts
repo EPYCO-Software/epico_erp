@@ -1,11 +1,11 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Search } from 'lucide';
-import { CATEGORIAS_PRODUCTO, Icon, ProductoTarifa, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, TipoProducto, pesos } from 'ui';
+import { Buscador, CATEGORIAS_PRODUCTO, FiltrosElegidos, GrupoFiltro, ProductoTarifa, pasaFiltro, enRango, opcionesDe, TIPOS_PRODUCTO, TIPO_DE_CATEGORIA, TipoProducto, pesos } from 'ui';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { CAJAS_LISTA, FILA_LISTA, PanelLateral, seleccionMultiple, vistaPrevia } from '../../layout/panel-lateral';
 import { VentasService, existenciasBajas, filtrarProductos } from './datos';
 import { DetalleProducto } from './detalle-producto';
+import { permisosSesion } from '../../core/permisos';
 
 /**
  * Ventas → Productos → Productos: el tarifario (concretos f´c y MR, ajustes, servicios y renta de maquinaria) y los que se
@@ -14,34 +14,26 @@ import { DetalleProducto } from './detalle-producto';
  */
 @Component({
   selector: 'app-productos',
-  imports: [Icon, RouterLink, EnEncabezado, PanelLateral, DetalleProducto],
+  imports: [Buscador, RouterLink, EnEncabezado, PanelLateral, DetalleProducto],
   template: `
     <ng-template appEnEncabezado>
       <div
         class="flex items-center gap-3 md:grid md:grid-cols-[minmax(max-content,1fr)_minmax(0,640px)_minmax(max-content,1fr)] md:gap-6"
       >
         <div class="flex items-center gap-3">
-          <a routerLink="/ventas/productos/nuevo" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          @if (puede('ventas.productos.crear')) {
+            <a routerLink="/ventas/productos/nuevo" class="boton-primario h-9 w-auto px-3.5 text-[15px]">Nuevo</a>
+          }
           <h1 class="text-xl font-bold tracking-[-0.02em] text-carbon max-md:sr-only">Productos</h1>
         </div>
-        <form role="search" class="relative min-w-0 flex-1" (submit)="$event.preventDefault()">
-          <label for="buscar-producto" class="sr-only">Buscar productos por código, nombre o categoría</label>
-          <ui-icon
-            [icono]="iconoBuscar"
-            [tamano]="17"
-            class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texto-suave max-sm:hidden"
-          />
-          <input
-            id="buscar-producto"
-            type="search"
-            autocomplete="off"
-            placeholder="Buscar…"
-            class="campo h-9 rounded-lg bg-white/65! pr-3 pl-3 text-[15px] sm:pl-9"
-            [value]="texto()"
-            (input)="texto.set($any($event.target).value)"
-            (keydown.escape)="texto.set('')"
-          />
-        </form>
+        <ui-buscador
+          class="min-w-0 flex-1"
+          idBuscar="buscar-producto"
+          etiqueta="Buscar productos por código, nombre o categoría"
+          [(texto)]="texto"
+          [grupos]="grupos()"
+          [(filtros)]="filtros"
+        />
         <p class="text-right text-sm text-texto-suave max-md:sr-only" aria-live="polite">{{ conteo() }}</p>
       </div>
     </ng-template>
@@ -49,20 +41,6 @@ import { DetalleProducto } from './detalle-producto';
     <div [class]="cajas.contenedor">
       <div [class]="cajas.columna">
         <div [class]="cajas.tabla">
-          <!-- Por tipo: lo principal (concreto), servicios y productos generales -->
-          <fieldset class="px-1 pt-3 pb-2">
-            <legend class="sr-only">Tipo de producto</legend>
-            <div class="inline-flex flex-wrap gap-1 rounded-xl bg-carbon/5 p-1 text-sm">
-              @for (t of tipos(); track t.id) {
-                <label
-                  class="cursor-pointer rounded-lg px-3 py-1.5 font-semibold text-texto-suave has-checked:bg-white has-checked:text-carbon has-checked:shadow-sm has-focus-visible:outline-2 has-focus-visible:outline-epico"
-                >
-                  <input type="radio" name="tipo-producto" class="sr-only" [checked]="tipo() === t.id" (change)="tipo.set(t.id)" />
-                  {{ t.nombre }} <span class="font-normal">({{ t.n }})</span>
-                </label>
-              }
-            </div>
-          </fieldset>
           <div tabindex="0" role="region" aria-label="Tabla de productos" [class]="cajas.region">
             <table class="w-full text-left text-sm whitespace-nowrap" [class.min-w-240]="!previa()">
               <caption class="sr-only">
@@ -144,25 +122,51 @@ import { DetalleProducto } from './detalle-producto';
   `,
 })
 export default class Productos {
+  /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
+  protected readonly puede = permisosSesion();
   private readonly ventas = inject(VentasService);
   private readonly router = inject(Router);
 
-  protected readonly iconoBuscar = Search;
   protected readonly cajas = CAJAS_LISTA;
   protected readonly fila = FILA_LISTA;
   protected readonly categorias = CATEGORIAS_PRODUCTO;
   protected readonly pesos = pesos;
   protected readonly texto = signal('');
-  /** Todos o solo un tipo (Concreto, Servicio, Producto general). */
-  protected readonly tipo = signal<TipoProducto | 'todos'>('todos');
-  protected readonly tipos = computed(() =>
-    [{ id: 'todos' as const, nombre: 'Todos' }, ...(Object.keys(TIPOS_PRODUCTO) as TipoProducto[]).map((id) => ({ id, nombre: TIPOS_PRODUCTO[id] }))].map(
-      (t) => ({ ...t, n: this.ventas.productos().filter((p) => t.id === 'todos' || TIPO_DE_CATEGORIA[p.categoria] === t.id).length }),
-    ),
-  );
-  protected readonly filas = computed(() =>
-    filtrarProductos(this.ventas.productos(), this.texto()).filter((p) => this.tipo() === 'todos' || TIPO_DE_CATEGORIA[p.categoria] === this.tipo()),
-  );
+  /** Filtro por tipo (Concreto, Aditivo, Servicio, Producto general), en el botón de filtros del buscador. */
+  protected readonly filtros = signal<FiltrosElegidos>({});
+  protected readonly grupos = computed<GrupoFiltro[]>(() => [
+    {
+      id: 'tipo',
+      titulo: 'Tipo de producto',
+      opciones: (Object.keys(TIPOS_PRODUCTO) as TipoProducto[]).map((id) => ({
+        id,
+        nombre: TIPOS_PRODUCTO[id],
+        n: this.ventas.productos().filter((p) => TIPO_DE_CATEGORIA[p.categoria] === id).length,
+      })),
+    },
+    { id: 'categoria', titulo: 'Categoría', opciones: opcionesDe(this.ventas.productos(), (p) => p.categoria, (c) => CATEGORIAS_PRODUCTO[c as keyof typeof CATEGORIAS_PRODUCTO] ?? c) },
+    { id: 'unidad', titulo: 'Unidad', opciones: opcionesDe(this.ventas.productos(), (p) => p.unidad) },
+    { id: 'precio', titulo: 'Precio de lista', rango: 'numero', prefijo: '$' },
+    {
+      id: 'uso',
+      titulo: 'Cotizaciones',
+      opciones: [
+        { id: 'si', nombre: 'En cotizaciones', n: this.ventas.productos().filter((p) => this.usos().get(p.id)).length },
+        { id: 'no', nombre: 'Sin usar', n: this.ventas.productos().filter((p) => !this.usos().get(p.id)).length },
+      ],
+    },
+  ]);
+  protected readonly filas = computed(() => {
+    const f = this.filtros();
+    return filtrarProductos(this.ventas.productos(), this.texto()).filter(
+      (p) =>
+        pasaFiltro(f, 'tipo', TIPO_DE_CATEGORIA[p.categoria]) &&
+        pasaFiltro(f, 'categoria', p.categoria) &&
+        pasaFiltro(f, 'unidad', p.unidad) &&
+        enRango(f, 'precio', p.precio) &&
+        pasaFiltro(f, 'uso', this.usos().get(p.id) ? 'si' : 'no'),
+    );
+  });
   /** En cuántas cotizaciones va cada producto. */
   protected readonly usos = computed(() => new Map(this.ventas.productos().map((p) => [p.id, this.ventas.usoDe(p.id).cotizaciones.length])));
   protected readonly bajas = existenciasBajas;

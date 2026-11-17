@@ -1,9 +1,12 @@
-import { Service, computed, inject, signal } from '@angular/core';
-import { CotizacionGuardada, Pedido, PedidoVista, aIsoConOffset, pedidoDePartida, plantaPara } from 'ui';
+import { HttpClient } from '@angular/common/http';
+import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { AUTH_API_URL, AuthService, CotizacionGuardada, Pedido, PedidoVista, ViajeCamion, aIsoConOffset, esLugar, mensajeError, pedidoDePartida, plantaPara } from 'ui';
 import { ObrasService } from './obras.service';
+import { ApiPedidoPortal, aPedidoPortal, aViaje } from './pedidos-api';
 
-// shortcut: pedidos en memoria. Al conectar el backend, los crea el ERP al aceptar la cotización y el portal solo
-// los consulta (con su facturación y cobranza); esta API no cambia.
+// Sin backend (pruebas, demo): pedidos de ejemplo en memoria. Con él, los crea el backend al aceptar la cotización y
+// el portal solo los consulta (con su cobranza y sus viajes).
 const PEDIDOS_DEMO: Pedido[] = [
   // Se entrega hoy (la fecha se calcula al cargar) con 3 camiones: ver SeguimientoService.
   {
@@ -38,20 +41,58 @@ export const enCurso = (p: Pick<Pedido, 'estado'>) => p.estado !== 'entregado' &
 
 let siguiente = 1;
 
-/** Pedidos del cliente: entrega, cobranza y relación con la cotización que los originó. */
+/**
+ * Pedidos del cliente: entrega, cobranza y relación con la cotización que los originó. Con backend se leen de
+ * /portal/pedidos al entrar (y al aceptar una cotización), con su planta y sus viajes (SeguimientoService).
+ * shortcut: la lista no trae las líneas: se pide el detalle de cada pedido (con muchos pedidos, que la lista las traiga).
+ */
 @Service()
 export class PedidosService {
   private readonly obras = inject(ObrasService);
-  private readonly _pedidos = signal<Pedido[]>(PEDIDOS_DEMO);
+  private readonly base = inject(AUTH_API_URL, { optional: true });
+  private readonly http = this.base ? inject(HttpClient) : null;
+  private readonly auth = this.base ? inject(AuthService) : null;
+  private readonly _pedidos = signal<Pedido[]>(this.base ? [] : PEDIDOS_DEMO);
+  /** Con backend: planta (nombre y zona) y viajes de cada pedido. */
+  private readonly plantas = signal(new Map<string, { nombre: string; zonaHoraria: string }>());
+  readonly viajes = signal(new Map<string, ViajeCamion[]>());
+  readonly cargando = signal(false);
+  readonly errorCarga = signal('');
   private consecutivo = 141;
+
+  constructor() {
+    if (!this.base) return;
+    const cliente = computed(() => this.auth!.sesion()?.cliente?.id ?? '');
+    effect(() => {
+      if (cliente()) untracked(() => void this.recargar());
+    });
+  }
+
+  async recargar(): Promise<void> {
+    const clienteId = this.auth!.sesion()?.cliente?.id ?? '';
+    this.cargando.set(true);
+    try {
+      const lista = await firstValueFrom(this.http!.get<{ items: ApiPedidoPortal[] }>(`${this.base}/portal/pedidos?pagina=1&tamano=500`));
+      const completos = await Promise.all(lista.items.map((p) => firstValueFrom(this.http!.get<ApiPedidoPortal>(`${this.base}/portal/pedidos/${p.id}`))));
+      this.plantas.set(new Map(completos.map((p) => [p.id, { nombre: p.planta.nombre, zonaHoraria: p.planta.zonaHoraria }])));
+      this.viajes.set(new Map(completos.map((p) => [p.id, p.remisiones.map((v) => aViaje(v, p.planta.zonaHoraria))])));
+      this._pedidos.set(completos.map((p) => aPedidoPortal(p, clienteId)));
+      this.errorCarga.set('');
+    } catch (e) {
+      this.errorCarga.set(mensajeError(e));
+    } finally {
+      this.cargando.set(false);
+    }
+  }
 
   /** Con nombres y zona horaria ya resueltos; el de entrega más reciente primero. */
   readonly pedidos = computed<PedidoVista[]>(() =>
     this._pedidos()
       .map((p) => {
         const obra = this.obras.buscar(p.obraId);
-        const planta = plantaPara(obra);
-        return { ...p, clienteNombre: '', obraNombre: obra?.nombre ?? 'Obra', plantaNombre: planta.nombre, zonaHoraria: planta.zonaHoraria };
+        const planta = this.plantas().get(p.id) ?? plantaPara(obra);
+        const obraNombre = obra?.nombre ?? (esLugar(p.obraId) ? 'Lugar de entrega' : 'Obra');
+        return { ...p, clienteNombre: '', obraNombre, plantaNombre: planta.nombre, zonaHoraria: planta.zonaHoraria };
       })
       .sort((a, b) => b.fechaHoraEntrega.localeCompare(a.fechaHoraEntrega)),
   );
@@ -82,7 +123,7 @@ export class PedidosService {
     return this._pedidos().some((p) => p.obraId === obraId && enCurso(p));
   }
 
-  /** Aceptar una cotización genera un pedido por partida, ligado a ella. Devuelve los pedidos creados. */
+  /** Sin backend: aceptar una cotización genera un pedido por partida, ligado a ella. Devuelve los pedidos creados. */
   generarDesdeCotizacion(c: CotizacionGuardada): Pedido[] {
     const nuevos = c.partidas.map<Pedido>((p) => ({
       id: `pe-${Date.now().toString(36)}-${siguiente++}`,

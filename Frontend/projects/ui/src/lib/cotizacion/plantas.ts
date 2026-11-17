@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { Obra, UbicacionGps } from '../models/obra';
 
 /** Planta que atiende según el municipio de la obra (encabezado y clave del folio). */
@@ -22,7 +23,48 @@ const PLANTAS: (PlantaContacto & { coincide: RegExp })[] = [
 ];
 const GENERAL: PlantaContacto = { clave: 'GEN', nombre: 'EPICO CONCRETOS', zonaHoraria: 'America/Merida', telefonos: TELEFONOS, correos: 'epico.concretos@gmail.com' };
 
-export function plantaPara(obra: Pick<Obra, 'municipio'> | null | undefined): PlantaContacto {
+/** Una planta del backend (GET /portal/catalogo → plantas). */
+export interface PlantaServidor {
+  id: string;
+  codigo: string;
+  nombre: string;
+  direccion: string | null;
+  telefono: string | null;
+  zonaHoraria: string;
+  lat: number | null;
+  lng: number | null;
+  kmIncluidos: number | null;
+  precioKm: number | null;
+}
+
+/** Con backend, las plantas reales (las carga el portal al entrar); null = las fijas de arriba (pruebas, demo). */
+export const plantasServidor = signal<PlantaServidor[] | null>(null);
+
+const distancia2 = (a: UbicacionGps, b: { lat: number | null; lng: number | null }) =>
+  b.lat == null || b.lng == null ? Infinity : (a.lat - b.lat) ** 2 + (a.lng - b.lng) ** 2;
+
+/** La planta del backend que atiende la obra: la más cercana a su GPS, la de su municipio o la primera. */
+function plantaServidorPara(lista: PlantaServidor[], obra: Pick<Obra, 'municipio' | 'ubicacion'> | null | undefined): PlantaContacto {
+  const n = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  const u = obra?.ubicacion;
+  const p =
+    (u ? [...lista].sort((a, b) => distancia2(u, a) - distancia2(u, b))[0] : undefined) ??
+    (obra?.municipio ? lista.find((x) => n(`${x.nombre} ${x.direccion ?? ''}`).includes(n(obra.municipio.split(',')[0]))) : undefined) ??
+    lista[0];
+  if (!p) return GENERAL;
+  return {
+    clave: p.codigo,
+    nombre: p.nombre.toUpperCase(),
+    zonaHoraria: p.zonaHoraria,
+    ...(p.lat != null && p.lng != null ? { ubicacion: { lat: p.lat, lng: p.lng } } : {}),
+    telefonos: p.telefono ?? '',
+    correos: '',
+  };
+}
+
+export function plantaPara(obra: Pick<Obra, 'municipio'> & Partial<Pick<Obra, 'ubicacion'>> | null | undefined): PlantaContacto {
+  const remotas = plantasServidor();
+  if (remotas) return plantaServidorPara(remotas, obra);
   const p = obra ? PLANTAS.find((x) => x.coincide.test(obra.municipio)) : undefined;
   return p ? { clave: p.clave, nombre: p.nombre, zonaHoraria: p.zonaHoraria, ubicacion: p.ubicacion, telefonos: p.telefonos, correos: p.correos } : GENERAL;
 }

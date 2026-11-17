@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormField, form, submit, validate } from '@angular/forms/signals';
 import { FieldError } from 'ui';
-import { RAZONES_SOCIALES } from '../../core/plantas';
+import { razonesVigentes } from '../../core/plantas';
 import { DatosLista, ListaPrecios, ListasPreciosService, MONEDAS, Moneda } from './precios';
 
 /**
@@ -39,7 +39,7 @@ import { DatosLista, ListaPrecios, ListasPreciosService, MONEDAS, Moneda } from 
         <legend [class]="etiqueta">Plantas donde aplica</legend>
         <p class="mt-1 text-texto-suave">{{ modelo().plantas.length ? '' : 'Ninguna marcada: aplica en todas las plantas.' }}</p>
         <div class="mt-2 grid gap-3 sm:grid-cols-2">
-          @for (r of razones; track r.id) {
+          @for (r of razones(); track r.id) {
             <div>
               <p class="font-semibold">{{ r.nombre }}</p>
               <div class="mt-1 flex flex-wrap gap-1.5">
@@ -79,7 +79,7 @@ export class EditorLista implements OnInit {
   protected readonly botonSecundario =
     'inline-flex h-10 items-center rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
   protected readonly monedas = (Object.keys(MONEDAS) as Moneda[]).map((id) => ({ id, nombre: MONEDAS[id] }));
-  protected readonly razones = RAZONES_SOCIALES;
+  protected readonly razones = razonesVigentes;
 
   protected readonly modelo = signal<DatosLista>({ nombre: '', moneda: 'MXN', plantas: [] });
   protected readonly f = form(this.modelo, (m) => {
