@@ -1,7 +1,10 @@
 import { Component, Injector, afterNextRender, computed, inject, input, output, signal } from '@angular/core';
 import { FormField, form, required, submit } from '@angular/forms/signals';
-import { EstatusPlantaEtiqueta, FechaZonaPipe, FieldError, PedidoVista } from 'ui';
-import { VentasService, mensajeDe, offsetEn } from './datos';
+import { CdkMenu, CdkMenuItem, CdkMenuTrigger } from '@angular/cdk/menu';
+import { ChevronDown } from 'lucide';
+import { EstatusPlantaEtiqueta, FechaZonaPipe, FieldError, Icon, PedidoVista } from 'ui';
+import { ConfirmarOrden, EntregaPorConfirmar } from './confirmar-orden';
+import { VentasService, mensajeDe, offsetEn, porConfirmar } from './datos';
 import { permisosSesion } from '../../core/permisos';
 
 type Respuesta = 'actualizacion' | 'rechazada';
@@ -15,7 +18,7 @@ type Respuesta = 'actualizacion' | 'rechazada';
  */
 @Component({
   selector: 'app-planta-pedido',
-  imports: [EstatusPlantaEtiqueta, FechaZonaPipe, FieldError, FormField],
+  imports: [CdkMenu, CdkMenuItem, CdkMenuTrigger, ConfirmarOrden, EstatusPlantaEtiqueta, FechaZonaPipe, FieldError, FormField, Icon],
   host: { class: 'block' },
   template: `
     <section aria-labelledby="planta-titulo" class="rounded-xl bg-white/70 p-3 text-sm">
@@ -28,13 +31,59 @@ type Respuesta = 'actualizacion' | 'rechazada';
         }
         <ui-estatus-planta [estatus]="estatus()" />
       </div>
+      @if (pendiente()) {
+        <p class="mt-1 flex flex-wrap items-center gap-2">
+          <span class="rounded-md bg-[#FBF0DD] px-2 py-0.5 text-xs font-bold text-[#7A5410]">Orden por confirmar</span>
+          @if (estatus() !== 'no_enviado' && puede('ventas.pedidos.confirmar')) {
+            <button type="button" [class]="secundario" (click)="confirmando.set(true)">Confirmar orden</button>
+          }
+        </p>
+      } @else if (p().confirmadaEn; as en) {
+        <p class="mt-1 text-texto-suave">
+          <span class="rounded-md bg-[#E5F0EA] px-2 py-0.5 text-xs font-bold text-[#2E5E4A]">Orden confirmada</span>
+          el {{ en | fechaZona: p().zonaHoraria }}
+        </p>
+      }
 
       @switch (estatus()) {
         @case ('no_enviado') {
           <p class="mt-1 text-texto-suave">Aún no se envía a {{ p().plantaNombre }}.</p>
-          @if (puede('ventas.pedidos.planta')) {
-            <button type="button" [class]="primario + ' mt-2'" (click)="cambiar('enviado')">Enviar requerimiento a planta</button>
-          }
+          <!-- Botón dividido: enviar a planta y, en la flecha, confirmar la orden sin esperar a planta -->
+          <div class="mt-2 flex flex-wrap gap-2">
+            @if (puede('ventas.pedidos.planta')) {
+              <div class="flex">
+                <button type="button" [class]="primario + (ofrecerConfirmar() ? ' rounded-r-none' : '')" (click)="cambiar('enviado')">
+                  Enviar requerimiento a planta
+                </button>
+                @if (ofrecerConfirmar()) {
+                  <button
+                    type="button"
+                    [class]="primario + ' rounded-l-none border-l border-white/40 px-2'"
+                    [cdkMenuTriggerFor]="menuPlanta"
+                  >
+                    <ui-icon [icono]="iconoAbrir" [tamano]="16" /><span class="sr-only">Más opciones del requerimiento</span>
+                  </button>
+                }
+              </div>
+            } @else if (ofrecerConfirmar()) {
+              <button type="button" [class]="primario" (click)="confirmando.set(true)">Confirmar orden</button>
+            }
+          </div>
+          <ng-template #menuPlanta>
+            <section aria-label="Opciones del requerimiento">
+              <div cdkMenu aria-label="Opciones del requerimiento" class="glass-strong mt-1 min-w-72 p-1.5 text-[15px] text-carbon">
+                <button
+                  cdkMenuItem
+                  type="button"
+                  class="flex w-full flex-col items-start rounded-lg px-3 py-2 text-left hover:bg-carbon/5 focus-visible:bg-carbon/5 focus-visible:outline-none"
+                  (cdkMenuItemTriggered)="confirmando.set(true)"
+                >
+                  <span class="font-semibold">Confirmar orden</span>
+                  <span class="text-sm text-texto-suave">Queda confirmada sin esperar a planta; el requerimiento se puede enviar después.</span>
+                </button>
+              </div>
+            </section>
+          </ng-template>
         }
         @case ('enviado') {
           <p class="mt-1 text-texto-suave">Esperando la respuesta de {{ p().plantaNombre }}.</p>
@@ -123,6 +172,13 @@ type Respuesta = 'actualizacion' | 'rechazada';
       }
       <p class="mt-2 font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ aviso() }}</p>
     </section>
+    <app-confirmar-orden
+      [titulo]="'Confirmar la orden ' + p().folio"
+      [entregas]="entrega()"
+      [acciones]="[{ id: 'confirmar', texto: 'Confirmar orden', primaria: true }]"
+      [(abierto)]="confirmando"
+      (elegido)="confirmarOrden()"
+    />
   `,
 })
 export class PlantaPedido {
@@ -140,6 +196,22 @@ export class PlantaPedido {
     'inline-flex h-9 items-center rounded-[0.625rem] border border-acero-oscuro bg-white px-3.5 text-sm font-semibold transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico';
   protected readonly estatus = computed(() => this.p().estatusPlanta ?? 'no_enviado');
   protected readonly respondiendo = signal<Respuesta | null>(null);
+  protected readonly iconoAbrir = ChevronDown;
+  protected readonly pendiente = computed(() => porConfirmar(this.p()));
+  protected readonly ofrecerConfirmar = computed(() => this.pendiente() && this.puede('ventas.pedidos.confirmar'));
+  protected readonly confirmando = signal(false);
+  protected readonly entrega = computed<EntregaPorConfirmar[]>(() => {
+    const p = this.p();
+    return [{ id: p.id, titulo: p.producto, fecha: p.fechaHoraEntrega, zona: p.zonaHoraria, lugar: `${p.obraNombre} · ${p.plantaNombre}`, m3: p.volumenM3 }];
+  });
+  protected async confirmarOrden(): Promise<void> {
+    try {
+      await this.ventas.confirmarOrden(this.p().id);
+      this.aviso.set(`Orden ${this.p().folio} confirmada.`);
+    } catch (e) {
+      this.aviso.set(mensajeDe(e));
+    }
+  }
   protected readonly aviso = signal('');
 
   protected readonly actualizacion = form(signal({ fecha: '', nota: '' }), (m) => {

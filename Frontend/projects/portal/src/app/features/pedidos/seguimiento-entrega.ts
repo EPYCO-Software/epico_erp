@@ -9,7 +9,7 @@ import { ESTADO_VIAJE, MINUTOS_SENAL, Senal, minutosDesde, minutosParaLlegar, se
 /** Pedidos cuya entrega está en marcha: se ofrece el seguimiento de camiones. */
 export const porEntregarse = (p: Pick<PedidoVista, 'estado'> | null) => !!p && ['en_planta', 'en_ruta', 'en_obra'].includes(p.estado);
 
-const ICONO_ESTADO = { cargando: Factory, en_ruta: Truck, en_obra: MapPin, regresando: CircleCheck };
+const ICONO_ESTADO = { programado: Clock, cargando: Factory, en_ruta: Truck, en_obra: MapPin, regresando: CircleCheck };
 
 /**
  * Dónde van los camiones de un pedido: mapa con planta, obra y camiones, y lista en texto con estado, señal y
@@ -58,6 +58,9 @@ const ICONO_ESTADO = { cargando: Factory, en_ruta: Truck, en_obra: MapPin, regre
               <p class="mt-1 font-medium">{{ estadoViaje[v.estado] }}</p>
               <p class="text-texto-suave">
                 @switch (v.estado) {
+                  @case ('programado') {
+                    Lista para tu entrega; aún no carga en planta
+                  }
                   @case ('cargando') {
                     Sale de planta ~{{ v.salida | fechaZona: zona() : 'HH:mm' }} · llegada estimada {{ v.llegadaEstimada | fechaZona: zona() : 'HH:mm' }}
                   }

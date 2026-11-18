@@ -22,6 +22,8 @@ import {
   siguienteFolio,
   telefono,
   totalVigente,
+  creditoDe,
+  sinCreditoPara,
 } from './datos';
 import { HistorialService } from '../../core/historial';
 import { PRODUCTOS } from 'ui';
@@ -167,6 +169,23 @@ describe('nueva cotización', () => {
     expect(s.cotizaciones().find((x) => x.id === base.id)!.ocultaAlCliente).toBe(true);
     await s.enviar(base.id, 'compras@grupohabita.mx', true);
     expect(s.cotizaciones().find((x) => x.id === base.id)!.ocultaAlCliente).toBeUndefined();
+  });
+
+  it('mejorar oferta: al enviarla reemplaza a la anterior, que ya no se confirma; cancelarla la devuelve', async () => {
+    const s = TestBed.inject(VentasService);
+    const h = TestBed.inject(HistorialService);
+    const base = s.cotizaciones().find((x) => x.id === 'EPI-PRES-ESC-26091')!;
+    const buscar = (id: string) => s.cotizaciones().find((x) => x.id === id)!;
+    const oferta = await s.crear({ clienteId: base.clienteId, plantaId: 'ESC', partidas: base.partidas, descuento: 5, baseId: base.id, reemplazaId: base.id }, 'operaciones@epicoconcretos.mx');
+    // En borrador no reemplaza nada
+    expect(buscar(base.id).reemplazadaPorId).toBeUndefined();
+    await s.enviar(oferta.id, 'compras@grupohabita.mx', true);
+    expect(buscar(base.id).reemplazadaPorId).toBe(oferta.id);
+    expect(h.de(registro.cotizacion(base.id))[0].texto).toBe(`Reemplazada por la oferta ${oferta.folio}`);
+    expect(await s.confirmar(base.id)).toEqual([]);
+    expect(buscar(base.id).estado).not.toBe('pedido');
+    await s.cancelar(oferta.id);
+    expect(buscar(base.id).reemplazadaPorId).toBeUndefined();
   });
 
   it('las órdenes nacen por cobrar, con su método de pago y sin enviar a planta; el cobro cambia y se anota', async () => {
@@ -443,5 +462,30 @@ describe('editar un cliente', () => {
     const [e] = h.de(registro.cliente('c-maya'));
     expect(e.detalles).toEqual(['Se agregaron los datos de facturación Obra Norte']);
     expect(e.cambios).toEqual([{ campo: 'Facturación predeterminada', antes: 'Constructora Maya', despues: 'Obra Norte' }]);
+  });
+});
+
+describe('crédito del cliente', () => {
+  const orden = (folio: string, importe: number, cobro: string, creditoDesde?: string) =>
+    ({ id: folio, folio, importe, cobro, fechaHoraEntrega: '2026-11-01T08:00:00-06:00', ...(creditoDesde ? { creditoDesde } : {}) }) as never;
+  const ahora = Date.parse('2026-11-20T12:00:00Z');
+
+  it('usado = órdenes en cobro Crédito; vence a los días del cliente; las vencidas se marcan', () => {
+    const c = creditoDe(
+      { credito: { limite: 100_000, dias: 15 } },
+      [orden('A', 30_000, 'credito', '2026-11-01T12:00:00Z'), orden('B', 20_000, 'credito', '2026-11-10T12:00:00Z'), orden('C', 99_000, 'pagado')],
+      ahora,
+    );
+    expect([c.usado, c.disponible]).toEqual([50_000, 50_000]);
+    expect(c.ordenes.map((o) => [o.p.folio, o.vencida])).toEqual([['A', true], ['B', false]]);
+    expect(c.ordenes[0].vence).toBe('2026-11-16T12:00:00.000Z');
+  });
+
+  it('sin límite no hay crédito; no deja pasar lo que exceda el disponible', () => {
+    expect(sinCreditoPara(creditoDe({ credito: { limite: null, dias: 30 } }, []), 1)).toMatch(/no tiene crédito/);
+    expect(sinCreditoPara(creditoDe(undefined, []), 1)).toMatch(/no tiene crédito/);
+    const c = creditoDe({ credito: { limite: 10_000, dias: 30 } }, [orden('A', 6_000, 'credito')], ahora);
+    expect(sinCreditoPara(c, 4_000)).toBe('');
+    expect(sinCreditoPara(c, 4_000.01)).toMatch(/Excede el crédito del cliente: disponible \$4,000\.00/);
   });
 });

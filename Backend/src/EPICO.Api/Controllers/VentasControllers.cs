@@ -19,6 +19,13 @@ public class ClientesController(IAppDbContext db, IUsuarioActual yo) : CrudContr
 {
     protected override string Recurso => "ventas.clientes";
 
+    /// <summary>Crédito del cliente</summary>
+    /// <remarks>Límite, días, usado (total con IVA de sus pedidos no cancelados con cobro crédito, de todas las razones sociales),
+    /// disponible (null sin límite) y esos pedidos con su vencimiento (creditoDesde + días).</remarks>
+    [HttpGet("{id:guid}/credito")]
+    public async Task<ActionResult<CreditoCliente>> Credito(Guid id, [FromServices] VentasServicio ventas, CancellationToken ct) =>
+        await Consulta().AnyAsync(x => x.Id == id, ct) ? await ventas.Credito(id, ct) : NotFound();
+
     protected override async Task AntesDeBorrar(Cliente x, CancellationToken ct)
     {
         if (x.EsPublicoGeneral) throw new ReglaException("El cliente público en general no se elimina.", 409);
@@ -27,6 +34,13 @@ public class ClientesController(IAppDbContext db, IUsuarioActual yo) : CrudContr
             || await Db.Set<Pedido>().IgnoreQueryFilters().AnyAsync(p => p.ClienteId == x.Id && !p.IsDeleted, ct)
             || await Db.Set<Obra>().IgnoreQueryFilters().AnyAsync(o => o.ClienteId == x.Id && !o.IsDeleted, ct))
             throw new ReglaException("No se puede eliminar: lo usan cotizaciones, pedidos u obras.", 409);
+        // Su cuenta del portal no lo impide: se desactiva y se cierran sus sesiones (sin cliente tampoco podría entrar).
+        var ahora = DateTime.UtcNow;
+        var cuentas = Db.Set<ClienteContacto>().Where(k => k.ClienteId == x.Id && k.UsuarioId != null).Select(k => k.UsuarioId!.Value);
+        foreach (var u in await Db.Set<Usuario>().Where(u => u.Tipo == Domain.Common.TipoUsuario.Portal && cuentas.Contains(u.Id)).ToListAsync(ct))
+            u.Activo = false;
+        foreach (var s in await Db.Set<Sesion>().Where(s => s.RevocadaEn == null && cuentas.Contains(s.UsuarioId)).ToListAsync(ct))
+            s.RevocadaEn = ahora;
     }
 }
 
@@ -138,6 +152,40 @@ public class EquiposController(IAppDbContext db, IUsuarioActual yo) : CrudContro
 {
     protected override string Recurso => "flota.equipos";
     protected override Task<bool> PermitidoAsync(Equipo x, CancellationToken ct) => PadreVisible<Sucursal>(x.SucursalId, ct);
+
+    /// <summary>sucursalIds: plantas donde opera; siempre incluye la principal (sin lista = solo la principal). Todas deben ser visibles.</summary>
+    protected override async Task AntesDeGuardar(Equipo x, bool nuevo, CancellationToken ct)
+    {
+        if (x.OperadorId is Guid o && !await Db.Set<Operador>().AnyAsync(p => p.Id == o, ct)) throw new ReglaException("El operador no existe.");
+        x.SucursalIds = [.. (x.SucursalIds ?? []).Prepend(x.SucursalId).Distinct()];
+        var ids = x.SucursalIds;
+        if (await Db.Set<Sucursal>().CountAsync(s => ids.Contains(s.Id), ct) != ids.Count)
+            throw new ReglaException("Una de las plantas no existe o no tienes acceso a ella.");
+    }
+
+    /// <summary>Recorrido de la unidad</summary>
+    /// <remarks>desde/hasta (ISO 8601; por omisión las últimas 12 h; máximo 7 días, 400 si te pasas). Puntos GPS (a lo más 2000,
+    /// muestreados conservando el primero y el último), los viajes que se cruzan con el rango y el resumen: km (haversine), velocidad
+    /// máxima, promedio en movimiento (&gt; 5 km/h) y minutos en movimiento y detenido.</remarks>
+    [HttpGet("{id:guid}/recorrido")]
+    public Task<Application.Flota.Recorrido> Recorrido(Guid id, [FromServices] Application.Flota.FlotaServicio flota, [FromQuery] DateTimeOffset? desde,
+        [FromQuery] DateTimeOffset? hasta, CancellationToken ct) => flota.RecorridoDeEquipo(id, desde, hasta, ct);
+
+    /// <summary>Resumen de la unidad</summary>
+    /// <remarks>Del periodo desde/hasta (ISO 8601; por omisión los últimos 30 días): trayectos, km y km estimados, viajes, m³ (solo
+    /// revolvedor), litros, costo de combustible y rendimiento km/L (odómetro entre la primera y la última carga / litros de las
+    /// cargas posteriores a la primera). Además, a la fecha: última carga, último odómetro y km de trayectos desde la última carga.</remarks>
+    [HttpGet("{id:guid}/resumen")]
+    public Task<Application.Flota.ResumenEquipo> Resumen(Guid id, [FromServices] Application.Flota.FlotaServicio flota, [FromQuery] DateTimeOffset? desde,
+        [FromQuery] DateTimeOffset? hasta, CancellationToken ct) => flota.ResumenDeEquipo(id, desde, hasta, ct);
+
+    /// <summary>Viajes de la unidad</summary>
+    /// <remarks>De la entrega más reciente a la más vieja; desde/hasta (ISO 8601, hasta exclusivo) filtran por entrega.
+    /// resumen = { viajes, m3 (solo revolvedor), ultimoViaje }.</remarks>
+    [HttpGet("{id:guid}/viajes")]
+    public Task<Application.Flota.FichaViajes> Viajes(Guid id, [FromServices] Application.Flota.FlotaServicio flota, [FromQuery] DateTimeOffset? desde,
+        [FromQuery] DateTimeOffset? hasta, CancellationToken ct, [FromQuery] int pagina = 1, [FromQuery] int tamano = 50) =>
+        flota.ViajesDeEquipo(id, desde, hasta, pagina, tamano, ct);
 }
 
 [Route("api/v1/producto-equipos")]
@@ -300,19 +348,30 @@ public class CotizacionesController(IAppDbContext db, VentasServicio ventas) : C
     public Task<Cotizacion> Cancelar(Guid id, CancellationToken ct) => ventas.Cancelar(id, ct);
 
     /// <summary>Confirmar → pedidos</summary>
-    /// <remarks>Genera un pedido por partida, con su parte del descuento, y devuelve los pedidos. Pide cliente, obra y fecha de entrega en cada partida.</remarks>
+    /// <remarks>Genera un pedido por partida, con su parte del descuento, y devuelve los pedidos. Pide cliente, obra y fecha de entrega en cada partida.
+    /// Body opcional { confirmarOrdenes: true } = los pedidos nacen confirmados (pide también ventas.pedidos.confirmar).</remarks>
     [HttpPost("{id:guid}/confirmar"), Permiso("ventas.cotizaciones.confirmar")]
-    public Task<List<Pedido>> Confirmar(Guid id, CancellationToken ct) => ventas.Confirmar(id, ct);
+    public async Task<ActionResult<List<Pedido>>> Confirmar(Guid id,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] ConfirmarCotizacionRequest? r,
+        [FromServices] IUsuarioActual yo, CancellationToken ct)
+    {
+        var confirmar = r?.ConfirmarOrdenes == true;
+        if (confirmar && !yo.Tiene(PedidosController.PermisoConfirmar)) return PermisoAttribute.SinPermiso(PedidosController.PermisoConfirmar);
+        return await ventas.Confirmar(id, ct, confirmar);
+    }
 }
 
 [ApiController]
 [Route("api/v1/pedidos")]
-public class PedidosController(IAppDbContext db, VentasServicio ventas) : ControllerBase
+public class PedidosController(IAppDbContext db, VentasServicio ventas, IUsuarioActual yo, Application.Flota.FlotaServicio flota) : ControllerBase
 {
+    public const string PermisoConfirmar = "ventas.pedidos.confirmar";
+
     /// <summary>Lista</summary>
     /// <remarks>Paginada, por fecha de entrega (la más lejana primero). <c>incluir=lineas</c> trae las líneas.
     /// desde/hasta (ISO 8601, hasta exclusivo) filtran por entrega. Filtros por igualdad, repetibles:
-    /// <c>?cobro=por_cobrar&amp;estado=…&amp;sucursalId=a&amp;sucursalId=b&amp;cotizacionId=…</c></remarks>
+    /// <c>?cobro=por_cobrar&amp;estado=…&amp;sucursalId=a&amp;sucursalId=b&amp;cotizacionId=…</c>
+    /// Cada uno trae unidades (números económicos de sus viajes) y m3Asignados.</remarks>
     [HttpGet, Permiso("ventas.pedidos.ver")]
     public async Task<Pagina<Pedido>> Lista([FromQuery] string? incluir, [FromQuery] DateTimeOffset? desde, [FromQuery] DateTimeOffset? hasta,
         [FromQuery] int pagina = 1, [FromQuery] int tamano = 50, CancellationToken ct = default)
@@ -321,20 +380,27 @@ public class PedidosController(IAppDbContext db, VentasServicio ventas) : Contro
         if (desde is { } d) q = q.Where(p => p.FechaHoraEntrega >= d.UtcDateTime);
         if (hasta is { } h) q = q.Where(p => p.FechaHoraEntrega < h.UtcDateTime);
         if (Listas.Incluir(incluir, "lineas")) q = q.Include(p => p.Lineas).AsSplitQuery();
-        return await Listas.Paginar(q.OrderByDescending(p => p.FechaHoraEntrega).ThenBy(p => p.Id), pagina, tamano, ct);
+        var pag = await Listas.Paginar(q.OrderByDescending(p => p.FechaHoraEntrega).ThenBy(p => p.Id), pagina, tamano, ct);
+        await flota.Completar(pag.Items, ct);
+        return pag;
     }
 
     /// <summary>Uno completo</summary>
-    /// <remarks>Con sus líneas.</remarks>
+    /// <remarks>Con sus líneas, unidades y m3Asignados.</remarks>
     [HttpGet("{id:guid}"), Permiso("ventas.pedidos.ver")]
-    public async Task<ActionResult<Pedido>> Uno(Guid id, CancellationToken ct) =>
-        await ventas.Pedido(id, ct) is { } p ? p : NotFound();
+    public async Task<ActionResult<Pedido>> Uno(Guid id, CancellationToken ct)
+    {
+        if (await ventas.Pedido(id, ct) is not { } p) return NotFound();
+        await flota.Completar([p], ct);
+        return p;
+    }
 
     /// <summary>Orden directa</summary>
-    /// <remarks>Pedido sin cotización. La API calcula los importes.</remarks>
+    /// <remarks>Pedido sin cotización. La API calcula los importes. confirmada: true = nace confirmada (pide también ventas.pedidos.confirmar).</remarks>
     [HttpPost, Permiso("ventas.pedidos.crear")]
     public async Task<ActionResult<Pedido>> Crear(PedidoRequest r, CancellationToken ct)
     {
+        if (r.Confirmada && !yo.Tiene(PermisoConfirmar)) return PermisoAttribute.SinPermiso(PermisoConfirmar);
         var p = await ventas.CrearPedido(r, ct);
         return CreatedAtAction(nameof(Uno), new { id = p.Id }, p);
     }
@@ -350,7 +416,7 @@ public class PedidosController(IAppDbContext db, VentasServicio ventas) : Contro
     public Task<Pedido> Cobro(Guid id, ValorRequest r, CancellationToken ct) => ventas.CambiarCobro(id, r.Valor, ct);
 
     /// <summary>Cambiar método de pago</summary>
-    /// <remarks>valor: sin_metodo, transferencia.</remarks>
+    /// <remarks>valor: sin_metodo, transferencia, efectivo, tarjeta, cheque.</remarks>
     [HttpPost("{id:guid}/metodo-pago"), Permiso("ventas.pedidos.editar")]
     public Task<Pedido> MetodoPago(Guid id, ValorRequest r, CancellationToken ct) => ventas.CambiarMetodoPago(id, r.Valor, ct);
 
@@ -367,6 +433,12 @@ public class PedidosController(IAppDbContext db, VentasServicio ventas) : Contro
     /// <summary>Cancelar</summary>
     [HttpPost("{id:guid}/cancelar"), Permiso("ventas.pedidos.cancelar")]
     public Task<Pedido> Cancelar(Guid id, CancellationToken ct) => ventas.CancelarPedido(id, ct);
+
+    /// <summary>Confirmar la orden</summary>
+    /// <remarks>Ventas la pasa de por confirmar a confirmada (confirmadaEn, confirmadaPorId). 409 si ya está confirmada o cancelada.
+    /// También se confirma sola cuando la planta queda en "confirmado".</remarks>
+    [HttpPost("{id:guid}/confirmar"), Permiso(PermisoConfirmar)]
+    public Task<Pedido> Confirmar(Guid id, CancellationToken ct) => ventas.ConfirmarOrden(id, ct);
 }
 
 [Route("api/v1/remisiones")]

@@ -8,9 +8,11 @@ export type { ConcretoDisponible };
 export const CLAVES_SOLUCION = SOLUCIONES.map((s) => s.id);
 
 /** De un producto del catálogo, su concreto (null si no es un concreto de tarifario fc-/mr-). */
-export function concretoDe(p: Pick<ProductoTarifa, 'id' | 'precio'> & { soluciones?: string[] }): ConcretoDisponible | null {
+export function concretoDe(p: Pick<ProductoTarifa, 'id' | 'precio' | 'pedidoMinimo'> & { soluciones?: string[] }): ConcretoDisponible | null {
   const m = /^(fc|mr)-(\d+)$/.exec(p.id);
-  return m ? { id: p.id, tipo: m[1] as 'fc' | 'mr', kg: Number(m[2]), precio: p.precio, soluciones: p.soluciones ?? [] } : null;
+  return m
+    ? { id: p.id, tipo: m[1] as 'fc' | 'mr', kg: Number(m[2]), precio: p.precio, soluciones: p.soluciones ?? [], ...(p.pedidoMinimo ? { pedidoMinimo: p.pedidoMinimo } : {}) }
+    : null;
 }
 
 /** Los concretos que se pueden ofrecer: los del backend o, sin él, los del tarifario. */

@@ -6,7 +6,7 @@ export interface ApiViaje {
   folio: string;
   pedidoId: string;
   pedidoFolio: string;
-  estado: 'cargando' | 'en_ruta' | 'en_obra' | 'regresando' | 'terminado';
+  estado: 'programado' | 'cargando' | 'en_ruta' | 'en_obra' | 'regresando' | 'terminado';
   volumenM3: number;
   camion: string | null;
   operador: string | null;

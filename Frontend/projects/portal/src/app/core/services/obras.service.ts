@@ -106,7 +106,7 @@ export class ObrasService {
       concretosServidor.set(
         catalogo.productos
           .filter((p) => p.activo)
-          .map((p) => concretoDe({ id: idFront(p), precio: p.precioLista, soluciones: p.soluciones ?? [] }))
+          .map((p) => concretoDe({ id: idFront(p), precio: p.precioLista, soluciones: p.soluciones ?? [], pedidoMinimo: p.pedidoMinimo ?? undefined }))
           .filter((c): c is ConcretoDisponible => !!c),
       );
       aditivosServidor.set(

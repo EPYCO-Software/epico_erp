@@ -77,6 +77,126 @@ public class PortalTests(Api api) : IClassFixture<Api>
     }
 
     [Fact]
+    public async Task Cuenta_del_portal_desde_el_ERP_y_limites()
+    {
+        var (root, _) = await api.Entrar(Api.Root, Api.RootPassword);
+        var cliente = await Id(await root.PostAsJsonAsync("/api/v1/clientes",
+            new { nombre = $"Limitado {Guid.NewGuid():N}", limiteCotizaciones = 1, limiteObras = 1 }));
+        var url = $"/api/v1/clientes/{cliente}/cuenta-portal";
+        Assert.Equal(HttpStatusCode.NotFound, (await root.GetAsync(url)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await root.PostAsJsonAsync(url, new { nombre = "Ana" })).StatusCode);
+
+        var correo = $"cta{Guid.NewGuid():N}@cliente.mx";
+        var r = await root.PostAsJsonAsync(url, new { correo, nombre = "Ana" });
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var cuenta = await r.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal((correo, true), (cuenta.GetProperty("correo").GetString(), cuenta.GetProperty("activa").GetBoolean()));
+        Assert.DoesNotContain("password", (await r.Content.ReadAsStringAsync()).ToLowerInvariant());
+        Assert.Equal(HttpStatusCode.Conflict, (await root.PostAsJsonAsync(url, new { correo = "otra@cliente.mx", nombre = "B" })).StatusCode);
+        var otro = await Id(await root.PostAsJsonAsync("/api/v1/clientes", new { nombre = $"Otro {Guid.NewGuid():N}" }));
+        Assert.Equal(HttpStatusCode.Conflict, // el correo ya es de un usuario
+            (await root.PostAsJsonAsync($"/api/v1/clientes/{otro}/cuenta-portal", new { correo, nombre = "Ana" })).StatusCode);
+        // Los del portal no salen en Configuración → Usuarios ni se tocan desde ahí.
+        Assert.DoesNotContain((await root.GetFromJsonAsync<JsonElement>("/api/v1/usuarios?take=500")).EnumerateArray(),
+            u => u.GetProperty("correo").GetString() == correo);
+        var usuarioPortal = cuenta.GetProperty("usuarioId").GetGuid();
+        Assert.Equal(HttpStatusCode.NotFound, (await root.GetAsync($"/api/v1/usuarios/{usuarioPortal}/permisos")).StatusCode);
+        Guid emp;
+        await using (var db = api.Db()) emp = (await db.Set<Sucursal>().FirstAsync(s => s.Codigo == "ESC")).EmpresaId;
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await root.PostAsJsonAsync("/api/v1/usuario-accesos", new { usuarioId = usuarioPortal, empresaId = emp })).StatusCode);
+        // Ni el CRUD de usuarios crea o convierte a uno del portal.
+        var interno = await Id(await root.PostAsJsonAsync("/api/v1/usuarios", new { correo = $"int{Guid.NewGuid():N}@epico.mx", nombre = "I", tipo = "portal" }));
+        var ui = await root.GetFromJsonAsync<JsonElement>($"/api/v1/usuarios/{interno}");
+        Assert.Equal("interno", ui.GetProperty("tipo").GetString());
+        var conTipo = JsonSerializer.Deserialize<Dictionary<string, object?>>(ui.GetRawText())!;
+        conTipo["tipo"] = "portal";
+        Assert.Equal(HttpStatusCode.OK, (await root.PutAsJsonAsync($"/api/v1/usuarios/{interno}", conTipo)).StatusCode);
+        Assert.Equal("interno", (await root.GetFromJsonAsync<JsonElement>($"/api/v1/usuarios/{interno}")).GetProperty("tipo").GetString());
+
+        // La contraseña temporal solo va en el correo.
+        async Task<string> PasswordDelCorreo()
+        {
+            await using var db = api.Db();
+            var mail = await db.Set<Domain.Correo.CorreoSaliente>().Where(c => c.Para == correo).OrderByDescending(c => c.CreadoEn).FirstAsync();
+            Assert.Equal("Tu acceso al portal de EPICO", mail.Asunto);
+            return System.Text.RegularExpressions.Regex.Match(mail.Html, @"temporal (\w{14})").Groups[1].Value;
+        }
+        var pass = await PasswordDelCorreo();
+        var (p, _) = await api.Entrar(correo, pass, "portal");
+
+        Guid esc;
+        await using (var db = api.Db()) esc = (await db.Set<Sucursal>().SingleAsync(s => s.Codigo == "ESC")).Id;
+        var obra = await Id(await p.PostAsJsonAsync("/api/v1/portal/obras", new { nombre = "Torre", direccion = "Calle 1" }));
+        var llena = await p.PostAsJsonAsync("/api/v1/portal/obras", new { nombre = "Bodega", direccion = "Calle 2" });
+        Assert.Equal(HttpStatusCode.Conflict, llena.StatusCode);
+        Assert.Contains("límite de 1 obras", await llena.Content.ReadAsStringAsync());
+        // En el ERP no hay límite.
+        await Id(await root.PostAsJsonAsync("/api/v1/obras", new { clienteId = cliente, nombre = "Nave", direccion = "Calle 3" }));
+
+        object Pedir(Guid? revisionDeId = null) => new
+            { sucursalId = esc, obraId = obra, revisionDeId, partidas = new[] { Partida(DateTime.UtcNow.AddDays(5)) } };
+        var primera = await Id(await p.PostAsJsonAsync("/api/v1/portal/cotizaciones", Pedir()));
+        Assert.Equal(HttpStatusCode.Conflict, (await p.PostAsJsonAsync("/api/v1/portal/cotizaciones", Pedir())).StatusCode);
+        await Id(await p.PostAsJsonAsync("/api/v1/portal/cotizaciones", Pedir(primera))); // la revisión sí pasa
+        var perfilP = await p.GetFromJsonAsync<JsonElement>("/api/v1/portal/perfil");
+        var credito = perfilP.GetProperty("credito"); // sin límite de crédito
+        Assert.Equal((JsonValueKind.Null, 0m, JsonValueKind.Null), (credito.GetProperty("limite").ValueKind, credito.GetProperty("usado").GetDecimal(),
+            credito.GetProperty("disponible").ValueKind));
+        var limites = perfilP.GetProperty("limites");
+        Assert.Equal((1, 1, 1, 2), (limites.GetProperty("cotizaciones").GetInt32(), limites.GetProperty("obras").GetInt32(),
+            limites.GetProperty("cotizacionesUsadas").GetInt32(), limites.GetProperty("obrasUsadas").GetInt32()));
+
+        // Reenviar: contraseña nueva, la anterior ya no sirve.
+        Assert.Equal(HttpStatusCode.OK, (await root.PostAsync($"{url}/reenviar", null)).StatusCode);
+        var nueva = await PasswordDelCorreo();
+        Assert.NotEqual(pass, nueva);
+        async Task<HttpStatusCode> Login(string password) => (await api.CreateClient().PostAsJsonAsync("/api/v1/auth/login",
+            new { correo, password, app = "portal" })).StatusCode;
+        Assert.Equal(HttpStatusCode.Unauthorized, await Login(pass));
+        Assert.Equal(HttpStatusCode.OK, await Login(nueva));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await root.PutAsJsonAsync($"{url}/activa", new { activa = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await Login(nueva));
+        Assert.False((await root.GetFromJsonAsync<JsonElement>(url)).GetProperty("activa").GetBoolean());
+        await using (var db = api.Db())
+        {
+            var textos = await db.Set<Evento>().Where(e => e.RegistroTipo == "Cliente" && e.RegistroId == cliente).Select(e => e.Texto).ToListAsync();
+            Assert.Contains($"Cuenta del portal creada para {correo}", textos);
+            Assert.Contains($"Credenciales del portal reenviadas a {correo}", textos);
+            Assert.Contains($"Cuenta del portal desactivada ({correo})", textos);
+        }
+
+        // Un cliente que solo tiene cuenta del portal se puede borrar: la cuenta queda desactivada.
+        var correo2 = $"cta{Guid.NewGuid():N}@cliente.mx";
+        Assert.Equal(HttpStatusCode.Created,
+            (await root.PostAsJsonAsync($"/api/v1/clientes/{otro}/cuenta-portal", new { correo = correo2, nombre = "Beto" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await root.DeleteAsync($"/api/v1/clientes/{otro}")).StatusCode);
+        await using (var db = api.Db()) Assert.False((await db.Set<Usuario>().SingleAsync(u => u.Correo == correo2)).Activo);
+
+        // Quien solo da de alta clientes crea la cuenta y la ve, pero no reenvía ni desactiva.
+        Domain.Acceso.Empresa empresa;
+        await using (var db = api.Db()) empresa = await db.Set<Domain.Acceso.Empresa>().FirstAsync(e => e.Id == emp);
+        var altaCorreo = $"alta{Guid.NewGuid():N}@epico.mx";
+        await api.CrearUsuario(altaCorreo, "Clave.Alta.1", ["ventas.clientes.ver", "ventas.clientes.crear"], empresa);
+        var (alta, _) = await api.Entrar(altaCorreo, "Clave.Alta.1");
+        var nuevo = await Id(await alta.PostAsJsonAsync("/api/v1/clientes", new { nombre = $"Alta {Guid.NewGuid():N}" }));
+        var urlNuevo = $"/api/v1/clientes/{nuevo}/cuenta-portal";
+        Assert.Equal(HttpStatusCode.Created, (await alta.PostAsJsonAsync(urlNuevo,
+            new { correo = $"cta{Guid.NewGuid():N}@cliente.mx", nombre = "Ceci", rolId = Guid.NewGuid(), permisos = new[] { "*" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await alta.GetAsync(urlNuevo)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await alta.PostAsync($"{urlNuevo}/reenviar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await alta.PutAsJsonAsync($"{urlNuevo}/activa", new { activa = false })).StatusCode);
+        await using (var db = api.Db())
+        {
+            var u = await db.Set<Usuario>().SingleAsync(x => x.Id == db.Set<ClienteContacto>().Where(k => k.ClienteId == nuevo).Select(k => k.UsuarioId).Single());
+            Assert.Equal((TipoUsuario.Portal, (Guid?)null), (u.Tipo, u.RolId));
+            Assert.False(await db.Set<UsuarioAcceso>().AnyAsync(a => a.UsuarioId == u.Id));
+            Assert.False(await db.Set<UsuarioPermiso>().AnyAsync(a => a.UsuarioId == u.Id));
+        }
+    }
+
+    [Fact]
     public async Task Portal_solo_ve_lo_de_su_cliente_y_cotiza_con_tarifa()
     {
         var (root, _) = await api.Entrar(Api.Root, Api.RootPassword);

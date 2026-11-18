@@ -1,7 +1,9 @@
 using EPICO.Application.Common;
 using EPICO.Contracts.Ventas;
 using EPICO.Domain.Acceso;
+using System.Globalization;
 using EPICO.Domain.Common;
+using EPICO.Domain.Historial;
 using EPICO.Domain.Ventas;
 using Microsoft.EntityFrameworkCore;
 
@@ -79,6 +81,15 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             throw new ReglaException("La cotización base no existe.");
         c.BaseId = r.BaseId;
         await Encabezado(c, r, ct);
+        if (r.ReemplazaId is Guid reemplazaId)
+        {
+            var anterior = await db.Set<Cotizacion>().FirstOrDefaultAsync(x => x.Id == reemplazaId, ct)
+                           ?? throw new ReglaException("La oferta a mejorar no existe.");
+            if (c.ClienteId is null || anterior.ClienteId != c.ClienteId) throw new ReglaException("La oferta a mejorar es de otro cliente.");
+            Negociable(anterior);
+            c.ReemplazaId = anterior.Id;
+            c.BaseId ??= anterior.Id;
+        }
         await Partidas(c, r.Partidas, ct);
         Calculo.Totalizar(c, r.DescuentoPct, await TasaIva(ct));
 
@@ -116,30 +127,81 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         return c;
     }
 
-    public Task<Cotizacion> Enviar(Guid id, CancellationToken ct) => CambiarCotizacion(id, c =>
+    /// <summary>Si mejora otra oferta (ReemplazaId), la anterior queda reemplazada por esta (su estado no cambia).</summary>
+    public async Task<Cotizacion> Enviar(Guid id, CancellationToken ct)
     {
+        var c = await Cotizacion(id, ct, editar: true) ?? throw new ReglaException("La cotización no existe.", 404);
         if (c.Estado is EstadoCotizacion.Pedido or EstadoCotizacion.Cancelada) throw Ya(c.Estado);
+        await NoReemplazada(c, ct);
         ValidarLugar(c, obligatorio: true);
         Cotizadas(c);
         c.Estado = EstadoCotizacion.Enviada;
         c.OcultaAlCliente = false;
-    }, ct);
+        if (c.ReemplazaId is Guid anteriorId
+            && await db.Set<Cotizacion>().IgnoreQueryFilters().FirstAsync(x => x.Id == anteriorId, ct) is { } a && a.ReemplazadaPorId != c.Id)
+        {
+            Negociable(a);
+            await NoReemplazada(a, ct);
+            a.ReemplazadaPorId = c.Id;
+            await Anotar(a, $"Reemplazada por la oferta {c.Folio} ({Dinero(a.Total)} → {Dinero(c.Total)})", ct);
+            await Anotar(c, $"Mejora la oferta {a.Folio}", ct);
+        }
+        await db.SaveChangesAsync(ct);
+        return c;
+    }
+
+    /// <summary>Pedido o cancelada: ya no se negocia (409).</summary>
+    static void Negociable(Cotizacion a)
+    {
+        if (a.Estado is EstadoCotizacion.Pedido or EstadoCotizacion.Cancelada)
+            throw new ReglaException("Esa cotización ya no se puede negociar.", 409);
+    }
+
+    async Task NoReemplazada(Cotizacion c, CancellationToken ct)
+    {
+        if (c.ReemplazadaPorId is Guid r)
+            throw new ReglaException($"Esta oferta fue reemplazada por {await db.Set<Cotizacion>().IgnoreQueryFilters()
+                .Where(x => x.Id == r).Select(x => x.Folio).FirstAsync(ct)}.", 409);
+    }
+
+    Task Anotar(Cotizacion c, string texto, CancellationToken ct) => Anotar(nameof(Domain.Ventas.Cotizacion), c.Id, c.EmpresaId, texto, ct);
+
+    async Task Anotar(string tipo, Guid id, Guid empresaId, string texto, CancellationToken ct) => db.Set<Evento>().Add(new Evento
+    {
+        OrganizacionId = await db.Set<Empresa>().IgnoreQueryFilters().Where(e => e.Id == empresaId).Select(e => e.OrganizacionId).FirstAsync(ct),
+        RegistroTipo = tipo, RegistroId = id, Fecha = DateTime.UtcNow, AutorId = yo.Id, SesionId = yo.SesionId,
+        Tipo = TipoEvento.Sistema, Texto = texto,
+    });
+
+    static string Dinero(decimal? x) => "$" + (x ?? 0).ToString("N2", CultureInfo.InvariantCulture);
 
     public Task<Cotizacion> Ocultar(Guid id, bool oculta, CancellationToken ct) =>
         CambiarCotizacion(id, c => c.OcultaAlCliente = oculta, ct);
 
-    public Task<Cotizacion> Cancelar(Guid id, CancellationToken ct) => CambiarCotizacion(id, c =>
+    /// <summary>Si era una oferta que reemplazó a otra, la anterior vuelve a valer.</summary>
+    public async Task<Cotizacion> Cancelar(Guid id, CancellationToken ct)
     {
+        var c = await Cotizacion(id, ct, editar: true) ?? throw new ReglaException("La cotización no existe.", 404);
         if (c.Estado == EstadoCotizacion.Pedido) throw Ya(c.Estado);
         c.Estado = EstadoCotizacion.Cancelada;
-    }, ct);
+        if (c.ReemplazaId is Guid anteriorId
+            && await db.Set<Cotizacion>().IgnoreQueryFilters().FirstAsync(x => x.Id == anteriorId, ct) is { } a && a.ReemplazadaPorId == c.Id)
+        {
+            a.ReemplazadaPorId = null;
+            await Anotar(a, $"Vuelve a valer: se canceló la oferta {c.Folio}", ct);
+        }
+        await db.SaveChangesAsync(ct);
+        return c;
+    }
 
     /// <summary>Confirmar: un pedido por partida (cada entrega es una orden) y la cotización pasa a "pedido".</summary>
-    public async Task<List<Pedido>> Confirmar(Guid id, CancellationToken ct)
+    /// <summary>confirmarOrdenes = los pedidos nacen confirmados por Ventas (el portal siempre los deja por confirmar).</summary>
+    public async Task<List<Pedido>> Confirmar(Guid id, CancellationToken ct, bool confirmarOrdenes = false)
     {
         var c = await Cotizacion(id, ct, editar: true) ?? throw new ReglaException("La cotización no existe.", 404);
         if (c.Estado is EstadoCotizacion.Pedido or EstadoCotizacion.Cancelada) throw Ya(c.Estado);
         if (c.ClienteId is not Guid clienteId) throw new ReglaException("Para confirmar hace falta el cliente.");
+        await NoReemplazada(c, ct);
         ValidarLugar(c, obligatorio: true);
         Cotizadas(c);
         foreach (var p in c.Partidas)
@@ -147,6 +209,10 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             if (p.Entrega is null) throw new ReglaException($"Falta la entrega de «{p.Nombre}».");
             if (p.ProductoId is null && !p.Especial) throw new ReglaException($"«{p.Nombre}» no tiene producto de concreto.");
         }
+        var prodIds = c.Partidas.Select(p => p.ProductoId).OfType<Guid>().Concat(c.Partidas.SelectMany(p => p.Lineas).Select(l => l.ProductoId)).ToHashSet();
+        var minimos = await db.Set<Producto>().IgnoreQueryFilters().Where(x => prodIds.Contains(x.Id) && x.PedidoMinimo != null).ToDictionaryAsync(x => x.Id, ct);
+        await PedidoMinimo(c.Partidas.Where(p => p.ProductoId is Guid g && minimos.ContainsKey(g)).Select(p => (minimos[p.ProductoId!.Value], p.VolumenM3))
+            .Concat(c.Partidas.SelectMany(p => p.Lineas).Where(l => minimos.ContainsKey(l.ProductoId)).Select(l => (minimos[l.ProductoId], l.Cantidad))), ct);
         var traslado = c.Partidas.Any(p => Calculo.TrasladoM3(p) > 0) ? await ProductoTraslado(ct) : null;
         var especial = c.Partidas.Any(p => p.ProductoId is null) ? await ProductoEspecial(ct) : null;
         var iva = await TasaIva(ct);
@@ -171,6 +237,7 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             CopiarLugar(c, pedido);
             Calculo.Totalizar(pedido, pedido.Lineas.Sum(l => l.Importe) * fraccionDescuento, iva);
             db.Set<Pedido>().Add(pedido);
+            if (confirmarOrdenes) await MarcarConfirmada(pedido, ct);
             pedidos.Add(pedido);
         }
         c.Estado = EstadoCotizacion.Pedido;
@@ -213,6 +280,7 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         var productos = await db.Set<Producto>().Where(x => ids.Contains(x.Id) || codigos.Contains(x.Codigo)).ToListAsync(ct);
         Producto Buscar(Guid id) => productos.FirstOrDefault(x => x.Id == id) ?? throw new ReglaException("Un producto no existe.");
         var planta = await db.Set<Sucursal>().AsNoTracking().FirstAsync(s => s.Id == c.SucursalId, ct);
+        var pedidas = new List<(Producto, decimal)>();
 
         foreach (var quitada in c.Partidas.Where(p => reqs.All(r => r.Id != p.Id)).ToList())
         {
@@ -245,6 +313,7 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
             if (p.Aditivos.FirstOrDefault(a => !productos.Any(x => x.Activo && x.Codigo == CodigoAditivo(a))) is { } falta)
                 throw new ReglaException($"El aditivo «{falta}» no está en tus productos.");
             p.VolumenM3 = r.VolumenM3;
+            if (concreto is not null) pedidas.Add((concreto, r.VolumenM3));
             p.Especial = r.Especial;
             p.PrecioM3 = r.PrecioM3 ?? Tarifa(r, concreto, productos)
                          ?? (r.Especial ? null : throw new ReglaException($"No hay tarifa para «{r.Nombre}» ({CodigoConcreto(r)}): indica el precio por m³."));
@@ -268,6 +337,7 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
                     : new CotizacionLinea();
                 if (lr.Id is null) p.Lineas.Add(l);
                 var producto = Buscar(lr.ProductoId);
+                pedidas.Add((producto, lr.Cantidad));
                 l.ProductoId = producto.Id;
                 l.Concepto = lr.Concepto ?? producto.Nombre;
                 l.Dias = lr.Dias;
@@ -276,6 +346,16 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
                 l.Importe = Calculo.Importe(l.PrecioUnitario, l.Cantidad * (l.Dias ?? 1));
             }
         }
+        await PedidoMinimo(pedidas, ct);
+    }
+
+    /// <summary>400 si alguna cantidad pedida no llega al PedidoMinimo de su producto (en la unidad del producto).</summary>
+    async Task PedidoMinimo(IEnumerable<(Producto Producto, decimal Cantidad)> pedidas, CancellationToken ct)
+    {
+        var (bajo, _) = pedidas.FirstOrDefault(x => x.Producto.PedidoMinimo is decimal m && x.Cantidad < m);
+        if (bajo is null) return;
+        var unidad = await db.Set<UnidadMedida>().IgnoreQueryFilters().Where(u => u.Id == bajo.UnidadId).Select(u => u.Nombre).FirstOrDefaultAsync(ct);
+        throw new ReglaException($"El pedido mínimo de {bajo.Nombre} es {bajo.PedidoMinimo!.Value.ToString("0.###", CultureInfo.InvariantCulture)} {unidad}.");
     }
 
     static string CodigoConcreto(PartidaRequest r) => $"CON-{r.TipoResistencia.ToUpperInvariant()}-{r.ResistenciaKgCm2}";
@@ -362,6 +442,7 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         p.Folio = await db.SiguienteFolioAsync(p.EmpresaId, p.SucursalId, "pedido", ct);
         db.Set<Pedido>().Add(p);
+        if (r.Confirmada) await MarcarConfirmada(p, ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return p;
@@ -400,8 +481,39 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         return p;
     }
 
-    public Task<Pedido> CambiarCobro(Guid id, string valor, CancellationToken ct) =>
-        CambiarPedido(id, p => p.Cobro = ReglaException.Opcion<EstadoCobro>(valor), ct);
+    /// <summary>A crédito: el cliente debe tener límite y alcanzarle (409). CreditoDesde se fija al entrar y se borra al salir.</summary>
+    public async Task<Pedido> CambiarCobro(Guid id, string valor, CancellationToken ct)
+    {
+        var p = await Pedido(id, ct, editar: true) ?? throw new ReglaException("El pedido no existe.", 404);
+        var nuevo = ReglaException.Opcion<EstadoCobro>(valor);
+        if (nuevo == EstadoCobro.Credito && p.Cobro != EstadoCobro.Credito)
+        {
+            var credito = await Credito(p.ClienteId, ct);
+            if (credito.Limite is not > 0) throw new ReglaException("El cliente no tiene crédito asignado.", 409);
+            if (credito.Usado + p.Total > credito.Limite)
+                throw new ReglaException($"Excede el crédito del cliente: disponible {Dinero(credito.Disponible)}.", 409);
+            p.CreditoDesde = DateTime.UtcNow;
+        }
+        else if (nuevo != EstadoCobro.Credito) p.CreditoDesde = null;
+        p.Cobro = nuevo;
+        await db.SaveChangesAsync(ct);
+        return p;
+    }
+
+    /// <summary>Crédito del cliente: sus pedidos no cancelados con cobro "credito", de todas sus razones sociales y plantas.</summary>
+    public async Task<CreditoCliente> Credito(Guid clienteId, CancellationToken ct)
+    {
+        var c = await db.Set<Cliente>().IgnoreQueryFilters().FirstAsync(x => x.Id == clienteId, ct);
+        var ahora = DateTime.UtcNow;
+        var pedidos = (await db.Set<Pedido>().IgnoreQueryFilters().AsNoTracking()
+                .Where(p => p.ClienteId == clienteId && !p.IsDeleted && p.Cobro == EstadoCobro.Credito && p.Estado != EstadoPedido.Cancelado)
+                .Select(p => new { p.Id, p.Folio, p.Total, Desde = p.CreditoDesde ?? p.CreatedAt }).ToListAsync(ct))
+            .OrderBy(p => p.Desde)
+            .Select(p => new PedidoCredito(p.Id, p.Folio, p.Total, p.Desde, p.Desde.AddDays(c.DiasCredito), p.Desde.AddDays(c.DiasCredito) < ahora))
+            .ToList();
+        var usado = pedidos.Sum(p => p.Importe);
+        return new(c.LimiteCredito, c.DiasCredito, usado, c.LimiteCredito - usado, pedidos);
+    }
 
     public Task<Pedido> CambiarMetodoPago(Guid id, string valor, CancellationToken ct) =>
         CambiarPedido(id, p => p.MetodoPago = ReglaException.Opcion<MetodoPago>(valor), ct);
@@ -419,7 +531,65 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         p.Estado = EstadoPedido.Cancelado;
     }, ct);
 
-    public Task<Pedido> Planta(Guid id, PlantaRequest r, CancellationToken ct) => CambiarPedido(id, p =>
+    /// <summary>Confirmación de Ventas: la orden pasa de "por confirmar" a "confirmada".</summary>
+    public async Task<Pedido> ConfirmarOrden(Guid id, CancellationToken ct)
+    {
+        var p = await Pedido(id, ct, editar: true) ?? throw new ReglaException("El pedido no existe.", 404);
+        if (p.Estado == EstadoPedido.Cancelado) throw new ReglaException("La orden está cancelada.", 409);
+        if (p.ConfirmadaEn is not null) throw new ReglaException("La orden ya está confirmada.", 409);
+        await MarcarConfirmada(p, ct);
+        await db.SaveChangesAsync(ct);
+        return p;
+    }
+
+    /// <summary>Marca la orden confirmada por el usuario actual y lo anota con la entrega en la hora de su planta.</summary>
+    async Task MarcarConfirmada(Pedido p, CancellationToken ct)
+    {
+        (p.ConfirmadaEn, p.ConfirmadaPorId) = (DateTime.UtcNow, yo.Id);
+        var zona = await db.Set<Sucursal>().IgnoreQueryFilters().Where(s => s.Id == p.SucursalId).Select(s => s.ZonaHoraria).FirstOrDefaultAsync(ct);
+        var entrega = HoraLocal(p.FechaHoraEntrega, zona);
+        await Anotar(nameof(Domain.Ventas.Pedido), p.Id, p.EmpresaId,
+            $"Orden confirmada (entrega {entrega.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)})", ct);
+    }
+
+    /// <summary>Hora UTC → hora de la planta (zona IANA; sin zona, America/Mexico_City; si el sistema no la conoce, UTC).</summary>
+    public static DateTime HoraLocal(DateTime utc, string? zona)
+    {
+        var tz = TimeZoneInfo.TryFindSystemTimeZoneById(string.IsNullOrEmpty(zona) ? "America/Mexico_City" : zona, out var z) ? z : TimeZoneInfo.Utc;
+        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), tz);
+    }
+
+    /// <summary>Al quedar "confirmado" con la planta, la orden se confirma sola si no lo estaba.</summary>
+    public async Task<Pedido> Planta(Guid id, PlantaRequest r, CancellationToken ct)
+    {
+        var p = await CambiarPlanta(id, r, ct);
+        if (p.EstatusPlanta == EstatusPlanta.Confirmado && p.ConfirmadaEn is null)
+            await MarcarConfirmada(p, ct);
+        // La propuesta de la planta va a la misma cola que las demás solicitudes de reagenda.
+        var pendiente = await db.Set<SolicitudReagenda>().FirstOrDefaultAsync(s => s.PedidoId == p.Id && s.Estado == EstadoSolicitud.Pendiente, ct);
+        if (r.Accion == "actualizacion")
+        {
+            if (pendiente is not null)
+            {
+                ResolverSolicitud(pendiente, EstadoSolicitud.Rechazada, "Reemplazada por la propuesta de la planta.");
+                await db.SaveChangesAsync(ct); // el índice único deja solo una pendiente por pedido
+            }
+            db.Set<SolicitudReagenda>().Add(new SolicitudReagenda
+            {
+                PedidoId = p.Id, FechaPropuesta = p.SolicitudPlantaFecha!.Value, Motivo = r.Nota?.Trim() is { Length: > 0 } n ? n : "La planta propone otra fecha.",
+                Origen = OrigenReagenda.Planta, SolicitadoPorId = yo.Id, SolicitadoEn = DateTime.UtcNow,
+            });
+        }
+        else if (r.Accion == "aceptar_actualizacion" && pendiente is { Origen: OrigenReagenda.Planta })
+            ResolverSolicitud(pendiente, EstadoSolicitud.Aceptada, null);
+        await db.SaveChangesAsync(ct);
+        return p;
+    }
+
+    public void ResolverSolicitud(SolicitudReagenda s, EstadoSolicitud estado, string? nota) =>
+        (s.Estado, s.ResueltaPorId, s.ResueltaEn, s.NotaResolucion) = (estado, yo.Id, DateTime.UtcNow, nota);
+
+    Task<Pedido> CambiarPlanta(Guid id, PlantaRequest r, CancellationToken ct) => CambiarPedido(id, p =>
     {
         if (p.Estado == EstadoPedido.Cancelado) throw Ya(p.Estado);
         var antes = p.EstatusPlanta;
@@ -475,13 +645,15 @@ public class VentasServicio(IAppDbContext db, IUsuarioActual yo)
         foreach (var lr in r.Lineas)
         {
             var producto = productos.FirstOrDefault(x => x.Id == lr.ProductoId) ?? throw new ReglaException("Un producto no existe.");
+            await PedidoMinimo([(producto, lr.Cantidad)], ct);
             p.Lineas.Add(Linea(producto.Id, lr.Descripcion ?? producto.Nombre,
                 Math.Max(lr.Cantidad, producto.MinimoCobro ?? 0), lr.PrecioUnitario ?? producto.PrecioLista));
         }
         Calculo.Totalizar(p, p.Lineas.Sum(l => l.Importe) * r.DescuentoPct / 100, await TasaIva(ct));
     }
 
-    async Task<decimal> VolumenConcreto(IEnumerable<PedidoLinea> lineas, CancellationToken ct)
+    /// <summary>m³ de concreto de la orden: sus líneas de productos de concreto, sin ajustes (AJ-).</summary>
+    public async Task<decimal> VolumenConcreto(IEnumerable<PedidoLinea> lineas, CancellationToken ct)
     {
         var ids = lineas.Select(l => l.ProductoId).ToHashSet();
         var concretos = await db.Set<Producto>().IgnoreQueryFilters()

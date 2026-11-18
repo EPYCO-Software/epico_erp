@@ -105,6 +105,12 @@ export interface CotizacionGuardada {
   revision: number;
   /** Cotización de la que se partió (revisión o nueva cotización tomada de base). */
   baseId?: string;
+  /**
+   * Negociación ("Mejorar oferta"): la oferta a la que esta reemplaza. Al enviarse, la anterior queda con
+   * `reemplazadaPorId` y ya no se envía, confirma ni acepta: el cliente solo acepta la última oferta.
+   */
+  reemplazaId?: string;
+  reemplazadaPorId?: string;
   /** Descuento sobre el subtotal, en %, que da la concretera (ERP). Se aplica antes del IVA. */
   descuento?: number;
   /** En qué va con la concretera (lo cambia el ERP); el portal lo muestra con sus palabras. Sin dato: "recibida". */

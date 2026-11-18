@@ -99,8 +99,103 @@ public partial class AppDbContext
         b.Entity<Equipo>(e =>
         {
             e.HasIndex(x => new { x.SucursalId, x.NumeroEconomico }).IsUnique();
+            e.HasIndex(x => x.SucursalIds).HasMethod("gin");
+            // Un dispositivo GPS, un equipo.
+            e.HasIndex(x => x.GpsId).IsUnique().HasFilter("\"GpsId\" IS NOT NULL AND NOT \"IsDeleted\"");
+            e.HasOne<Operador>().WithMany().HasForeignKey(x => x.OperadorId);
+            e.Property(x => x.UltimoOdometroKm).HasPrecision(12, 1);
+            e.Property(x => x.UltimoHorometro).HasPrecision(10, 1);
             e.HasOne<Sucursal>().WithMany().HasForeignKey(x => x.SucursalId);
-            e.HasQueryFilter("padre", x => VeTodo || Set<Sucursal>().Any(p => p.Id == x.SucursalId));
+            // Se ve si se ve alguna de sus plantas (la principal también cuenta, por si la lista viene vacía).
+            e.HasQueryFilter("padre", x => VeTodo || Set<Sucursal>().Any(p => p.Id == x.SucursalId || x.SucursalIds.Contains(p.Id)));
+        });
+        b.Entity<Operador>(e =>
+        {
+            e.HasIndex(x => new { x.OrganizacionId, x.Nombre });
+            e.HasOne<Organizacion>().WithMany().HasForeignKey(x => x.OrganizacionId);
+            e.HasOne<Sucursal>().WithMany().HasForeignKey(x => x.SucursalId);
+        });
+        b.Entity<DocumentoEquipo>(e =>
+        {
+            e.HasIndex(x => x.EquipoId);
+            e.HasOne<Equipo>().WithMany().HasForeignKey(x => x.EquipoId);
+            e.HasOne<Archivo>().WithMany().HasForeignKey(x => x.ArchivoId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Equipo>().Any(p => p.Id == x.EquipoId));
+        });
+        b.Entity<CargaCombustible>(e =>
+        {
+            e.HasIndex(x => new { x.EquipoId, x.Fecha });
+            e.Property(x => x.Litros).HasPrecision(10, 3);
+            e.Property(x => x.OdometroKm).HasPrecision(12, 1);
+            e.Property(x => x.Horometro).HasPrecision(10, 1);
+            e.HasOne<Equipo>().WithMany().HasForeignKey(x => x.EquipoId);
+            e.HasOne<Sucursal>().WithMany().HasForeignKey(x => x.SucursalId);
+            e.HasOne<Operador>().WithMany().HasForeignKey(x => x.OperadorId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Equipo>().Any(p => p.Id == x.EquipoId));
+        });
+        b.Entity<MuestraLaboratorio>(e =>
+        {
+            e.HasIndex(x => x.PedidoId);
+            e.HasIndex(x => x.Folio);
+            e.Property(x => x.RevenimientoCm).HasPrecision(5, 1);
+            e.Property(x => x.TemperaturaC).HasPrecision(5, 1);
+            e.HasOne<Pedido>().WithMany().HasForeignKey(x => x.PedidoId);
+            e.HasOne<Remision>().WithMany().HasForeignKey(x => x.RemisionId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Pedido>().Any(p => p.Id == x.PedidoId));
+        });
+        b.Entity<EnsayeLaboratorio>(e =>
+        {
+            e.HasIndex(x => new { x.MuestraId, x.EdadDias });
+            e.HasIndex(x => x.FechaProgramada);
+            e.Property(x => x.ResistenciaKgCm2).HasPrecision(7, 1);
+            e.HasOne<MuestraLaboratorio>().WithMany().HasForeignKey(x => x.MuestraId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<MuestraLaboratorio>().Any(p => p.Id == x.MuestraId));
+        });
+        b.Entity<InspeccionEquipo>(e =>
+        {
+            e.HasIndex(x => new { x.EquipoId, x.Fecha });
+            e.Property(x => x.OdometroKm).HasPrecision(12, 1);
+            // Los puntos van como jsonb (un valor: el PUT del CRUD los reemplaza completos).
+            e.Property(x => x.Puntos).HasColumnType("jsonb").HasConversion(
+                v => System.Text.Json.JsonSerializer.Serialize(v, System.Text.Json.JsonSerializerOptions.Web),
+                v => System.Text.Json.JsonSerializer.Deserialize<List<PuntoInspeccion>>(v, System.Text.Json.JsonSerializerOptions.Web) ?? new(),
+                new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<PuntoInspeccion>>(
+                    (a, b) => a!.SequenceEqual(b!), v => v.Aggregate(0, (h, p) => HashCode.Combine(h, p.GetHashCode())), v => v.ToList()));
+            e.HasOne<Equipo>().WithMany().HasForeignKey(x => x.EquipoId);
+            e.HasOne<Operador>().WithMany().HasForeignKey(x => x.OperadorId);
+            e.HasOne<Archivo>().WithMany().HasForeignKey(x => x.FirmaArchivoId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Equipo>().Any(p => p.Id == x.EquipoId));
+        });
+        b.Entity<PosicionEquipo>(e =>
+        {
+            e.HasIndex(x => new { x.EquipoId, x.Fecha });
+            e.Property(x => x.Lat).HasPrecision(9, 6);
+            e.Property(x => x.Lng).HasPrecision(9, 6);
+            e.Property(x => x.VelocidadKmh).HasPrecision(6, 1);
+            e.Property(x => x.Rumbo).HasPrecision(5, 1);
+            e.Property(x => x.AltitudM).HasPrecision(7, 1);
+            e.HasOne<Equipo>().WithMany().HasForeignKey(x => x.EquipoId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Equipo>().Any(p => p.Id == x.EquipoId));
+        });
+        b.Entity<Trayecto>(e =>
+        {
+            e.HasIndex(x => new { x.EquipoId, x.Inicio });
+            e.HasIndex(x => x.RemisionId).IsUnique().HasFilter("\"RemisionId\" IS NOT NULL AND NOT \"IsDeleted\"");
+            e.Property(x => x.OdometroInicio).HasPrecision(12, 1);
+            e.Property(x => x.OdometroFin).HasPrecision(12, 1);
+            e.Property(x => x.Km).HasPrecision(10, 1);
+            e.HasOne<Equipo>().WithMany().HasForeignKey(x => x.EquipoId);
+            e.HasOne<Sucursal>().WithMany().HasForeignKey(x => x.SucursalId);
+            e.HasOne<Pedido>().WithMany().HasForeignKey(x => x.PedidoId);
+            e.HasOne<Remision>().WithMany().HasForeignKey(x => x.RemisionId);
+            e.HasOne<Operador>().WithMany().HasForeignKey(x => x.OperadorId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Equipo>().Any(p => p.Id == x.EquipoId));
+        });
+        b.Entity<Mantenimiento>(e =>
+        {
+            e.HasIndex(x => x.EquipoId);
+            e.HasOne<Equipo>().WithMany().HasForeignKey(x => x.EquipoId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Equipo>().Any(p => p.Id == x.EquipoId));
         });
         b.Entity<ProductoEquipo>(e =>
         {
@@ -169,6 +264,8 @@ public partial class AppDbContext
             e.Property(x => x.EntregaLng).HasPrecision(9, 6);
             e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.VendedorId);
             e.HasOne<Cotizacion>().WithMany().HasForeignKey(x => x.BaseId);
+            e.HasOne<Cotizacion>().WithMany().HasForeignKey(x => x.ReemplazaId);
+            e.HasOne<Cotizacion>().WithMany().HasForeignKey(x => x.ReemplazadaPorId);
             e.HasOne<Moneda>().WithMany().HasForeignKey(x => x.MonedaCodigo);
             e.HasOne<ListaPrecios>().WithMany().HasForeignKey(x => x.ListaPreciosId);
             e.HasMany(x => x.Partidas).WithOne().HasForeignKey(x => x.CotizacionId);
@@ -200,6 +297,7 @@ public partial class AppDbContext
             e.HasOne<Cotizacion>().WithMany().HasForeignKey(x => x.CotizacionId);
             e.HasOne<CotizacionPartida>().WithMany().HasForeignKey(x => x.PartidaId);
             e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.VendedorId);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.ConfirmadaPorId);
             e.HasMany(x => x.Lineas).WithOne().HasForeignKey(x => x.PedidoId);
         });
         b.Entity<PedidoLinea>(e =>
@@ -208,12 +306,21 @@ public partial class AppDbContext
             e.HasOne<Producto>().WithMany().HasForeignKey(x => x.ProductoId);
             e.HasQueryFilter("padre", x => VeTodo || Set<Pedido>().Any(p => p.Id == x.PedidoId));
         });
+        b.Entity<SolicitudReagenda>(e =>
+        {
+            e.HasIndex(x => x.PedidoId).IsUnique().HasFilter("\"Estado\" = 'pendiente' AND NOT \"IsDeleted\"");
+            e.HasIndex(x => x.Estado);
+            e.HasOne<Pedido>().WithMany().HasForeignKey(x => x.PedidoId);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.SolicitadoPorId);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.ResueltaPorId);
+            e.HasQueryFilter("padre", x => VeTodo || Set<Pedido>().Any(p => p.Id == x.PedidoId));
+        });
         b.Entity<Remision>(e =>
         {
             e.HasIndex(x => x.PedidoId);
             e.HasOne<Pedido>().WithMany().HasForeignKey(x => x.PedidoId);
             e.HasOne<Equipo>().WithMany().HasForeignKey(x => x.EquipoId);
-            e.HasOne<Usuario>().WithMany().HasForeignKey(x => x.OperadorId);
+            e.HasOne<Operador>().WithMany().HasForeignKey(x => x.OperadorId);
             e.HasOne<Archivo>().WithMany().HasForeignKey(x => x.FirmaArchivoId);
             e.HasQueryFilter("padre", x => VeTodo || Set<Pedido>().Any(p => p.Id == x.PedidoId));
         });

@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { ArrowLeft, CalendarClock, Check, CircleCheck, Download, GitBranch, Info, LoaderCircle, MapPin, Save, Trash2 } from 'lucide';
 import { AuthService, Icon, MAQUINARIA, Mapa, PartidaCotizacion, SERVICIOS, agruparPorObra, descargarCotizacionPdf, etiquetas, fechaHoraCorta, lineasPartida, mensajeError, pesos, plantaPara, totales } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
+import { PerfilService } from '../../core/services/perfil.service';
 import { CotizadorState } from './cotizador.state';
 
 type Accion = 'descargar-guardar' | 'guardar' | 'descargar';
@@ -165,7 +166,17 @@ type Accion = 'descargar-guardar' | 'guardar' | 'descargar';
                   }
                 </div>
               </fieldset>
-              <button type="button" class="boton-primario mt-4 h-12 sm:w-auto sm:px-8" [disabled]="ocupado()" [attr.aria-busy]="ocupado()" (click)="confirmar()">
+              @if (tope()) {
+                <p id="cotizacion-tope" class="mt-3 rounded-xl bg-[#FBF0DD] px-4 py-2.5 text-sm font-medium text-[#7A5410]">{{ tope() }} Aún puedes descargarla.</p>
+              }
+              <button
+                type="button"
+                class="boton-primario mt-4 h-12 sm:w-auto sm:px-8"
+                [disabled]="ocupado() || (!!tope() && accion() !== 'descargar')"
+                [attr.aria-describedby]="tope() ? 'cotizacion-tope' : null"
+                [attr.aria-busy]="ocupado()"
+                (click)="confirmar()"
+              >
                 <ui-icon [icono]="ocupado() ? iconos.cargando : accion() === 'guardar' ? iconos.guardar : iconos.descargar" [class.animate-spin]="ocupado()" />
                 {{ textoBoton() }}
               </button>
@@ -222,6 +233,9 @@ export class ResumenCotizacion {
   protected readonly fecha = fechaHoraCorta;
   protected readonly grupos = computed(() => agruparPorObra(this.s.partidas(), this.s.obras()));
   protected readonly total = computed(() => totales(this.s.partidas().flatMap(lineasPartida)));
+  private readonly perfil = inject(PerfilService);
+  /** Límite de cotizaciones de su asesor; una revisión (-R1…) no es nueva y no cuenta. */
+  protected readonly tope = computed(() => (this.cotizacion.edicion()?.modo === 'revision' ? '' : this.perfil.tope('cotizaciones')));
   protected readonly textoBoton = computed(() => this.opciones.find((o) => o.id === this.accion())!.texto);
 
   protected async confirmar(): Promise<void> {
@@ -232,6 +246,7 @@ export class ResumenCotizacion {
     this.ocupado.set(true);
     const usuario = this.auth.sesion()?.usuario ?? { nombre: 'Cliente', correo: '' };
     const referencia = this.cotizacion.referenciaEdicion() ?? undefined;
+    const revision = this.cotizacion.edicion()?.modo === 'revision';
     const partidas = this.s.partidas();
     const obras = this.s.obras();
     try {
@@ -240,6 +255,7 @@ export class ResumenCotizacion {
         let guardada;
         try {
           guardada = await this.cotizacion.guardarCotizacion('', fecha);
+          if (!revision) this.perfil.contarCotizacion();
         } catch (e) {
           this.error.set(mensajeError(e));
           return;

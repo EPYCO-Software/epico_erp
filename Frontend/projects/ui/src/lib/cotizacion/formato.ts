@@ -122,6 +122,8 @@ export interface ConcretoDisponible {
   kg: number;
   precio: number;
   soluciones: string[];
+  /** m³: con menos no se deja cotizar ni ordenar. */
+  pedidoMinimo?: number;
 }
 
 /**
@@ -129,6 +131,11 @@ export interface ConcretoDisponible {
  * o el portal (catálogo). null = sin backend: el tarifario fijo. Ver concretos.ts.
  */
 export const concretosServidor = signal<ConcretoDisponible[] | null>(null);
+
+/** El pedido mínimo (m³) del concreto de una partida, si su producto lo tiene. */
+export function pedidoMinimoDe(e: Pick<EspecificacionConcreto, 'tipoResistencia' | 'resistenciaKgCm2'>): number | undefined {
+  return concretosServidor()?.find((c) => c.tipo === e.tipoResistencia && c.kg === e.resistenciaKgCm2)?.pedidoMinimo || undefined;
+}
 
 export function precioConcreto(p: PartidaCotizacion): number {
   const e = p.especificacion;
@@ -374,6 +381,10 @@ export interface ProductoTarifa {
   precio: number;
   /** Mínimo que se cobra (m³), si lo hay. */
   minimo?: number;
+  /** Lo menos que se puede pedir (en su unidad): con menos no se deja cotizar ni ordenar. */
+  pedidoMinimo?: number;
+  /** Minutos de servicio por viaje (descarga, bombeo o uso): con el transporte da lo que se ocupa la unidad. */
+  tiempoServicioMin?: number;
   descripcion: string;
   /** Productos generales: cuántos hay (control de existencias) y desde cuántos avisar que hay pocos. */
   existencias?: number;

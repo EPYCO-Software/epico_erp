@@ -7,6 +7,7 @@ export type Senal = 'en_vivo' | 'perdida' | 'sin_gps';
 export const MINUTOS_SENAL = 2;
 
 export const ESTADO_VIAJE: Record<EstadoViaje, string> = {
+  programado: 'Unidad asignada',
   cargando: 'Cargando en planta',
   en_ruta: 'En camino',
   en_obra: 'Descargando en obra',

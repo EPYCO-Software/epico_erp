@@ -34,6 +34,10 @@ interface Datos {
   descripcion: string;
   existencias: number | null;
   minimoExistencias: number | null;
+  /** Lo menos que se puede pedir (en su unidad); vacío = sin mínimo. */
+  pedidoMinimo: number | null;
+  /** Minutos de servicio por viaje (descarga, bombeo o uso); vacío = el de omisión. */
+  tiempoServicioMin: number | null;
   renta: 'no' | 'si';
   tipoEquipo: TipoEquipo | 'otro' | '';
   unidades: string[];
@@ -232,6 +236,47 @@ const opcion = (lista: readonly string[], valor: string) => (lista.includes(valo
                   <p class="mt-1 flex h-10 items-center text-sm font-semibold">{{ modelo().unidad }}</p>
                 }
               </div>
+            </section>
+          }
+
+          <section aria-labelledby="pedido-minimo-titulo" class="grid gap-4 py-6 @lg:grid-cols-2">
+            <h2 id="pedido-minimo-titulo" [class]="seccion + ' @lg:col-span-2'">Pedido mínimo</h2>
+            <div>
+              <label for="producto-pedido-minimo" [class]="etiqueta">Lo menos que se puede pedir ({{ modelo().unidad || 'unidades' }})</label>
+              <input
+                id="producto-pedido-minimo"
+                type="number"
+                step="0.5"
+                class="campo mt-1 h-10 px-3 text-right tabular-nums"
+                aria-describedby="producto-pedido-minimo-nota producto-pedido-minimo-error"
+                [formField]="f.pedidoMinimo"
+              />
+              <ui-field-error [campo]="f.pedidoMinimo" errorId="producto-pedido-minimo-error" />
+            </div>
+            <p id="producto-pedido-minimo-nota" class="self-end text-sm text-texto-suave @lg:pb-2.5">
+              Vacío: sin mínimo. Con menos no se deja cotizar ni ordenar, en el ERP ni en el portal, y se muestra al elegirlo.
+            </p>
+          </section>
+
+          @if (modelo().tipo !== 'general') {
+            <section aria-labelledby="tiempo-servicio-titulo" class="grid gap-4 py-6 @lg:grid-cols-2">
+              <h2 id="tiempo-servicio-titulo" [class]="seccion + ' @lg:col-span-2'">Tiempo de servicio</h2>
+              <div>
+                <label for="producto-tiempo-servicio" [class]="etiqueta">Minutos por viaje</label>
+                <input
+                  id="producto-tiempo-servicio"
+                  type="number"
+                  step="5"
+                  class="campo mt-1 h-10 px-3 text-right tabular-nums"
+                  aria-describedby="producto-tiempo-servicio-nota producto-tiempo-servicio-error"
+                  [formField]="f.tiempoServicioMin"
+                />
+                <ui-field-error [campo]="f.tiempoServicioMin" errorId="producto-tiempo-servicio-error" />
+              </div>
+              <p id="producto-tiempo-servicio-nota" class="self-end text-sm text-texto-suave @lg:pb-2.5">
+                Lo que la unidad está en obra: descargar el concreto, bombear o el uso de la renta. Con el transporte (ida y vuelta)
+                da el tiempo de viaje que la ocupa. Vacío: {{ modelo().tipo === 'concreto' ? '60' : '120' }} min.
+              </p>
             </section>
           }
 
@@ -444,6 +489,8 @@ export class FormProducto implements OnInit {
     descripcion: '',
     existencias: 0,
     minimoExistencias: 0,
+    pedidoMinimo: null,
+    tiempoServicioMin: null,
     renta: 'no',
     tipoEquipo: '',
     unidades: [],
@@ -547,6 +594,8 @@ export class FormProducto implements OnInit {
     });
     min(m.existencias, 0, { message: 'No pueden ser negativas.' });
     min(m.minimoExistencias, 0, { message: 'No puede ser negativo.' });
+    min(m.pedidoMinimo, 0, { message: 'No puede ser negativo.' });
+    min(m.tiempoServicioMin, 0, { message: 'No puede ser negativo.' });
     // Renta de equipo: el tipo, y unidades conectadas o "no conectar por ahora"
     validate(m.tipoEquipo, ({ value, valueOf }) =>
       valueOf(m.tipo) === 'servicio' && valueOf(m.renta) === 'si' && !value() ? { kind: 'required', message: 'Elige el equipo.' } : undefined,
@@ -591,6 +640,8 @@ export class FormProducto implements OnInit {
         precio: p.precio,
         descripcion: p.descripcion,
         minimoExistencias: p.minimoExistencias ?? null,
+        pedidoMinimo: p.pedidoMinimo ?? null,
+        tiempoServicioMin: p.tiempoServicioMin ?? null,
         soluciones: [...(p.soluciones ?? [])],
         renta: p.equipo ? 'si' : 'no',
         tipoEquipo: (p.equipo?.tipo as TipoEquipo | 'otro') ?? '',
@@ -643,6 +694,8 @@ export class FormProducto implements OnInit {
         unidad: m.unidad,
         precio: m.precio ?? 0,
         descripcion: m.descripcion,
+        pedidoMinimo: m.pedidoMinimo || undefined,
+        tiempoServicioMin: m.tipo !== 'general' ? m.tiempoServicioMin || undefined : undefined,
         ...(m.tipo === 'general' ? { existencias: m.existencias ?? 0, minimoExistencias: m.minimoExistencias ?? 0 } : {}),
         ...(this.conConfig() ? { configuracion: this.config() } : {}),
         ...(equipo ? { equipo } : {}),
@@ -668,6 +721,8 @@ export class FormProducto implements OnInit {
       [f.descripcion().invalid(), '#producto-descripcion'],
       [f.precio().invalid(), '#producto-precio'],
       [f.unidad().invalid(), '#producto-unidad'],
+      [f.pedidoMinimo().invalid(), '#producto-pedido-minimo'],
+      [f.tiempoServicioMin().invalid(), '#producto-tiempo-servicio'],
       [f.tipoEquipo().invalid(), '#producto-equipo'],
       [f.unidades().invalid(), '#producto-sin-conectar'],
       [f.existencias().invalid(), '#producto-existencias'],

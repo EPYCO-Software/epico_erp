@@ -18,9 +18,13 @@ import {
 } from 'ui';
 import { BarraEstados, BotonRelacion } from '../../layout/vista-completa';
 import { CambiarCobro } from './cambiar-cobro';
-import { CambiosPedido, VentasService, mensajeDe, pedidoEditable } from './datos';
+import { CambiosPedido, VentasService, mensajeDe, pedidoEditable, porConfirmar } from './datos';
 import { EditorPedido } from './editor-pedido';
 import { PlantaPedido } from './planta-pedido';
+import { ViajesPedido } from './viajes-pedido';
+import { CalidadApi } from '../laboratorio/calidad-api';
+import { certificadoPdf } from '../flota/documentos-pdf';
+import { ReagendaOrden } from '../flota/reagenda-orden';
 import { permisosSesion } from '../../core/permisos';
 
 const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 'entregado'];
@@ -47,6 +51,8 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
     CambiarCobro,
     PlantaPedido,
     EditorPedido,
+    ViajesPedido,
+    ReagendaOrden,
   ],
   template: `
     <div class="flex items-start justify-between gap-3">
@@ -57,12 +63,15 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
         } @else {
           <h2 id="previa-titulo" tabindex="-1" class="flex flex-wrap items-center gap-2 text-lg font-bold outline-none">
             {{ p().folio }}<ui-estado-pedido [estado]="p().estado" />
+            @if (pendiente()) {
+              <span class="rounded-md bg-[#FBF0DD] px-2 py-0.5 text-xs font-bold text-[#7A5410]">Por confirmar</span>
+            }
           </h2>
         }
         <p class="text-sm text-texto-suave">{{ p().producto }} · {{ p().volumenM3 | number: '1.0-1' }} m³</p>
       </div>
       @if (completa()) {
-        <app-barra-estados class="mt-1" etiqueta="Estado de la entrega" [pasos]="pasos()" [actual]="p().estado" />
+        <app-barra-estados class="mt-1" etiqueta="Estado de la orden" [pasos]="pasos()" [actual]="pasoActual()" />
       } @else {
         <div class="-mt-1 -mr-1 flex shrink-0">
           <a
@@ -106,6 +115,11 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
           <ui-icon [icono]="iconos.pdf" [tamano]="16" />PDF
         </button>
       }
+      @if (conBackend && ['en_obra', 'entregado'].includes(p().estado)) {
+        <button type="button" [class]="botonSecundario + ' disabled:opacity-60'" [disabled]="generandoPdf()" (click)="descargarCertificado()">
+          <ui-icon [icono]="iconos.cotizacion" [tamano]="16" />Certificado<span class="sr-only"> de calidad</span>
+        </button>
+      }
     </div>
     <p class="mt-2 text-sm font-medium text-critico empty:hidden" role="alert">{{ errorPdf() }}</p>
 
@@ -114,6 +128,19 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
         <dt class="text-texto-suave">Cliente</dt>
         <dd>
           <a [routerLink]="['/ventas/clientes', p().clienteId]" [class]="enlace">{{ p().clienteNombre }}</a>
+        </dd>
+        <dt class="text-texto-suave">Origen</dt>
+        <dd>
+          @if (cotizacion(); as c) {
+            <a [routerLink]="['/ventas/cotizaciones', c.id]" [class]="enlace">Cotización {{ c.folio }}</a>
+            @if (ofertaAnterior(); as a) {
+              <span class="text-texto-suave">
+                (mejoró la oferta <a [routerLink]="['/ventas/cotizaciones', a.id]" [class]="enlace">{{ a.folio }}</a>)</span
+              >
+            }
+          } @else {
+            Orden directa, sin cotización
+          }
         </dd>
         <dt class="text-texto-suave">Entrega</dt>
         <dd>{{ p().fechaHoraEntrega | fechaZona: p().zonaHoraria }}</dd>
@@ -157,6 +184,12 @@ const FLUJO: EstadoPedido[] = ['programado', 'en_planta', 'en_ruta', 'en_obra', 
 
     <p class="mt-2 text-sm font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ aviso() }}</p>
     <app-planta-pedido class="mt-4" [p]="p()" [nivel]="completa() ? 2 : 3" />
+    @if (conBackend && p().estado !== 'cancelado') {
+      <app-reagenda-orden class="mt-3" [p]="p()" [nivel]="completa() ? 2 : 3" />
+    }
+    @if (conBackend && puede('operacion.remisiones.ver') && p().estado !== 'cancelado') {
+      <app-viajes-pedido class="mt-3" [p]="p()" [nivel]="completa() ? 2 : 3" />
+    }
 
     @if (editando()) {
       <app-editor-pedido class="mt-4 border-t border-acero/60 pt-4" [p]="p()" (listo)="guardar($event)" (descartar)="terminar('')" />
@@ -175,6 +208,8 @@ export class DetallePedido {
   /** Lo que la sesión puede hacer (se ocultan las acciones sin permiso; el backend también las rechaza). */
   protected readonly puede = permisosSesion();
   private readonly ventas = inject(VentasService);
+  /** Las unidades (Logística) viven en el backend. */
+  protected readonly conBackend = this.ventas.conBackend;
 
   readonly p = input.required<PedidoVista>();
   readonly vista = input<'panel' | 'completa'>('panel');
@@ -239,6 +274,20 @@ export class DetallePedido {
     afterNextRender(() => this.botonEditar()?.nativeElement.focus(), { injector: this.injector });
   }
   protected readonly generandoPdf = signal(false);
+  private readonly calidad = inject(CalidadApi);
+
+  /** El certificado de calidad de la orden (muestras y ensayes del laboratorio), en PDF. */
+  protected async descargarCertificado(): Promise<void> {
+    this.generandoPdf.set(true);
+    this.errorPdf.set('');
+    try {
+      await certificadoPdf(await this.calidad.certificado(this.p().id));
+    } catch (e) {
+      this.errorPdf.set(mensajeDe(e));
+    } finally {
+      this.generandoPdf.set(false);
+    }
+  }
   protected readonly errorPdf = linkedSignal({ source: computed(() => this.p().id), computation: () => '' });
 
   /** La orden de venta en PDF, con el formato de la cotización impresa: su partida, con la fecha de hoy. */
@@ -267,11 +316,20 @@ export class DetallePedido {
       this.generandoPdf.set(false);
     }
   }
-  /** Programado › En planta › En ruta › En obra › Entregado; el cancelado termina en Cancelado. */
+  protected readonly pendiente = computed(() => porConfirmar(this.p()));
+  protected readonly ofertaAnterior = computed(() => {
+    const id = this.cotizacion()?.reemplazaId;
+    return id ? this.ventas.cotizaciones().find((c) => c.id === id) : undefined;
+  });
+  /** Como Odoo: Por confirmar › Confirmada › En planta › En ruta › En obra › Entregado; la cancelada termina en Cancelado. */
   protected readonly pasos = computed(() =>
-    (this.p().estado === 'cancelado' ? (['programado', 'cancelado'] as EstadoPedido[]) : FLUJO).map((id) => ({
-      id,
-      nombre: ESTADO_PEDIDO[id],
-    })),
+    this.p().estado === 'cancelado'
+      ? [{ id: 'por_confirmar', nombre: 'Por confirmar' }, { id: 'cancelado', nombre: ESTADO_PEDIDO.cancelado }]
+      : [
+          { id: 'por_confirmar', nombre: 'Por confirmar' },
+          { id: 'programado', nombre: 'Confirmada' },
+          ...FLUJO.slice(1).map((id) => ({ id, nombre: ESTADO_PEDIDO[id] })),
+        ],
   );
+  protected readonly pasoActual = computed(() => (this.pendiente() ? 'por_confirmar' : this.p().estado));
 }

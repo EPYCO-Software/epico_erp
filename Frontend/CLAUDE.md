@@ -310,6 +310,114 @@ projects/
                            órdenes ni obras (409 del backend; el de mostrador nunca). Cotizaciones: "Cancelar cotización" en
                            el menú del lápiz (POST /cancelar); "Cotizaciones relacionadas" incluye sus revisiones (mismo folio
                            sin -R…). Público en general: lo crea la primera cotización "Sin cliente" y entra a la lista.
+                           Confirmación de órdenes: una orden nace "por confirmar" (Pedido.confirmadaEn vacío;
+                           porConfirmar). "Confirmar pedido" en la cotización abre confirmar-orden.ts (diálogo que recuerda
+                           día y hora de cada entrega en la zona de la planta): "Crear y confirmar" (confirmarOrdenes) o
+                           "Crear orden (por confirmar)". En la orden: barra Por confirmar › Confirmada › En planta…, origen
+                           (cotización y la oferta que mejoró) y en el requerimiento a planta el botón dividido "Enviar
+                           requerimiento a planta ▾ Confirmar orden" (mismo diálogo; POST /pedidos/{id}/confirmar,
+                           permiso ventas.pedidos.confirmar). Planta al confirmar también la confirma. Orden directa:
+                           casilla "Dejarla confirmada". Órdenes: filtro "Confirmación" y etiqueta "Por confirmar".
+                           Calendario de entregas (calendario-entregas.ts, con pruebas): Órdenes → selector Lista /
+                           Calendario (?vista=calendario); Día, Semana (lunes a domingo) o Mes (6 semanas), las mismas
+                           filas filtradas (buscador y plantas), cada orden en el día y hora de su planta, órdenes y m³ por
+                           día; Día y Semana son una tabla por hora como el calendario de Apple (horasVisibles: 06:00–20:00
+                           ampliado a la primera/última entrega; horas vacías delgadas con su línea, las ocupadas crecen); clic = vista previa, doble clic = vista completa, "+N más" abre el día.
+                           Pedido mínimo: Producto.pedidoMinimo (Productos → sección "Pedido mínimo", también en los del
+                           tarifario). pedidoMinimoDe(especificacion) (ui) lo lee de concretosServidor; nueva-cotizacion,
+                           editor-pedido y el cotizador del portal no dejan menos y muestran "Pedido mínimo: N m³" bajo
+                           el volumen. El backend da 400 igual. Distinto de minimoCobro (ese solo cobra de más).
+                           Logística (features/flota, módulo activo, menú Flota/Combustible; solo con backend):
+                           flota-api.ts (FlotaApi y tipos, con pruebas): toda unidad es un Equipo (TIPOS_EQUIPO de
+                           datos.ts + "otro"), categorías Transporte de concreto / Bombeo / Carga y flete / Maquinaria;
+                           estado manual disponible | mantenimiento | fuera_de_servicio; "en viaje" lo calcula
+                           GET /flota/tablero (con ?pedidoId= dice si choca ±4 h con la entrega y el motivo).
+                           Tipo Loop4 (fase 5): Mapa de flota (/flota/viajes, viajes.ts + panel-gps.ts): todas las
+                           unidades con su última posición (GET /flota/posiciones), lista en texto al lado; clic → panel
+                           con sensores (tambor, motor, combustible, temperatura: textoSensores) y recorrido por rango o
+                           viaje (/equipos/{id}/recorrido, /viajes/{id}/recorrido) dibujado como ruta (MapaSeguimiento
+                           ahora acepta `rutas` y emite `elegir`), con reproducción y gráfica de velocidad/altitud.
+                           Línea de tiempo (linea-tiempo.ts): fila por unidad, barras por viaje con etapas carga/ida/
+                           obra/regreso (reales sólidas, planeadas rayadas) y mantenimientos. Indicadores
+                           (indicadores.ts): KPIs, m³ por día (Grafica de Ventas), tablas por unidad/conductor/cliente/
+                           vendedor y prolongados en obra (> 90 min); CSV y PDF (jsPDF). Inspecciones (inspecciones.ts):
+                           checklist por tipo (GET /flota/checklist), fotos y firma (firma.ts, /archivos); una rechazada
+                           bloquea la unidad. Remisión PDF y firma de recibido en cada viaje (documentos-pdf.ts). Calidad
+                           y laboratorio (módulo activo, /laboratorio, laboratorio/calidad-api.ts): muestras, ensayes a
+                           7/14/28 días y certificado de la orden en PDF (también desde la orden de Ventas).
+                           Tablas de Logística como las de Ventas: casillas (seleccionMultiple, "N de M seleccionados"),
+                           selector de plantas del encabezado (plantas-flota.ts: ids del backend ↔ códigos), clic = vista
+                           previa de SOLO LECTURA con "Editar" y acciones rápidas (estado de la unidad, activar operador,
+                           iniciar/terminar servicio), doble clic = vista completa; acciones para las marcadas en Unidades
+                           (estado, baja) y Operadores (activar/desactivar). Marcador del menú: EnlaceModulo.contador
+                           (core/contadores.ts; "Órdenes N" = sinCamion()).
+                           Despacho y Órdenes: tablero-despacho.ts (columnas por estado × filas por hora como el
+                           calendario; clic en el folio → previa-orden.ts a la derecha). Órdenes tiene vistas Lista /
+                           Tablero por horas / Mapa (mapa-ordenes.ts: obras, plantas y camiones con GPS; ?vista=).
+                           Unidades en varias plantas: Equipo.sucursalIds (principal + "También opera en"); solo se le
+                           asignan órdenes de sus plantas. Recorridos (recorridos-unidad.ts, vista previa y ficha): GET
+                           /equipos/{id}/resumen (trayectos, km, diésel, rendimiento, km desde la última carga) y
+                           /trayectos (los de entrega los crea el back al terminar el viaje, km estimados; los manuales:
+                           traslado, flete, a taller). Aviso de carga cada 7 días o 500 km (tocaCarga, Vencimientos).
+                           Órdenes de logística (/flota/ordenes, Operación → Órdenes): ES la página de Ventas → Órdenes
+                           (ventas/ordenes.ts) con data.logistica = true: solo las gestionables (gestionable():
+                           confirmadas o en solicitud de confirmación a planta, sin entregar ni cancelar), marcador "N
+                           sin camión" (filtra; asignacionDe en flota-api) y filtro Camión, y además las vistas Tablero
+                           por horas y Mapa. Todo lo demás (columnas, filtros, calendario, vista previa, vista completa)
+                           es lo de Ventas: un cambio en Ventas cambia los dos.
+                           por correo (si clienteTieneCorreo es false pide el correo) y en su portal; quita las unidades
+                           que ya no caben. Solicitar reagendar (operacion.reagenda.solicitar, planta/logística): queda
+                           Pedido.reagendaPendiente hasta que Ventas acepte (avisa) o rechace; reagenda-orden también va
+                           en la orden de Ventas. La "actualización" de planta crea la misma solicitud.
+                           Tiempos de viaje: Producto.tiempoServicioMin (Productos → Tiempo de servicio) y
+                           Pedido.tiempos { transporteMin (ida y vuelta, calculado por la distancia o escrito con
+                           "Cambiar transporte"), servicioMin, totalMin }. Cada viaje ocupa la unidad de salidaProgramada
+                           a regresoEstimado (textoVentana); la disponibilidad es por cruce de esas ventanas.
+                           Menú: Operación (Despacho del día /flota/despacho = inicio del módulo, Viajes y mapa),
+                           Flota (Unidades /flota, Operadores, Vencimientos), Control (Combustible, Mantenimiento);
+                           /combustible redirige. Las listas siguen CAJAS_LISTA: UNA sola caja dentro de la columna
+                           (resúmenes y avisos van dentro de la caja; si no, columna-caja desacomoda la tabla).
+                           /flota: tabla + vista previa con form-unidad.ts (alta/edición, operador habitual del
+                           catálogo, GPS = uniqueId de Traccar); doble clic → ficha completa /flota/unidades/:id
+                           (unidad.ts: cifras, datos, documentos-unidad.ts, viajes recientes, combustible,
+                           mantenimiento, historial registro 'equipo:ID'). despacho.ts: kanban del día
+                           (columnasDespacho: Por asignar + estados del viaje), asignar y avanzar sin abrir la orden,
+                           refresco 30 s. operadores.ts (licencia y vencimiento), vencimientos.ts (GET
+                           /flota/vencimientos), combustible.ts (rendimientos km/L o L/h; el odómetro no baja),
+                           mantenimiento.ts (Programado › En proceso › Terminado / Cancelado; en proceso = unidad en
+                           taller). ?unidad=ID filtra combustible y mantenimiento.
+                           /flota/viajes: unidades en viaje, mapa (posiciones de Traccar, refresco 30 s) y órdenes
+                           confirmadas que aún necesitan unidad. En la orden (viajes-pedido.ts, permisos
+                           operacion.remisiones.*): "Asignar unidad" (flota/asignar-unidad.ts, el mismo en el despacho:
+                           unidad disponible, operador del catálogo u "Otro", m³ si es olla, método de pago) →
+                           POST /pedidos/{id}/viajes; cada viaje avanza Programado › Cargando › En ruta ›
+                           En obra › Regresando › Terminado (solo hacia adelante) y el backend mueve el estado del pedido;
+                           "Quitar" solo en Programado. Solo las ollas suman m³; bombas y demás acompañan la orden.
+                           Traccar se configura en el backend (Traccar__Url/Traccar__Token); sin eso, posiciones null.
+                           MetodoPago: sin_metodo, transferencia, efectivo, tarjeta, cheque. Portal: viaje "programado" =
+                           "Unidad asignada".
+                           Negociación: "Mejorar oferta" (menú del lápiz, recibida o enviada vigente) abre la hoja con
+                           ?base=ID&oferta=1 (reemplazaId); el resumen compara contra la oferta anterior. Al ENVIARLA, la
+                           anterior queda reemplazadaPorId (backend): no se envía, confirma ni acepta, aviso "Oferta
+                           reemplazada", etiqueta en la lista, filtro "Negociación" y fuera del total; en el portal, "Te
+                           enviamos una mejor oferta". Cancelar la nueva devuelve la anterior. Un borrador no reemplaza.
+                           Crédito (credito-cliente.ts en la ficha): Cliente.credito { limite, dias } (API limiteCredito,
+                           diasCredito); creditoDe: usado = órdenes en cobro "Crédito", vence = creditoDesde + días;
+                           cambiar-cobro revisa sinCreditoPara antes (el backend da 409). Portal: Mi perfil muestra el
+                           disponible (/portal/perfil.credito).
+                           Cuenta del portal (cuenta-portal.ts, en la ficha del cliente, solo con backend y nunca para el
+                           de mostrador): un cliente puede tener o no un usuario del portal (Tipo Portal: el backend no lo
+                           deja entrar al ERP). "Crear cuenta y enviar credenciales" (POST /clientes/{id}/cuenta-portal:
+                           el backend manda la contraseña temporal por correo y nunca la devuelve), reenviar credenciales
+                           y activar/desactivar. También al dar de alta: Clientes → Nuevo, casilla "Darle acceso al
+                           portal" (usa el correo del contacto; el aviso llega a la ficha por el state de la navegación).
+                           Quien tiene ventas.clientes.crear o .editar crea la cuenta; reenviar, desactivar y límites
+                           piden editar. Desde Ventas solo se crean usuarios del portal, nunca internos ni con permisos
+                           del ERP. Si el correo ya es de un contacto del cliente, la cuenta es de ese contacto
+                           (contactoId). Límites del portal (Cliente.limites; API limiteCotizaciones/limiteObras,
+                           null = sin límite): solo lo que el cliente crea en el portal; el backend da 409 al pasarse y el
+                           portal lo avisa antes (PerfilService.tope con /portal/perfil.limites: deshabilita "Agregar
+                           obra" y guardar una cotización nueva; una revisión -R no cuenta; descargar sí se puede).
                            Aditivos: también son productos (tipo/categoría "aditivo", código AJ-ADT-{CLAVE}; en la API tipo
                            concreto). aditivosServidor (lo llenan VentasService y ObrasService) → aditivosDisponibles() en los
                            dos cotizadores; la partida guarda la clave en minúsculas (fibra-sintetica) y su precio por m³ se

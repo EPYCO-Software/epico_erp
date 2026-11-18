@@ -34,19 +34,19 @@ describe('filtrarModulos', () => {
 
 describe('módulos activos', () => {
   beforeEach(() => TestBed.configureTestingModule({ providers: [{ provide: AUTH_STORAGE_KEY, useValue: 'test.modulos' }] }));
-  it('por ahora solo Seguridad, CRM, ventas y pedidos están activados', () => {
-    expect(MODULOS.filter((m) => m.activo).map((m) => m.id)).toEqual(['seguridad', 'crm', 'ventas', 'pedidos']);
+  it('por ahora solo Seguridad, CRM, ventas, pedidos, calidad y logística están activados', () => {
+    expect(MODULOS.filter((m) => m.activo).map((m) => m.id)).toEqual(['seguridad', 'crm', 'ventas', 'pedidos', 'calidad', 'logistica']);
   });
 
   it('por defecto la pantalla de inicio muestra solo los activados y la búsqueda busca dentro del filtro', () => {
     const s = TestBed.inject(ModulosService);
     const ids = () => s.resultados().map((m) => m.id);
     expect(s.filtros()).toEqual(['activados']);
-    expect(ids()).toEqual(['seguridad', 'crm', 'ventas', 'pedidos']);
-    s.busqueda.set('flota');
+    expect(ids()).toEqual(['seguridad', 'crm', 'ventas', 'pedidos', 'calidad', 'logistica']);
+    s.busqueda.set('compras');
     expect(ids()).toEqual([]);
     s.alternarFiltro('todos');
-    expect(ids()).toEqual(['logistica']);
+    expect(ids()).toEqual(['compras']);
     s.busqueda.set('');
     expect(ids()).toHaveLength(17);
   });
@@ -65,15 +65,17 @@ describe('módulos activos', () => {
     s.alternarFiltro('activados');
     expect(s.filtros()).toEqual(['todos']);
     // suma de verdad: un favorito no activado se agrega a los activados, en el orden del catálogo
-    const favoritos = [buscarModulo('logistica')!, buscarModulo('crm')!];
+    const favoritos = [buscarModulo('compras')!, buscarModulo('crm')!];
     expect(modulosDelFiltro(['activados', 'favoritos'], favoritos).map((m) => m.id)).toEqual([
       'seguridad',
       'crm',
       'ventas',
       'pedidos',
+      'calidad',
+      'compras',
       'logistica',
     ]);
-    expect(modulosDelFiltro(['favoritos'], favoritos).map((m) => m.id)).toEqual(['crm', 'logistica']);
+    expect(modulosDelFiltro(['favoritos'], favoritos).map((m) => m.id)).toEqual(['crm', 'compras']);
   });
 
   describe('moduloActivoGuard', () => {
@@ -89,8 +91,8 @@ describe('módulos activos', () => {
     });
 
     it('manda las de módulos no activados al aviso /modulos/:id', () => {
-      const r = correr('logistica');
-      expect(r instanceof UrlTree && r.toString()).toBe('/modulos/logistica');
+      const r = correr('compras');
+      expect(r instanceof UrlTree && r.toString()).toBe('/modulos/compras');
     });
   });
 });

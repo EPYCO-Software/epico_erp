@@ -43,6 +43,10 @@ public class Cliente : BaseEntity, IDeOrganizacion, IRestringible
     [Rastreado("Lista de precios", TipoDatoCambio.Referencia)] public Guid? ListaPreciosId { get; set; }
     [Range(0, 365), Rastreado("Días de crédito")] public int DiasCredito { get; set; }
     [Range(0, 999_999_999_999), Rastreado("Límite de crédito", TipoDatoCambio.Dinero)] public decimal? LimiteCredito { get; set; }
+    /// <summary>Cuántas cotizaciones puede pedir en el portal (sin contar canceladas ni revisiones); null = sin límite.</summary>
+    [Range(0, 9999), Rastreado("Límite de cotizaciones")] public int? LimiteCotizaciones { get; set; }
+    /// <summary>Cuántas obras puede tener al crear una en el portal (cuentan todas las suyas); null = sin límite.</summary>
+    [Range(0, 9999), Rastreado("Límite de obras")] public int? LimiteObras { get; set; }
     public string? Notas { get; set; }
 }
 
@@ -152,6 +156,10 @@ public class Producto : BaseEntity, IDeOrganizacion, IRestringible
     [MaxLength(3)] public string MonedaCodigo { get; set; } = "MXN";
     /// <summary>m³ mínimos que se cobran.</summary>
     [Range(0, 99_999_999), Rastreado("Mínimo de cobro")] public decimal? MinimoCobro { get; set; }
+    /// <summary>Cantidad mínima que se puede pedir, en la unidad del producto (MinimoCobro solo cobra de más).</summary>
+    [Range(0, 99_999_999), Rastreado("Pedido mínimo")] public decimal? PedidoMinimo { get; set; }
+    /// <summary>Minutos que ocupa a la unidad en la obra por viaje: descarga, bombeo o, en renta, el uso.</summary>
+    [Range(0, 100_000), Rastreado("Tiempo de servicio")] public int? TiempoServicioMin { get; set; }
     [MaxLength(8)] public string? ClaveProdServSat { get; set; }
     public bool ControlaExistencias { get; set; }
     public decimal? MinimoExistencias { get; set; }
@@ -212,14 +220,33 @@ public class MovimientoInventario : IEntidad
 
 public class Equipo : BaseEntity
 {
+    /// <summary>Planta principal; siempre está en SucursalIds.</summary>
     public Guid SucursalId { get; set; }
+    /// <summary>Plantas donde opera (al menos la principal). Se ve si se ve alguna.</summary>
+    public List<Guid> SucursalIds { get; set; } = [];
     [Rastreado("Tipo", TipoDatoCambio.Opcion)] public TipoEquipo Tipo { get; set; }
     /// <summary>ECO-21, BP-01</summary>
     [MaxLength(20), Rastreado("Número económico")] public string NumeroEconomico { get; set; } = "";
     [MaxLength(200)] public string? Descripcion { get; set; }
     [MaxLength(15), Rastreado("Placas")] public string? Placas { get; set; }
-    public decimal? CapacidadM3 { get; set; }
+    [MaxLength(80), Rastreado("Marca")] public string? Marca { get; set; }
+    [MaxLength(80), Rastreado("Modelo")] public string? Modelo { get; set; }
+    [Range(1950, 2100), Rastreado("Año")] public short? Anio { get; set; }
+    [Range(0, 99_999), Rastreado("Capacidad")] public decimal? Capacidad { get; set; }
+    /// <summary>m³, t, m, L…</summary>
+    [MaxLength(10), Rastreado("Unidad de capacidad")] public string? UnidadCapacidad { get; set; }
+    [Rastreado("Estado", TipoDatoCambio.Opcion)] public EstadoEquipo Estado { get; set; }
+    /// <summary>Operador habitual (catálogo): el de cada viaje si no se indica otro.</summary>
+    [Rastreado("Operador habitual", TipoDatoCambio.Referencia)] public Guid? OperadorId { get; set; }
+    /// <summary>Nombre del operador habitual cuando no está en el catálogo (respaldo).</summary>
+    [MaxLength(200), Rastreado("Operador")] public string? OperadorNombre { get; set; }
+    /// <summary>uniqueId del dispositivo en Traccar.</summary>
+    [MaxLength(64), Rastreado("GPS")] public string? GpsId { get; set; }
+    [Rastreado("Notas")] public string? Notas { get; set; }
     [Rastreado("Activo")] public bool Activo { get; set; } = true;
+    /// <summary>Los pone la carga de combustible (el mayor registrado).</summary>
+    [Editable(false)] public decimal? UltimoOdometroKm { get; set; }
+    [Editable(false)] public decimal? UltimoHorometro { get; set; }
 }
 
 public class ProductoEquipo : IEntidad

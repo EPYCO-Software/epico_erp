@@ -44,6 +44,24 @@ export interface ClientePortal {
 interface ApiPerfil {
   usuario: { nombre: string; apellidos: string | null; correo: string; telefono: string | null; puesto: string | null; fotoArchivoId: string | null };
   cliente: ClientePortal;
+  /** Lo que su asesor le permite crear en el portal (null = sin límite) y lo que lleva. */
+  limites?: LimitesPortal;
+  /** Su crédito con la concretera (sin límite = de contado). */
+  credito?: CreditoPortal;
+}
+
+export interface CreditoPortal {
+  limite: number | null;
+  dias: number;
+  usado: number;
+  disponible: number | null;
+}
+
+export interface LimitesPortal {
+  cotizaciones: number | null;
+  obras: number | null;
+  cotizacionesUsadas: number;
+  obrasUsadas: number;
 }
 
 interface ApiDatoFiscal {
@@ -106,6 +124,20 @@ export class PerfilService {
   /** Con backend: la empresa que representa (solo lectura). */
   readonly cliente = signal<ClientePortal | null>(null);
   readonly errorCarga = signal('');
+  readonly limites = signal<LimitesPortal | null>(null);
+  readonly credito = signal<CreditoPortal | null>(null);
+
+  /** Aviso si ya llegó al límite que le puso su asesor; '' si puede crear más. Sin límites (demo), nunca. */
+  tope(tipo: 'cotizaciones' | 'obras', usadas?: number): string {
+    const l = this.limites();
+    const max = l?.[tipo];
+    if (l == null || max == null || (usadas ?? l[`${tipo}Usadas`]) < max) return '';
+    return `Llegaste al límite de ${max} ${max === 1 ? { cotizaciones: 'cotización', obras: 'obra' }[tipo] : tipo}; pide a tu asesor que lo amplíe.`;
+  }
+  /** Tras crear una cotización nueva, sin volver a pedir el perfil. */
+  contarCotizacion(): void {
+    this.limites.update((l) => l && { ...l, cotizacionesUsadas: l.cotizacionesUsadas + 1 });
+  }
   private readonly _usuario = signal<PerfilUsuario>({
     nombre: '',
     apellidos: '',
@@ -158,6 +190,8 @@ export class PerfilService {
       });
       this.fotoArchivoId = u.fotoArchivoId;
       this.cliente.set(perfil.cliente);
+      this.limites.set(perfil.limites ?? null);
+      this.credito.set(perfil.credito ?? null);
       this._facturacion.set(fiscales.map((f, i) => aFacturacion(f, documentos[i].map(aDocumento))));
       this.errorCarga.set('');
     } catch (e) {

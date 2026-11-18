@@ -23,9 +23,19 @@ import { EditorCliente } from './editor-cliente';
       <div [class]="cajas.columna">
         <article [class]="cajas.hoja + ' max-w-4xl'">
           <h1 class="text-2xl font-bold tracking-[-0.02em]">Nuevo cliente</h1>
-          <p class="mt-1 text-sm text-texto-suave">
-            Sus obras se agregan al cotizarle; su cuenta del portal la crea él con el correo de su contacto.
-          </p>
+          <p class="mt-1 text-sm text-texto-suave">Sus obras se agregan al cotizarle o desde su ficha.</p>
+          @if (ventas.conBackend) {
+            <label class="mt-4 flex items-start gap-3 rounded-xl bg-white/80 p-3 text-sm">
+              <input type="checkbox" class="casilla mt-0.5 size-4" [checked]="conCuenta()" (change)="conCuenta.set($any($event.target).checked)" />
+              <span>
+                <span class="block font-semibold">Darle acceso al portal de clientes</span>
+                <span class="block text-texto-suave">
+                  Le creamos su usuario con el correo del contacto y le enviamos su contraseña temporal. Solo entra al portal
+                  (cotizar, sus obras y pedidos), nunca al ERP.
+                </span>
+              </span>
+            </label>
+          }
           @if (error()) {
             <p role="alert" class="mt-4 text-sm font-medium text-[#8E332C]">{{ error() }}</p>
           }
@@ -36,7 +46,8 @@ import { EditorCliente } from './editor-cliente';
   `,
 })
 export default class NuevoClientePagina {
-  private readonly ventas = inject(VentasService);
+  protected readonly ventas = inject(VentasService);
+  protected readonly conCuenta = signal(false);
   private readonly router = inject(Router);
   private readonly editor = viewChild.required(EditorCliente);
 
@@ -49,13 +60,34 @@ export default class NuevoClientePagina {
     this.error.set('');
     this.guardando.set(true);
     try {
+      const correo = c.contacto.correo.trim().toLowerCase();
+      if (this.conCuenta() && !correo) {
+        this.error.set('Para darle acceso al portal escribe el correo del contacto: entrará con él.');
+        document.getElementById('cliente-contacto-correo')?.focus();
+        return;
+      }
       const nuevo = await this.ventas.altaCliente(c);
       this.creado = true;
-      void this.router.navigate(['/ventas/clientes', nuevo.id]);
+      // El cliente ya existe: si la cuenta falla, se avisa en su ficha (ahí se puede reintentar), nunca se repite el alta.
+      const avisoCuenta = this.conCuenta() ? await this.crearCuenta(nuevo.id, `${c.contacto.nombre} ${c.contacto.apellidos}`.trim(), correo) : undefined;
+      void this.router.navigate(['/ventas/clientes', nuevo.id], { state: { avisoCuenta } });
     } catch (e) {
       this.error.set(mensajeDe(e));
     } finally {
       this.guardando.set(false);
+    }
+  }
+
+  private async crearCuenta(id: string, nombre: string, correo: string): Promise<{ clienteId: string; texto: string; error: boolean }> {
+    try {
+      const r = await this.ventas.crearCuentaPortal(id, { nombre: nombre || correo, correo });
+      return {
+        clienteId: id,
+        texto: r.correoEnviado ? `Cliente y cuenta del portal creados: credenciales enviadas a ${correo}.` : `Cliente y cuenta creados, pero no se pudo enviar el correo: usa "Reenviar credenciales".`,
+        error: !r.correoEnviado,
+      };
+    } catch (e) {
+      return { clienteId: id, texto: `El cliente se creó, pero su cuenta del portal no: ${mensajeDe(e)}`, error: true };
     }
   }
 

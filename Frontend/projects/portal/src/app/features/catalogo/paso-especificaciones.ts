@@ -26,11 +26,14 @@ const EDAD_LABEL: Record<number, string> = { 28: '28 días (estándar)', 14: '14
               class="campo h-11 rounded-r-none px-4"
               [formField]="s.f.volumenM3"
               [attr.aria-invalid]="s.f.volumenM3().touched() && s.f.volumenM3().invalid()"
-              aria-describedby="volumen-unidad volumen-error"
+              aria-describedby="volumen-unidad volumen-error volumen-minimo"
             />
             <span id="volumen-unidad" class="flex h-11 items-center rounded-r-[0.625rem] border border-l-0 border-acero-oscuro bg-carbon/4 px-4">m³</span>
           </div>
           <ui-field-error [campo]="s.f.volumenM3" errorId="volumen-error" />
+          @if (s.pedidoMinimo(); as m) {
+            <p id="volumen-minimo" class="mt-1 text-sm text-texto-suave">Pedido mínimo: <strong>{{ m }} m³</strong></p>
+          }
         </div>
 
         @if (s.modo() === 'manual') {

@@ -20,6 +20,7 @@ import {
   PageHeader,
   PerfilUsuario,
   mensajeError,
+  pesos,
   rfcValido,
 } from 'ui';
 import { PerfilService } from '../../core/services/perfil.service';
@@ -184,7 +185,14 @@ const empresaSchema = schema<DatosEmpresaRepresentada>((p) => {
                   <div><dt class="text-texto-suave">Sitio web</dt><dd>{{ c.sitioWeb || '—' }}</dd></div>
                   <div>
                     <dt class="text-texto-suave">Crédito</dt>
-                    <dd>{{ c.diasCredito ? c.diasCredito + ' días' : 'De contado' }}</dd>
+                    @if (perfil.credito()?.limite; as limite) {
+                      <dd>
+                        <span class="font-semibold">\${{ pesos(perfil.credito()!.disponible ?? 0) }} disponibles</span>
+                        de \${{ pesos(limite) }} · {{ perfil.credito()!.dias }} días para pagar
+                      </dd>
+                    } @else {
+                      <dd>{{ c.diasCredito ? c.diasCredito + ' días' : 'De contado' }}</dd>
+                    }
                   </div>
                 </dl>
               }
@@ -505,6 +513,7 @@ const empresaSchema = schema<DatosEmpresaRepresentada>((p) => {
 })
 export default class Perfil {
   protected readonly perfil = inject(PerfilService);
+  protected readonly pesos = pesos;
   protected readonly seccion = signal<SeccionPerfil>('informacion');
   protected readonly mensaje = signal('');
   protected readonly iconos = {

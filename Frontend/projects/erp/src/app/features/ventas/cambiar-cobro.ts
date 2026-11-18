@@ -1,8 +1,8 @@
 import { Component, computed, inject, input, output } from '@angular/core';
 import { CdkMenu, CdkMenuItem, CdkMenuTrigger } from '@angular/cdk/menu';
 import { ChevronDown } from 'lucide';
-import { ESTADO_COBRO, EstadoCobro, EstadoCobroEtiqueta, Icon, PedidoVista } from 'ui';
-import { VentasService, mensajeDe } from './datos';
+import { ESTADO_COBRO, EstadoCobro, EstadoCobroEtiqueta, Icon, PedidoVista, pesos } from 'ui';
+import { VentasService, mensajeDe, sinCreditoPara } from './datos';
 
 /**
  * Cambiar el cobro de una orden (Por cobrar → Pagado, Crédito…): botón con menú de cobros y, al elegir, una segunda
@@ -16,7 +16,7 @@ import { VentasService, mensajeDe } from './datos';
     <button
       type="button"
       class="inline-flex h-9 items-center gap-1.5 rounded-[0.625rem] border border-acero-oscuro bg-white px-3 text-sm font-semibold whitespace-nowrap transition-colors hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico"
-      [attr.aria-label]="'Cambiar el cobro de ' + p().folio + ', ahora ' + actual()"
+      [attr.aria-label]="'Cambiar cobro de ' + p().folio + ', ahora ' + actual()"
       [cdkMenuTriggerFor]="menu"
     >
       Cambiar cobro<ui-icon [icono]="iconoAbrir" [tamano]="16" />
@@ -52,7 +52,19 @@ export class CambiarCobro {
 
   protected async elegir(cobro: EstadoCobro): Promise<void> {
     const p = this.p();
+    // Sin la ficha del cliente (rol sin ver clientes) no se sabe su crédito: decide el backend
+    if (cobro === 'credito' && this.ventas.cliente(p.clienteId)) {
+      const credito = this.ventas.creditoDe(p.clienteId);
+      const motivo = sinCreditoPara(credito, p.importe);
+      if (motivo) return void this.cambiado.emit(`${p.folio}: ${motivo}`);
+      if (!confirm(`¿Pasar ${p.folio} ($${pesos(p.importe)}) a crédito? Le quedarán $${pesos(credito.disponible! - p.importe)} disponibles y vence en ${credito.dias} días.`)) return;
+      return this.aplicar(p, cobro);
+    }
     if (!confirm(`¿Cambiar el cobro de ${p.folio} de "${ESTADO_COBRO[p.cobro]}" a "${ESTADO_COBRO[cobro]}"?`)) return;
+    await this.aplicar(p, cobro);
+  }
+
+  private async aplicar(p: PedidoVista, cobro: EstadoCobro): Promise<void> {
     try {
       await this.ventas.cambiarCobro(p.id, cobro);
       this.cambiado.emit(`${p.folio}: el cobro pasó a "${ESTADO_COBRO[cobro]}".`);

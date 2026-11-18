@@ -6,7 +6,8 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, containsTree } fro
 import { filter } from 'rxjs';
 import { CircleHelp, Grip, Search, Settings } from 'lucide';
 import { Icon, OpcionUsuario, UserMenu } from 'ui';
-import { Modulo, ModulosService, buscarModulo, enlacesDelMenu } from '../core/modulos';
+import { MenuModulo, Modulo, ModulosService, buscarModulo, enlacesDelMenu } from '../core/modulos';
+import { ContadoresMenu } from '../core/contadores';
 import { BotonFiltroModulos } from '../features/inicio/filtro-modulos';
 import { IconoModulo } from '../features/inicio/icono-modulo';
 import { Ayuda } from './ayuda';
@@ -89,9 +90,11 @@ import { SelectorPlantas } from './selector-plantas';
                   [attr.aria-current]="g === menuActivo() || null"
                   class="group relative flex items-center px-1 text-[15px] whitespace-nowrap text-texto-suave after:absolute after:inset-x-3 after:bottom-0 after:h-0.75 after:rounded-full hover:text-carbon focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-epico aria-current:font-semibold aria-current:text-carbon aria-current:after:bg-epico aria-expanded:text-carbon"
                 >
-                  <span class="rounded-lg px-2 py-1.5 transition-colors group-hover:bg-carbon/5 group-aria-expanded:bg-carbon/8">{{
-                    g.nombre
-                  }}</span>
+                  <span class="rounded-lg px-2 py-1.5 transition-colors group-hover:bg-carbon/5 group-aria-expanded:bg-carbon/8"
+                    >{{ g.nombre }}@if (totalGrupo(g); as n) {
+                      <span class="sr-only">, </span><span class="ml-1.5 rounded-full bg-epico px-1.5 py-px text-xs font-bold text-white tabular-nums">{{ n }}<span class="sr-only"> pendientes</span></span>
+                    }</span
+                  >
                 </button>
                 <ng-template #panel>
                   <!-- El CDK lo pinta al final de <body>; la región con nombre lo deja dentro de un landmark (axe "region"). -->
@@ -102,9 +105,13 @@ import { SelectorPlantas } from './selector-plantas';
                       class="glass-strong mt-1 max-h-[calc(100dvh-6rem)] min-w-52 scroll-caja p-1.5 text-[15px] text-carbon"
                     >
                       @for (e of g.enlaces; track e.ruta) {
-                        <a cdkMenuItem [routerLink]="e.ruta" routerLinkActive ariaCurrentWhenActive="page" class="px-3" [class]="claseEnlace">{{
-                          e.nombre
-                        }}</a>
+                        <a cdkMenuItem [routerLink]="e.ruta" routerLinkActive ariaCurrentWhenActive="page" class="px-3" [class]="claseEnlace"
+                          >{{ e.nombre }}@if (e.contador && contadores.valor(e.contador.clave); as n) {
+                            <span class="sr-only">, </span><span class="ml-2 rounded-full bg-epico px-1.5 py-px text-xs font-bold text-white tabular-nums"
+                              >{{ n }}<span class="sr-only"> {{ e.contador.texto }}</span></span
+                            >
+                          }</a
+                        >
                       }
                       @for (s of g.secciones; track s.titulo; let i = $index) {
                         <div cdkMenuGroup [attr.aria-labelledby]="'menu-seccion-' + i" class="mt-1">
@@ -195,6 +202,11 @@ export class Encabezado {
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   protected readonly modulos = inject(ModulosService);
+  protected readonly contadores = inject(ContadoresMenu);
+  /** La suma de los marcadores de un menú (se ve en su botón). */
+  protected totalGrupo(g: MenuModulo): number {
+    return g.enlaces.reduce((t, e) => t + (e.contador ? this.contadores.valor(e.contador.clave) : 0), 0);
+  }
   protected readonly barra = inject(BarraEncabezado);
   private readonly buscador = viewChild<ElementRef<HTMLInputElement>>('buscador');
   /** Módulo de la página actual; sin módulo (inicio, avisos) el encabezado lleva logo y buscador. */

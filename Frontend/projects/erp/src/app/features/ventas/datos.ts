@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Service, computed, effect, inject, signal, untracked } from '@angular/core';
 import {
   AUTH_API_URL,
+  type LimitesCliente,
   type ConcretoDisponible,
   concretoDe,
   concretosServidor,
@@ -55,7 +56,7 @@ import {
 import { Actividad, Cambio, EventoHistorial, HistorialService, NuevaActividad } from '../../core/historial';
 import { normalizar } from '../../core/modulos';
 import { PlantasService, plantasVigentes } from '../../core/plantas';
-import { Contexto, VentasApi, aActividad, aCliente, aEvento, pedidoApi } from './ventas-api';
+import { Contexto, type CuentaPortal, VentasApi, aActividad, aCliente, aEvento, pedidoApi } from './ventas-api';
 
 /** En el orden del panel de filtros. Tinte + texto oscurecido (AA en texto pequeño), como los estados del dashboard. */
 export const ESTADOS_COTIZACION: Record<EstadoCotizacion, { nombre: string; clase: string }> = {
@@ -551,7 +552,8 @@ export const filtrarProductos = (productos: ProductoTarifa[], texto: string) =>
 
 /** Neto de las que no están canceladas. */
 export const totalVigente = (cotizaciones: CotizacionVista[]) =>
-  cotizaciones.reduce((suma, c) => (c.estado === 'cancelada' ? suma : suma + c.total), 0);
+  // Una oferta reemplazada tampoco: su negociación ya cuenta con la oferta que la reemplazó
+  cotizaciones.reduce((suma, c) => (c.estado === 'cancelada' || c.reemplazadaPorId ? suma : suma + c.total), 0);
 
 /** Solo las que no son pedido ni están canceladas se pueden editar y enviar (como en Odoo). */
 /** Lo que se edita de una orden; el importe se recalcula con su partida (mismas reglas que la cotización). */
@@ -566,6 +568,40 @@ export interface CambiosPedido {
 
 /** Una orden se edita mientras no se entregue ni se cancele. */
 export const pedidoEditable = (p: Pedido) => p.estado === 'programado';
+
+/** El crédito de un cliente: lo usado son sus órdenes en cobro "Crédito" (la misma regla que el backend). */
+export interface CreditoCliente {
+  /** null = sin crédito asignado. */
+  limite: number | null;
+  dias: number;
+  usado: number;
+  /** null sin límite; puede ser negativo si se pasó. */
+  disponible: number | null;
+  ordenes: { p: PedidoVista; vence: string; vencida: boolean }[];
+}
+
+/** `ahora` en ms (para probarlo). Sin fecha de inicio (demo), cuenta desde la entrega. */
+export function creditoDe(cliente: Pick<Cliente, 'credito'> | undefined, pedidos: PedidoVista[], ahora = Date.now()): CreditoCliente {
+  const limite = cliente?.credito?.limite ?? null;
+  const dias = cliente?.credito?.dias ?? 0;
+  const ordenes = pedidos
+    // Los cancelados no cuentan aunque su cobro siga en crédito (igual que el backend)
+    .filter((p) => p.cobro === 'credito' && p.estado !== 'cancelado')
+    .map((p) => {
+      const vence = new Date(Date.parse(p.creditoDesde ?? p.fechaHoraEntrega) + dias * 86_400_000).toISOString();
+      return { p, vence, vencida: Date.parse(vence) < ahora };
+    })
+    .sort((a, b) => Date.parse(a.vence) - Date.parse(b.vence));
+  const usado = ordenes.reduce((s, o) => s + o.p.importe, 0);
+  return { limite, dias, usado, disponible: limite == null ? null : limite - usado, ordenes };
+}
+
+/** Por qué una orden no puede pasar a crédito ('' si sí puede). */
+export function sinCreditoPara(c: CreditoCliente, importe: number): string {
+  if (!c.limite) return 'El cliente no tiene crédito asignado: dáselo en su ficha (Crédito).';
+  if (c.disponible! < importe) return `Excede el crédito del cliente: disponible $${pesos(Math.max(c.disponible!, 0))}, la orden es de $${pesos(importe)}.`;
+  return '';
+}
 
 export const modificable = (c: Cotizacion) => c.estado === 'recibida' || c.estado === 'borrador' || c.estado === 'enviada';
 
@@ -614,6 +650,12 @@ function vistaPedido(p: Pedido, cat: Catalogo): PedidoVista {
 const folioPedido = (consecutivo: number) => `PED-26-${String(consecutivo).padStart(4, '0')}`;
 
 /** Un pedido por partida (pedidoDePartida, la misma regla que el portal), de la planta de la cotización. */
+/** "Orden confirmada (entrega 20/11/2026 10:00)", con la hora de la planta. */
+const textoConfirmada = (p: PedidoVista) => `Orden confirmada (entrega ${fechaHoraCorta(p.fechaHoraEntrega)})`;
+
+/** Por confirmar: Ventas aún no la confirma (ni planta su requerimiento). */
+export const porConfirmar = (p: Pick<PedidoVista, 'confirmadaEn' | 'estado'>) => !p.confirmadaEn && p.estado !== 'cancelado';
+
 const pedidosDe = (c: Cotizacion, primerConsecutivo: number, cat: Catalogo = EJEMPLO, metodoPago: MetodoPago = 'sin_metodo'): PedidoVista[] =>
   c.partidas.map((p, i) => {
     const folio = folioPedido(primerConsecutivo + i);
@@ -639,7 +681,7 @@ const PEDIDOS: PedidoVista[] = COTIZACIONES.filter((c) => c.estado === 'pedido')
   .flatMap((c, i) => pedidosDe(c, 151 + i))
   .map((p): PedidoVista =>
     p.fechaHoraEntrega < '2026-11-05'
-      ? { ...p, estado: 'entregado', estatusPlanta: 'confirmado', metodoPago: 'transferencia' }
+      ? { ...p, estado: 'entregado', estatusPlanta: 'confirmado', metodoPago: 'transferencia', confirmadaEn: p.fechaHoraEntrega }
       : p.cotizacionId === 'EPI-PRES-ESC-26089'
         ? { ...p, estatusPlanta: 'enviado' }
         : p,
@@ -655,6 +697,7 @@ export const registro = {
   producto: (id: string) => 'producto:' + id,
   lista: (id: string) => 'lista-precios:' + id,
   programa: (id: string) => 'programa:' + id,
+  equipo: (id: string) => 'equipo:' + id,
 };
 
 /** Lo que se captura al dar de alta un producto. */
@@ -669,6 +712,10 @@ export interface NuevoProducto {
   descripcion: string;
   existencias?: number;
   minimoExistencias?: number;
+  /** Lo menos que se puede pedir (en su unidad). */
+  pedidoMinimo?: number;
+  /** Minutos de servicio por viaje. */
+  tiempoServicioMin?: number;
   /** Concretos: soluciones del cotizador. */
   soluciones?: string[];
 }
@@ -701,11 +748,21 @@ export const OPCIONES_CONCRETO = {
   ],
 } as const;
 
-/** Tipos de equipo que se rentan como servicio. */
+/** Tipos de equipo de la flota (Logística); los mismos se pueden rentar como servicio. */
 export const TIPOS_EQUIPO = {
   revolvedor: 'Camión revolvedor',
   'bomba-pluma': 'Bomba pluma',
   'bomba-estacionaria': 'Bomba estacionaria',
+  volteo: 'Camión de volteo',
+  plataforma: 'Plataforma (flete)',
+  tractocamion: 'Tractocamión',
+  pipa: 'Pipa',
+  camioneta: 'Camioneta',
+  retroexcavadora: 'Retroexcavadora',
+  cargador: 'Cargador frontal',
+  excavadora: 'Excavadora',
+  grua: 'Grúa',
+  montacargas: 'Montacargas',
   aplanadora: 'Aplanadora',
   vibrador: 'Vibrador',
   allanadora: 'Allanadora',
@@ -774,7 +831,7 @@ export function nombreConcreto(c: ConfigConcreto): string {
 /** Lo que se edita de un producto (el tipo y las existencias no: las existencias van con entradas y salidas). */
 export type CambiosProducto = Pick<
   ProductoTarifa,
-  'codigo' | 'nombre' | 'unidad' | 'precio' | 'descripcion' | 'minimoExistencias' | 'configuracion' | 'equipo' | 'soluciones'
+  'codigo' | 'nombre' | 'unidad' | 'precio' | 'descripcion' | 'minimoExistencias' | 'pedidoMinimo' | 'tiempoServicioMin' | 'configuracion' | 'equipo' | 'soluciones'
 >;
 
 /** Los del tarifario: su precio y su unidad los usa el cotizador, así que aquí no se cambian. */
@@ -1020,7 +1077,9 @@ export class VentasService {
     if (this.api) {
       // shortcut: el backend aún no manda el correo ni publica en el portal; solo cambia el estado a enviada.
       await this.api.enviar(id);
-      this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      const enviada = this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      // Una oferta mejorada deja reemplazada a la anterior (lo marca el backend al enviar)
+      if (enviada.reemplazaId) this.ponerCotizacion(await this.api.cotizacion(enviada.reemplazaId, this.contexto()));
       return;
     }
     const antes = this.buscar(id)!;
@@ -1030,34 +1089,47 @@ export class VentasService {
       texto: portal ? `Enviada al portal de ${antes.clienteNombre} (${correo})` : `Enviada por correo a ${correo}`,
       cambios: cambioEstado(antes.estado, 'enviada'),
     });
+    const anterior = antes.reemplazaId ? this.buscar(antes.reemplazaId) : undefined;
+    if (anterior && !anterior.reemplazadaPorId) {
+      this.cambiar(anterior.id, (c) => ({ ...c, reemplazadaPorId: id }));
+      this.historial.registrar(registro.cotizacion(anterior.id), {
+        texto: `Reemplazada por la oferta ${antes.folio}`,
+        detalles: [`Neto $${pesos(anterior.total)} → $${pesos(antes.total)}`],
+      });
+    }
   }
 
   /** Cancelar una cotización (no pedida): ya no se envía ni se confirma; queda en la lista como Cancelada. */
   async cancelar(id: string): Promise<void> {
     if (this.api) {
       await this.api.cancelar(id);
-      this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      const cancelada = this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
+      // Cancelar una oferta enviada hace que la anterior vuelva a valer
+      if (cancelada.reemplazaId) this.ponerCotizacion(await this.api.cotizacion(cancelada.reemplazaId, this.contexto()));
       return;
     }
     const antes = this.buscar(id)!;
     this.cambiar(id, (c) => ({ ...c, estado: 'cancelada' }));
     this.historial.registrar(registro.cotizacion(id), { texto: 'Cotización cancelada', cambios: cambioEstado(antes.estado, 'cancelada') });
+    if (antes.reemplazaId) this.cambiar(antes.reemplazaId, (c) => (c.reemplazadaPorId === id ? { ...c, reemplazadaPorId: undefined } : c));
   }
 
   /**
    * Como "Confirmar" en Odoo: la cotización pasa a pedido y genera un pedido por partida (cada entrega es una orden de
    * venta, como al aceptarla en el portal). Devuelve los pedidos nuevos; si ya no se podía confirmar, ninguno.
    */
-  async confirmar(id: string, metodoPago: MetodoPago = 'sin_metodo'): Promise<PedidoVista[]> {
+  async confirmar(id: string, metodoPago: MetodoPago = 'sin_metodo', confirmarOrdenes = false): Promise<PedidoVista[]> {
     if (this.api) {
-      const nuevos = await this.api.confirmar(id, this.contexto());
+      const nuevos = await this.api.confirmar(id, this.contexto(), confirmarOrdenes);
       const con = metodoPago === 'sin_metodo' ? nuevos : await Promise.all(nuevos.map((p) => this.api!.accionPedido(p.id, 'metodo-pago', { valor: metodoPago }, this.contexto())));
       this.ponerCotizacion(await this.api.cotizacion(id, this.contexto()));
       return con.map((p) => this.ponerPedido(p));
     }
     const c = this.buscar(id);
-    if (!c || !modificable(c)) return [];
-    const nuevos = pedidosDe(c, this.consecutivo + 1, this.catalogo(), metodoPago);
+    // Una oferta reemplazada ya no se confirma: el cliente acepta la última (el backend da 409)
+    if (!c || !modificable(c) || c.reemplazadaPorId) return [];
+    const ahora = new Date().toISOString();
+    const nuevos = pedidosDe(c, this.consecutivo + 1, this.catalogo(), metodoPago).map((p) => (confirmarOrdenes ? { ...p, confirmadaEn: ahora } : p));
     this.consecutivo += nuevos.length;
     this.pedidos.update((lista) => [...nuevos, ...lista]);
     this.cambiar(id, (x) => ({ ...x, estado: 'pedido' }));
@@ -1069,8 +1141,23 @@ export class VentasService {
     });
     for (const p of nuevos) {
       this.historial.registrar(registro.pedido(p.folio), { texto: `Orden de venta creada desde la cotización ${c.folio}` });
+      if (confirmarOrdenes) this.historial.registrar(registro.pedido(p.folio), { texto: textoConfirmada(p) });
     }
     return nuevos;
+  }
+
+  /** Ventas confirma la orden (antes, quien confirma vio la fecha y hora de entrega). */
+  /** Vuelve a leer una orden del backend (p. ej. tras asignarle unidades en Logística: cambian estado y método de pago). */
+  async refrescarPedido(id: string): Promise<void> {
+    if (this.api) this.ponerPedido(await this.api.pedido(id, this.contexto()));
+  }
+
+  async confirmarOrden(id: string): Promise<void> {
+    if (this.api) return void this.ponerPedido(await this.api.accionPedido(id, 'confirmar', {}, this.contexto()));
+    const p = this.pedidos().find((x) => x.id === id);
+    if (!p || p.confirmadaEn || p.estado === 'cancelado') return;
+    this.cambiarPedido(id, { confirmadaEn: new Date().toISOString() });
+    this.historial.registrar(registro.pedido(p.folio), { texto: textoConfirmada(p) });
   }
 
   private readonly catalogo = (): Catalogo => ({ clientes: this.clientes(), obras: this.obras(), nombres: this.nombres });
@@ -1114,6 +1201,42 @@ export class VentasService {
   async eliminarCliente(id: string): Promise<void> {
     if (this.api) await this.api.eliminarCliente(id);
     this.clientes.update((l) => l.filter((c) => c.id !== id));
+  }
+
+  /** Cuenta del portal: solo con backend (sin él, la ficha no la ofrece). */
+  readonly conBackend = !!this.api;
+  cuentaPortal(clienteId: string): Promise<CuentaPortal | null> {
+    return this.api?.cuentaPortal(clienteId) ?? Promise.resolve(null);
+  }
+  async crearCuentaPortal(clienteId: string, d: { correo: string; nombre: string }): Promise<CuentaPortal & { correoEnviado: boolean }> {
+    const cuenta = await this.api!.crearCuentaPortal(clienteId, d);
+    this.clientes.update((l) => l.map((c) => (c.id === clienteId ? { ...c, portal: true } : c)));
+    void this.historial.cargar(registro.cliente(clienteId));
+    return cuenta;
+  }
+  async reenviarCredenciales(clienteId: string): Promise<{ correoEnviado: boolean }> {
+    const r = await this.api!.reenviarCredenciales(clienteId);
+    void this.historial.cargar(registro.cliente(clienteId));
+    return r;
+  }
+  async activarCuentaPortal(clienteId: string, activa: boolean): Promise<void> {
+    await this.api!.activarCuentaPortal(clienteId, activa);
+    void this.historial.cargar(registro.cliente(clienteId));
+  }
+  /** El crédito del cliente con sus órdenes a crédito (de las que ve esta sesión). */
+  creditoDe(clienteId: string): CreditoCliente {
+    return creditoDe(this.cliente(clienteId), this.pedidos().filter((p) => p.clienteId === clienteId));
+  }
+  async guardarCredito(clienteId: string, credito: { limite: number | null; dias: number }): Promise<void> {
+    if (this.api) await this.api.guardarCredito(clienteId, credito);
+    this.clientes.update((l) => l.map((c) => (c.id === clienteId ? { ...c, credito } : c)));
+    if (this.api) void this.historial.cargar(registro.cliente(clienteId));
+  }
+
+  async guardarLimites(clienteId: string, limites: LimitesCliente): Promise<void> {
+    if (this.api) await this.api.guardarLimites(clienteId, limites);
+    this.clientes.update((l) => l.map((c) => (c.id === clienteId ? { ...c, limites } : c)));
+    if (this.api) void this.historial.cargar(registro.cliente(clienteId));
   }
 
   async eliminarObra(id: string): Promise<void> {
@@ -1282,13 +1405,19 @@ export class VentasService {
    * Orden de venta directa, sin pasar por cotización: una por producto, como al confirmar. Con `conCotizacion`, además
    * queda su cotización (creada y confirmada) como respaldo; sin ella, cada orden guarda su partida. Devuelve las órdenes.
    */
-  async crearOrdenes(n: NuevaCotizacion, vendedorId: string, conCotizacion: boolean, metodoPago: MetodoPago = 'sin_metodo'): Promise<PedidoVista[]> {
-    if (conCotizacion) return this.confirmar((await this.crear(n, vendedorId)).id, metodoPago);
+  async crearOrdenes(
+    n: NuevaCotizacion,
+    vendedorId: string,
+    conCotizacion: boolean,
+    metodoPago: MetodoPago = 'sin_metodo',
+    confirmada = false,
+  ): Promise<PedidoVista[]> {
+    if (conCotizacion) return this.confirmar((await this.crear(n, vendedorId)).id, metodoPago, confirmada);
     if (this.api) {
       const clienteId = await this.clienteApi(n.clienteId);
       const nuevos = [];
       for (const p of n.partidas) {
-        nuevos.push(await this.api.crearPedido(pedidoApi({ ...n, clienteId }, p, metodoPago, this.contexto(), this.unidadDe), this.contexto()));
+        nuevos.push(await this.api.crearPedido({ ...pedidoApi({ ...n, clienteId }, p, metodoPago, this.contexto(), this.unidadDe), confirmada }, this.contexto()));
       }
       return nuevos.map((p) => this.ponerPedido(p));
     }
@@ -1306,6 +1435,7 @@ export class VentasService {
           metodoPago,
           partida: p,
           ...(n.descuento ? { descuento: n.descuento } : {}),
+          ...(confirmada ? { confirmadaEn: new Date().toISOString() } : {}),
         },
         this.catalogo(),
       );
@@ -1340,6 +1470,8 @@ export class VentasService {
       unidad: n.unidad,
       precio: n.precio,
       descripcion: n.descripcion.trim(),
+      ...(n.pedidoMinimo ? { pedidoMinimo: n.pedidoMinimo } : {}),
+      ...(n.tiempoServicioMin ? { tiempoServicioMin: n.tiempoServicioMin } : {}),
       ...(general ? { existencias: n.existencias ?? 0, minimoExistencias: n.minimoExistencias ?? 0 } : {}),
       ...(n.configuracion ? { configuracion: n.configuracion } : {}),
       ...(n.equipo ? { equipo: n.equipo } : {}),
@@ -1373,7 +1505,7 @@ export class VentasService {
       await this.recargar();
       return void this.historial.cargar(registro.producto(id));
     }
-    const { equipo: _equipo, ...resto } = antes;
+    const { equipo: _equipo, pedidoMinimo: _minimo, tiempoServicioMin: _tiempo, ...resto } = antes;
     const despues: ProductoTarifa = {
       ...resto,
       nombre: c.nombre.trim(),
@@ -1383,6 +1515,8 @@ export class VentasService {
       ...(c.equipo ? { equipo: c.equipo } : {}),
       ...(antes.existencias != null && c.minimoExistencias != null ? { minimoExistencias: c.minimoExistencias } : {}),
       ...(c.soluciones ? { soluciones: c.soluciones } : {}),
+      ...(c.pedidoMinimo ? { pedidoMinimo: c.pedidoMinimo } : {}),
+      ...(c.tiempoServicioMin ? { tiempoServicioMin: c.tiempoServicioMin } : {}),
     };
     const cambios: Cambio[] = [];
     const campo = (nombre: string, a: string, d: string) => a !== d && cambios.push({ campo: nombre, antes: a, despues: d });
@@ -1391,6 +1525,8 @@ export class VentasService {
     campo('Unidad', antes.unidad, despues.unidad);
     campo('Precio de lista', '$' + pesos(antes.precio), '$' + pesos(despues.precio));
     campo('Descripción', antes.descripcion || '—', despues.descripcion || '—');
+    campo('Tiempo de servicio', antes.tiempoServicioMin ? `${antes.tiempoServicioMin} min` : '—', despues.tiempoServicioMin ? `${despues.tiempoServicioMin} min` : '—');
+    campo('Pedido mínimo', String(antes.pedidoMinimo ?? '—'), String(despues.pedidoMinimo ?? '—'));
     campo('Aviso de existencias', String(antes.minimoExistencias ?? '—'), String(despues.minimoExistencias ?? '—'));
     const equipo = (p: ProductoTarifa) => (p.equipo ? textoEquipo(p.equipo) : 'No es renta de equipo');
     campo('Renta de equipo', equipo(antes), equipo(despues));
@@ -1494,7 +1630,7 @@ export class VentasService {
     const antes = this.pedidos().find((p) => p.id === id);
     if (!antes || antes.cobro === cobro) return;
     if (this.api) return void this.ponerPedido(await this.api.accionPedido(id, 'cobro', { valor: cobro }, this.contexto()));
-    this.cambiarPedido(id, { cobro });
+    this.cambiarPedido(id, { cobro, creditoDesde: cobro === 'credito' ? new Date().toISOString() : undefined });
     this.historial.registrar(registro.pedido(antes.folio), {
       texto: 'Cobro actualizado',
       cambios: [{ campo: 'Cobro', antes: ESTADO_COBRO[antes.cobro], despues: ESTADO_COBRO[cobro] }],
@@ -1538,6 +1674,8 @@ export class VentasService {
       estatusPlanta: estatus,
       solicitudPlanta: solicitud,
       ...(aceptaFecha ? { fechaHoraEntrega: aceptaFecha } : {}),
+      // Si planta la confirma, la orden queda confirmada (igual que el backend)
+      ...(estatus === 'confirmado' && !antes.confirmadaEn ? { confirmadaEn: new Date().toISOString() } : {}),
     });
     const texto = {
       no_enviado: 'Requerimiento retirado de planta',
@@ -1632,6 +1770,8 @@ export class VentasService {
         return { tipo: 'Producto', id: this.productoApi(id) };
       case 'obra':
         return { tipo: 'Obra', id };
+      case 'equipo':
+        return { tipo: 'Equipo', id };
       case 'usuario':
         return { tipo: 'Usuario', id };
       case 'rol':

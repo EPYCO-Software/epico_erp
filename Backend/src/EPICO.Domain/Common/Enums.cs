@@ -16,7 +16,30 @@ public enum TipoProducto { Concreto, Servicio, General }
 
 public enum TipoMovimientoInventario { Entrada, Salida, Ajuste }
 
-public enum TipoEquipo { Revolvedor, BombaPluma, BombaEstacionaria, Aplanadora, Vibrador, Allanadora, Otro }
+public enum TipoEquipo
+{
+    Revolvedor, BombaPluma, BombaEstacionaria, Aplanadora, Vibrador, Allanadora, Otro,
+    Volteo, Plataforma, Tractocamion, Pipa, Camioneta, Retroexcavadora, Cargador, Excavadora, Grua, Montacargas,
+}
+
+public enum EstadoEquipo { Disponible, Mantenimiento, FueraDeServicio }
+
+public enum TipoDocumentoEquipo { Seguro, Verificacion, TarjetaCirculacion, PermisoSct, Tenencia, Otro, Calibracion }
+
+public enum TipoMantenimiento { Preventivo, Correctivo }
+
+public enum EstadoMantenimiento { Programado, EnProceso, Terminado, Cancelado }
+
+/// <summary>Quién pidió cambiar la entrega.</summary>
+public enum OrigenReagenda { Planta, Logistica, Ventas, Cliente }
+
+public enum EstadoSolicitud { Pendiente, Aceptada, Rechazada }
+
+public enum TipoTrayecto { Entrega, Traslado, Flete, Mantenimiento, Otro }
+
+public enum FuentePosicion { Traccar, Demo, Manual }
+
+public enum ResultadoInspeccion { Aprobada, ConObservaciones, Rechazada }
 
 public enum AplicarRegla { Todos, Producto, Categoria }
 
@@ -34,11 +57,12 @@ public enum EstadoPedido { Programado, EnPlanta, EnRuta, EnObra, Entregado, Canc
 
 public enum EstadoCobro { PorCobrar, PorFacturar, Facturado, Credito, Pagado, Finalizado }
 
-public enum MetodoPago { SinMetodo, Transferencia }
+public enum MetodoPago { SinMetodo, Transferencia, Efectivo, Tarjeta, Cheque }
 
 public enum EstatusPlanta { NoEnviado, Enviado, Confirmado, Actualizacion, Rechazada }
 
-public enum EstadoViaje { Cargando, EnRuta, EnObra, Regresando, Terminado }
+/// <summary>Programado = camión asignado, aún no carga. El orden importa: un viaje solo avanza.</summary>
+public enum EstadoViaje { Programado, Cargando, EnRuta, EnObra, Regresando, Terminado }
 
 public enum TipoImpuesto { Traslado, Retencion }
 

@@ -1,7 +1,7 @@
 import { buscarSolucion } from './catalogo';
 import { concretoDe, concretoExistente, concretosServidor, resistenciasDe, solucionesDisponibles, sugeridaDisponible } from './concretos';
 import { SOLUCIONES } from './catalogo';
-import { agruparPorObra, aditivoDe, aditivosDisponibles, aditivosServidor, conceptoConcreto, etiquetas, lineasPartida, precioConcreto } from './formato';
+import { pedidoMinimoDe, agruparPorObra, aditivoDe, aditivosDisponibles, aditivosServidor, conceptoConcreto, etiquetas, lineasPartida, precioConcreto } from './formato';
 
 const concreto = (id: string, precio: number, soluciones: string[]) => concretoDe({ id, precio, soluciones })!;
 
@@ -9,6 +9,14 @@ describe('concretos: soluciones conectadas a los productos', () => {
   afterEach(() => {
     concretosServidor.set(null);
     aditivosServidor.set(null);
+  });
+
+  it('pedido mínimo: el del producto de esa resistencia; sin backend o sin mínimo, ninguno', () => {
+    const e = { tipoResistencia: 'fc' as const, resistenciaKgCm2: 200 };
+    expect(pedidoMinimoDe(e)).toBeUndefined();
+    concretosServidor.set([concretoDe({ id: 'fc-200', precio: 1, pedidoMinimo: 3 })!, concreto('fc-250', 1, [])]);
+    expect(pedidoMinimoDe(e)).toBe(3);
+    expect(pedidoMinimoDe({ ...e, resistenciaKgCm2: 250 })).toBeUndefined();
   });
 
   it('sin backend se ofrecen todas las soluciones y todas las resistencias del tarifario', () => {

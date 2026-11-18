@@ -38,8 +38,10 @@ import {
   precioConcreto,
   totales,
   totalesCotizacion,
+  pedidoMinimoDe,
 } from 'ui';
 import { PlantasService } from '../../core/plantas';
+import { permisosSesion } from '../../core/permisos';
 import { EnEncabezado } from '../../layout/barra-encabezado';
 import { COLUMNA } from '../../layout/panel-lateral';
 import { CAJAS_VISTA, RutaNavegacion } from '../../layout/vista-completa';
@@ -216,8 +218,14 @@ function productoDe(solucionId: string, obraId: string, entrega: string, modo: M
             Precios del tarifario; escribe un precio especial solo donde aplique.
             {{ orden() ? 'Se crea una orden por producto, sin pasar por cotización.' : 'Se guarda en borrador.' }}
             @if (cotizacionBase(); as b) {
-              Trae todo de {{ b.folio }} (neto \${{ pesos(b.total) }}): cambia lo que quieras; las dos quedan ligadas para
-              comparar precios. Revisa las fechas de entrega.
+              @if (esOferta()) {
+                Negociación: trae todo de {{ b.folio }} (neto \${{ pesos(b.total) }}); mejora el precio especial o el descuento.
+                Al enviarla, {{ b.folio }} queda reemplazada y el cliente solo puede aceptar esta.
+              } @else {
+                Trae todo de {{ b.folio }} (neto \${{ pesos(b.total) }}): cambia lo que quieras; las dos quedan ligadas para
+                comparar precios.
+              }
+              Revisa las fechas de entrega.
             }
           </p>
 
@@ -533,10 +541,11 @@ function productoDe(solucionId: string, obraId: string, entrega: string, modo: M
                         step="0.5"
                         [id]="'p' + i + '-volumen'"
                         class="campo mt-1 h-9 px-3 text-right text-sm tabular-nums"
-                        [attr.aria-describedby]="'p' + i + '-volumen-error'"
+                        [attr.aria-describedby]="'p' + i + '-volumen-error ' + 'p' + i + '-volumen-minimo'"
                         [formField]="f.productos[i].volumen"
                       />
                       <ui-field-error [campo]="f.productos[i].volumen" [errorId]="'p' + i + '-volumen-error'" />
+                      <p [id]="'p' + i + '-volumen-minimo'" class="mt-1 text-xs text-texto-suave empty:hidden">{{ textoMinimo(p) }}</p>
                     </div>
                   </div>
                   <div [id]="'p' + i + '-existe'" role="status">
@@ -827,6 +836,11 @@ function productoDe(solucionId: string, obraId: string, entrega: string, modo: M
             <dd class="text-right tabular-nums">\${{ pesos(total().iva) }}</dd>
             <dt class="border-t border-acero/60 pt-1.5 text-base font-bold">Neto</dt>
             <dd class="border-t border-acero/60 pt-1.5 text-right text-base font-bold tabular-nums">\${{ pesos(total().neto) }}</dd>
+            @if (esOferta() && cotizacionBase(); as b) {
+              <dt class="text-texto-suave">Oferta anterior ({{ b.folio }})</dt>
+              <dd class="text-right tabular-nums">\${{ pesos(b.total) }}</dd>
+              <dd class="col-span-2 text-right text-sm" [class]="mejora().clase">{{ mejora().texto }}</dd>
+            }
           </dl>
 
           @if (orden()) {
@@ -842,6 +856,17 @@ function productoDe(solucionId: string, obraId: string, entrega: string, modo: M
               </div>
               <ui-field-error [campo]="f.metodoPago" errorId="metodo-error" />
             </fieldset>
+          }
+
+          @if (orden() && puedeConfirmar) {
+            <!-- La fecha y hora de entrega están en la hoja: quien la crea puede dejarla confirmada -->
+            <label class="mt-4 flex cursor-pointer items-start gap-2.5 text-sm">
+              <input type="checkbox" class="casilla mt-0.5 size-4" [checked]="confirmarOrden()" (change)="confirmarOrden.set($any($event.target).checked)" />
+              <span>
+                <span class="block font-semibold">Dejarla confirmada</span>
+                <span class="block text-texto-suave">Revisa la fecha y hora de entrega de cada producto; sin marcar, queda por confirmar.</span>
+              </span>
+            </label>
           }
 
           <!-- Botón dividido: la acción elegida (Guardar por omisión) y, en la flecha, las demás -->
@@ -931,9 +956,23 @@ export default class NuevaCotizacionPagina implements OnInit {
   protected readonly cotizacionBase = computed(() =>
     this.orden() ? undefined : this.ventas.cotizaciones().find((c) => c.id === this.base()),
   );
+  /** Orden directa: dejarla confirmada al crearla (con el permiso de confirmar órdenes). */
+  protected readonly puedeConfirmar = permisosSesion()('ventas.pedidos.confirmar');
+  protected readonly confirmarOrden = signal(false);
+  /** De la URL (?oferta=1, "Mejorar oferta"): la nueva reemplaza a la base al enviarse (negociación). */
+  readonly oferta = input<string>();
+  protected readonly esOferta = computed(() => !!this.oferta() && !!this.cotizacionBase());
+  /** Cuánto mejora la oferta anterior; si no baja el neto, se avisa (no se bloquea). */
+  protected readonly mejora = computed(() => {
+    const antes = this.cotizacionBase()?.total ?? 0;
+    const d = antes - this.total().neto;
+    if (d > 0.005) return { texto: `Baja $${pesos(d)} (−${((d / antes) * 100).toFixed(1)} %)`, clase: 'font-semibold text-[#2E5E4A]' };
+    return { texto: d < -0.005 ? `Sube $${pesos(-d)}: no mejora la oferta` : 'Mismo neto: aún no mejora la oferta', clase: 'font-semibold text-[#8E332C]' };
+  });
   protected readonly titulo = computed(() => {
     if (this.orden()) return 'Nueva orden de venta';
     const b = this.cotizacionBase();
+    if (b && this.esOferta()) return `Mejorar oferta de ${b.folio}`;
     return b ? `Nueva cotización basada en ${b.folio}` : 'Nueva cotización';
   });
   protected readonly lista = computed(() => (this.orden() ? '/ventas/ordenes' : '/ventas/cotizaciones'));
@@ -1016,6 +1055,11 @@ export default class NuevaCotizacionPagina implements OnInit {
       );
       required(p.volumen, { message: 'Escribe el volumen.' });
       min(p.volumen, 0.5, { message: 'El mínimo es 0.5 m³.' });
+      // El pedido mínimo del producto (Productos): con menos no se cotiza ni se ordena
+      validate(p.volumen, ({ value, valueOf }) => {
+        const m = pedidoMinimoDe(valueOf(p.especificacion));
+        return m && value() != null && value()! < m ? { kind: 'pedido-minimo', message: `El pedido mínimo de este concreto es ${m} m³.` } : undefined;
+      });
       min(p.precio, 1, { message: 'El precio debe ser mayor a cero.' });
       min(p.distancia, 0, { message: 'La distancia no puede ser negativa.' });
       // No se cotiza un concreto que no está en los productos (para esa solución)
@@ -1041,6 +1085,12 @@ export default class NuevaCotizacionPagina implements OnInit {
     );
     min(m.traslado.precioKm, 0, { message: 'No puede ser negativo.' });
   });
+
+  /** "Pedido mínimo: 3 m³" bajo el volumen, si el concreto lo tiene. */
+  protected textoMinimo(p: Producto): string {
+    const m = pedidoMinimoDe(p.especificacion);
+    return m ? `Pedido mínimo: ${m} m³` : '';
+  }
 
   protected readonly obras = computed(() => this.obrasDe(this.modelo().clienteId));
   /** Las obras más el lugar de entrega (como obra de solo lectura): para la distancia y el PDF. */
@@ -1414,10 +1464,17 @@ export default class NuevaCotizacionPagina implements OnInit {
           partidas: this.partidas(),
           descuento: m.descuento || undefined,
           baseId: this.cotizacionBase()?.id,
+          ...(this.esOferta() ? { reemplazaId: this.cotizacionBase()!.id } : {}),
           ...(m.lugar ? { lugar: m.lugar } : {}),
         };
         if (accion === 'orden' || accion === 'orden-cotizacion') {
-          const ordenes = await this.ventas.crearOrdenes(datos, this.usuario?.id ?? this.usuario?.correo ?? '', accion === 'orden-cotizacion', m.metodoPago || 'sin_metodo');
+          const ordenes = await this.ventas.crearOrdenes(
+            datos,
+            this.usuario?.id ?? this.usuario?.correo ?? '',
+            accion === 'orden-cotizacion',
+            m.metodoPago || 'sin_metodo',
+            this.puedeConfirmar && this.confirmarOrden(),
+          );
           this.guardada = true;
           await this.router.navigate(['/ventas/ordenes', ordenes[0].folio]);
           return undefined;

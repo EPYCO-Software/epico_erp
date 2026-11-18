@@ -29,6 +29,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUsuarioActual, UsuarioActual>();
 builder.Services.AddSingleton<Tokens>();
 builder.Services.AddScoped<EPICO.Application.Ventas.VentasServicio>();
+builder.Services.AddScoped<EPICO.Application.Flota.FlotaServicio>();
+builder.Services.AddScoped<EPICO.Application.Calidad.CalidadServicio>();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>

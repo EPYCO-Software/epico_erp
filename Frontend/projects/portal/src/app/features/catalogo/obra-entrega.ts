@@ -1,7 +1,8 @@
-import { Component, Injector, afterNextRender, inject, signal, viewChild } from '@angular/core';
+import { Component, Injector, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { Check, MapPin, Plus, X } from 'lucide';
 import { Icon, Mapa, ObraForm, mensajeError } from 'ui';
 import { NuevaObra } from '../../core/services/obras.service';
+import { PerfilService } from '../../core/services/perfil.service';
 import { CotizadorState } from './cotizador.state';
 
 /** Paso 3, al final: a qué obra va el concreto. Elegir una registrada o agregar una nueva con su ubicación. */
@@ -14,15 +15,20 @@ import { CotizadorState } from './cotizador.state';
         <h2 id="obra-titulo" class="text-lg font-bold">Obra de entrega</h2>
         <button
           type="button"
-          class="flex h-9 items-center gap-1.5 rounded-[0.625rem] border border-acero-oscuro bg-white px-3 text-sm font-semibold hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico"
+          class="flex h-9 items-center gap-1.5 rounded-[0.625rem] border border-acero-oscuro bg-white px-3 text-sm font-semibold hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico disabled:cursor-not-allowed disabled:opacity-50"
           [attr.aria-expanded]="agregando()"
           aria-controls="obra-nueva"
+          [disabled]="!agregando() && !!tope()"
+          [attr.aria-describedby]="tope() ? 'obra-tope' : null"
           (click)="alternarFormulario()"
         >
           <ui-icon [icono]="agregando() ? iconos.cerrar : iconos.agregar" [tamano]="16" />{{ agregando() ? 'Cancelar' : 'Agregar obra' }}
         </button>
       </div>
 
+      @if (tope()) {
+        <p id="obra-tope" class="mt-2 text-sm font-medium text-[#7A5410]">{{ tope() }}</p>
+      }
       @if (s.faltaObra()) {
         <p role="alert" class="mt-3 rounded-xl bg-[#F6E3E1] px-4 py-2.5 text-sm font-medium text-[#8E332C]">Selecciona o agrega la obra donde entregaremos el concreto.</p>
       }
@@ -82,6 +88,9 @@ export class ObraEntrega {
   protected readonly agregando = signal(false);
   private readonly formulario = viewChild(ObraForm);
   private readonly injector = inject(Injector);
+
+  private readonly perfil = inject(PerfilService);
+  protected readonly tope = computed(() => this.perfil.tope('obras', this.s.obras().length));
 
   protected alternarFormulario(): void {
     this.agregando.update((v) => !v);

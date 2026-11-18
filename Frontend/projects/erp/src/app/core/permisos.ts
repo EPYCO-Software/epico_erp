@@ -26,6 +26,7 @@ export const PERMISOS_MODULO: Partial<Record<IdModulo, string[]>> = {
   pedidos: ['ventas.pedidos.'],
   inventario: ['inventario.'],
   logistica: ['flota.', 'operacion.'],
+  calidad: ['calidad.'],
 };
 
 /**
@@ -34,6 +35,17 @@ export const PERMISOS_MODULO: Partial<Record<IdModulo, string[]>> = {
  */
 export const PERMISOS_RUTA: [ruta: string, permiso: string][] = [
   // Las altas antes que su lista: la primera regla que coincide manda
+  ['/laboratorio', 'calidad.muestras.ver'],
+  ['/flota/ordenes', 'operacion.remisiones.ver'],
+  ['/flota/despacho', 'operacion.remisiones.ver'],
+  ['/flota/linea-tiempo', 'operacion.remisiones.ver'],
+  ['/flota/indicadores', 'operacion.remisiones.ver'],
+  ['/flota/inspecciones', 'flota.inspecciones.ver'],
+  ['/flota/viajes', 'operacion.remisiones.ver'],
+  ['/flota/operadores', 'flota.operadores.ver'],
+  ['/flota/combustible', 'flota.combustible.ver'],
+  ['/flota/mantenimiento', 'flota.mantenimiento.ver'],
+  ['/flota', 'flota.equipos.ver'],
   ['/ventas/cotizaciones/nueva', 'ventas.cotizaciones.crear'],
   ['/ventas/ordenes/nueva', 'ventas.pedidos.crear'],
   ['/ventas/clientes/nuevo', 'ventas.clientes.crear'],

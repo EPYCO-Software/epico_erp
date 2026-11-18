@@ -36,7 +36,12 @@ export interface Modulo {
 export interface EnlaceModulo {
   nombre: string;
   ruta: string;
+  /** Marcador junto al nombre (p. ej. órdenes sin camión): su clave en ContadoresMenu y qué cuenta, para lectores de pantalla. */
+  contador?: { clave: ClaveContador; texto: string };
 }
+
+/** Los marcadores del menú; cada uno lo calcula ContadoresMenu (core/contadores.ts). */
+export type ClaveContador = 'logistica.sin-camion';
 
 /** Un menú desplegable del módulo: sus enlaces y, debajo, secciones con título (como Configuración en Odoo). */
 export interface MenuModulo {
@@ -49,7 +54,7 @@ export interface MenuModulo {
 export const enlacesDelMenu = (m: MenuModulo) => [...m.enlaces, ...(m.secciones ?? []).flatMap((s) => s.enlaces)];
 
 // shortcut: módulos activos fijos para todas las empresas; vendrán del backend (licencia/configuración por empresa).
-const ACTIVOS: IdModulo[] = ['seguridad', 'crm', 'ventas', 'pedidos'];
+const ACTIVOS: IdModulo[] = ['seguridad', 'crm', 'ventas', 'pedidos', 'logistica', 'calidad'];
 
 /**
  * Los mismos menús que Ventas en Odoo. Las opciones sin página abren "en construcción" (app.routes.ts).
@@ -141,6 +146,39 @@ const MENU_SEGURIDAD: MenuModulo[] = [
   { nombre: 'Plataforma', enlaces: [{ nombre: 'Servidores de correo', ruta: '/configuracion/servidores-correo' }] },
 ];
 
+/** Logística: la flota (cualquier unidad: ollas, bombas, volteos, maquinaria…) y sus viajes. */
+const MENU_LOGISTICA: MenuModulo[] = [
+  {
+    nombre: 'Operación',
+    enlaces: [
+      { nombre: 'Órdenes', ruta: '/flota/ordenes', contador: { clave: 'logistica.sin-camion', texto: 'sin camión' } },
+      { nombre: 'Despacho del día', ruta: '/flota/despacho' },
+      { nombre: 'Línea de tiempo', ruta: '/flota/linea-tiempo' },
+      { nombre: 'Mapa de flota', ruta: '/flota/viajes' },
+    ],
+  },
+  {
+    nombre: 'Flota',
+    enlaces: [
+      { nombre: 'Unidades', ruta: '/flota' },
+      { nombre: 'Operadores', ruta: '/flota/operadores' },
+      { nombre: 'Vencimientos', ruta: '/flota/vencimientos' },
+    ],
+  },
+  {
+    nombre: 'Control',
+    enlaces: [
+      { nombre: 'Combustible', ruta: '/flota/combustible' },
+      { nombre: 'Mantenimiento', ruta: '/flota/mantenimiento' },
+      { nombre: 'Inspecciones', ruta: '/flota/inspecciones' },
+    ],
+  },
+  { nombre: 'Informes', enlaces: [{ nombre: 'Indicadores de logística', ruta: '/flota/indicadores' }] },
+];
+
+/** Calidad: muestras de concreto, sus ensayes y los certificados de las órdenes. */
+const MENU_CALIDAD: MenuModulo[] = [{ nombre: 'Laboratorio', enlaces: [{ nombre: 'Muestras y ensayes', ruta: '/laboratorio' }] }];
+
 /**
  * Catálogo de módulos del ERP, en el orden de la pantalla de inicio. Es la navegación de la app.
  * Los nombres llevan espacio no separable (\u00a0) donde el mockup corta la línea distinto ("Integraciones / e IoT").
@@ -151,12 +189,12 @@ const CATALOGO: Omit<Modulo, 'activo'>[] = [
   { id: 'ventas', nombre: 'Ventas', ruta: '/ventas', menu: MENU_VENTAS },
   { id: 'pedidos', nombre: 'Pedidos y atención', ruta: '/pedidos' },
   { id: 'productos', nombre: 'Productos y recetas', ruta: '/modulos/productos' },
-  { id: 'calidad', nombre: 'Calidad y laboratorio', ruta: '/laboratorio' },
+  { id: 'calidad', nombre: 'Calidad y laboratorio', ruta: '/laboratorio', menu: MENU_CALIDAD },
   { id: 'compras', nombre: 'Compras y proveedores', ruta: '/modulos/compras' },
   { id: 'inventario', nombre: 'Inventario y materiales', ruta: '/inventario' },
   { id: 'planeacion', nombre: 'Planeación y despacho', ruta: '/modulos/planeacion' },
   { id: 'automatizacion', nombre: 'Automatización de planta', ruta: '/modulos/automatizacion' },
-  { id: 'logistica', nombre: 'Logística, flota y bombeo', ruta: '/flota' },
+  { id: 'logistica', nombre: 'Logística, flota y bombeo', ruta: '/flota/despacho', menu: MENU_LOGISTICA },
   { id: 'operaciones', nombre: 'Operaciones y mantenimiento', ruta: '/mantenimiento' },
   { id: 'finanzas', nombre: 'Finanzas y facturación', ruta: '/facturacion' },
   { id: 'personal', nombre: 'Personal y colaboradores', ruta: '/modulos/personal' },

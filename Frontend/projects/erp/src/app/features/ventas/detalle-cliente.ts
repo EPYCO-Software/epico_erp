@@ -16,6 +16,8 @@ import { AuthService, Cliente, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, pesos 
 import { TODOS, tiene } from '../../core/permisos';
 import { HistorialService } from '../../core/historial';
 import { CambiosCliente, ESTADOS_COTIZACION, VentasService, mensajeDe, registro, telefono } from './datos';
+import { CreditoCliente } from './credito-cliente';
+import { CuentaPortalCliente } from './cuenta-portal';
 import { EditorCliente } from './editor-cliente';
 
 /**
@@ -28,7 +30,7 @@ import { EditorCliente } from './editor-cliente';
   selector: 'app-detalle-cliente',
   // Bloque: un host en línea con bloques adentro hace que el navegador lo ponga encima de sus botones al apuntar.
   host: { class: 'block' },
-  imports: [EditorCliente, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, RouterLink],
+  imports: [CreditoCliente, CuentaPortalCliente, EditorCliente, EstadoPedidoEtiqueta, FechaZonaPipe, Icon, RouterLink],
   template: `
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
@@ -188,6 +190,14 @@ import { EditorCliente } from './editor-cliente';
           }
         </section>
 
+        @if (!ventas.esPublico(c().id)) {
+          <app-credito-cliente [c]="c()" [nivel]="nivel()" />
+        }
+
+        @if (ventas.conBackend && (puedeEditar() || puedeCrear()) && !ventas.esPublico(c().id)) {
+          <app-cuenta-portal [c]="c()" [nivel]="nivel()" />
+        }
+
         <!-- Cotizaciones y pedidos por separado, del editado más recientemente al más antiguo -->
         <section>
           <p role="heading" [attr.aria-level]="nivel()" [class]="titulo">Cotizaciones ({{ cotizaciones().length }})</p>
@@ -235,7 +245,7 @@ import { EditorCliente } from './editor-cliente';
   `,
 })
 export class DetalleCliente {
-  private readonly ventas = inject(VentasService);
+  protected readonly ventas = inject(VentasService);
   private readonly auth = inject(AuthService);
   private readonly historial = inject(HistorialService);
   private readonly injector = inject(Injector);
@@ -298,6 +308,8 @@ export class DetalleCliente {
       this.error.set(true);
     }
   }
+  /** Quien da de alta clientes también les crea su cuenta del portal (solo portal; reenviar o desactivar pide editar). */
+  protected readonly puedeCrear = computed(() => tiene(this.auth.sesion()?.permisos ?? [TODOS], 'ventas.clientes.crear'));
   protected readonly puedeCrearObra = computed(() => tiene(this.auth.sesion()?.permisos ?? [TODOS], 'ventas.obras.crear'));
   /** Los títulos de sección, un nivel debajo del título (h2 en el panel, h1 en la vista completa). */
   protected readonly nivel = computed(() => (this.completa() ? 2 : 3));

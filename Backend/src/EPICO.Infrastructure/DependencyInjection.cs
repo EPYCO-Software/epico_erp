@@ -15,6 +15,12 @@ public static class DependencyInjection
         s.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         s.AddSingleton<Correo.Cifrado>();
         s.AddHostedService<Correo.EnvioCorreos>();
+        s.AddHttpClient(Gps.TraccarGps.Cliente, h => h.Timeout = TimeSpan.FromSeconds(8));
+        s.AddSingleton<Application.Flota.IGps, Gps.TraccarGps>();
+        s.AddSingleton<Gps.AvisosCombustible>();
+        s.AddHostedService(sp => sp.GetRequiredService<Gps.AvisosCombustible>());
+        s.AddSingleton<Gps.GuardarPosiciones>();
+        s.AddHostedService(sp => sp.GetRequiredService<Gps.GuardarPosiciones>());
         return s;
     }
 
@@ -28,6 +34,15 @@ public static class DependencyInjection
         .MapEnum<TipoProducto>()
         .MapEnum<TipoMovimientoInventario>()
         .MapEnum<TipoEquipo>()
+        .MapEnum<EstadoEquipo>()
+        .MapEnum<TipoDocumentoEquipo>()
+        .MapEnum<TipoMantenimiento>()
+        .MapEnum<EstadoMantenimiento>()
+        .MapEnum<OrigenReagenda>()
+        .MapEnum<EstadoSolicitud>()
+        .MapEnum<TipoTrayecto>()
+        .MapEnum<FuentePosicion>()
+        .MapEnum<ResultadoInspeccion>()
         .MapEnum<AplicarRegla>()
         .MapEnum<TipoReglaPrecio>()
         .MapEnum<TipoPrograma>()

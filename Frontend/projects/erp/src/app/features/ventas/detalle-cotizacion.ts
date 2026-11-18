@@ -14,7 +14,7 @@ import {
 import { DecimalPipe } from '@angular/common';
 import { CdkMenu, CdkMenuItem, CdkMenuTrigger } from '@angular/cdk/menu';
 import { Router, RouterLink } from '@angular/router';
-import { Ban, Check, ChevronDown, ChevronRight, ClipboardCheck, CopyPlus, Download, Eye, EyeOff, Maximize2, PencilLine, Send, X } from 'lucide';
+import { Ban, Check, ChevronDown, ChevronRight, ClipboardCheck, CopyPlus, Download, Eye, EyeOff, HandCoins, Maximize2, PencilLine, Send, X } from 'lucide';
 import {
   AuthService,
   CotizacionVista,
@@ -31,6 +31,7 @@ import { BarraEstados } from '../../layout/vista-completa';
 import { TODOS, tiene, permisosSesion } from '../../core/permisos';
 import { ESTADOS_COTIZACION, VentasService, mensajeDe, modificable } from './datos';
 import { CambiosCotizacion, EditorCotizacion } from './editor-cotizacion';
+import { AccionConfirmar, ConfirmarOrden, EntregaPorConfirmar } from './confirmar-orden';
 import { EnviarCotizacion } from './enviar-cotizacion';
 
 const LISTA = new Intl.ListFormat('es');
@@ -58,6 +59,7 @@ const LISTA = new Intl.ListFormat('es');
     ResumenCotizacion,
     RouterLink,
     BarraEstados,
+    ConfirmarOrden,
     EditorCotizacion,
     EnviarCotizacion,
   ],
@@ -97,7 +99,7 @@ const LISTA = new Intl.ListFormat('es');
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
         @if (!editando()) {
           <div class="flex flex-wrap gap-2">
-            @if (puedeModificar()) {
+            @if (puedeModificar() && !c().reemplazadaPorId) {
               <!-- Como Odoo: en borrador se resalta Enviar; ya enviada, Confirmar -->
               @if (puede('ventas.cotizaciones.enviar')) {
                 <button type="button" [class]="enviada() ? botonSecundario : botonPrimario" (click)="enviando.set(true)">
@@ -105,7 +107,7 @@ const LISTA = new Intl.ListFormat('es');
                 </button>
               }
               @if (puede('ventas.cotizaciones.confirmar')) {
-                <button type="button" [class]="enviada() ? botonPrimario : botonSecundario" (click)="confirmar()">
+                <button type="button" [class]="enviada() ? botonPrimario : botonSecundario" (click)="confirmando.set(true)">
                   <ui-icon [icono]="iconos.confirmar" [tamano]="16" />Confirmar pedido
                 </button>
               }
@@ -135,6 +137,13 @@ const LISTA = new Intl.ListFormat('es');
                       <ui-icon [icono]="iconos.editar" [tamano]="16" class="mt-0.5" />
                       <span><span class="block font-semibold">Editar esta cotización</span>
                         <span class="block text-sm text-texto-suave">{{ enviada() ? 'Se vuelve la revisión R' + (c().revision + 1) + '.' : 'Cambia esta misma.' }}</span></span>
+                    </button>
+                  }
+                  @if (negociable()) {
+                    <button cdkMenuItem type="button" [class]="opcionMenu" (cdkMenuItemTriggered)="mejorarOferta()">
+                      <ui-icon [icono]="iconos.oferta" [tamano]="16" class="mt-0.5" />
+                      <span><span class="block font-semibold">Mejorar oferta</span>
+                        <span class="block text-sm text-texto-suave">Otra cotización con mejor precio; al enviarla reemplaza a esta y el cliente solo acepta la nueva.</span></span>
                     </button>
                   }
                   <button cdkMenuItem type="button" [class]="opcionMenu" (cdkMenuItemTriggered)="basadaEnEsta()">
@@ -180,7 +189,8 @@ const LISTA = new Intl.ListFormat('es');
                   [routerLink]="['/ventas/ordenes', p.folio]"
                   class="inline-flex items-center gap-1.5 rounded-lg bg-[#E5F0EA] px-2.5 py-1 text-sm font-semibold text-[#2E5E4A] hover:underline focus-visible:outline-2 focus-visible:outline-epico"
                 >
-                  <ui-icon [icono]="iconos.pedido" [tamano]="15" />Pedido {{ p.folio }} · {{ estadoPedido[p.estado] }}
+                  <ui-icon [icono]="iconos.pedido" [tamano]="15" />Orden {{ p.folio }} ·
+                  {{ !p.confirmadaEn && p.estado !== 'cancelado' ? 'Por confirmar' : p.estado === 'programado' ? 'Confirmada' : estadoPedido[p.estado] }}
                 </a>
               </li>
             }
@@ -191,6 +201,18 @@ const LISTA = new Intl.ListFormat('es');
           <app-barra-estados class="ml-auto" etiqueta="Estado de la cotización" [pasos]="pasos()" [actual]="c().estado" />
         }
       </div>
+    }
+    @if (c().reemplazadaPorId) {
+      <p class="mt-3 flex flex-wrap items-center gap-x-1.5 rounded-xl bg-[#FBF0DD] px-3 py-2 text-sm text-[#7A5410]">
+        <ui-icon [icono]="iconos.oferta" [tamano]="15" />
+        <span class="font-semibold">Oferta reemplazada</span> por
+        @if (reemplazo(); as r) {
+          <a [routerLink]="['/ventas/cotizaciones', r.id]" class="rounded font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-epico">{{ r.folio }}</a>
+        } @else {
+          otra oferta
+        }
+        : ya no se envía ni se confirma; el cliente solo acepta la última.
+      </p>
     }
     <p class="mt-2 text-sm font-medium text-[#2E5E4A] empty:hidden" aria-live="polite">{{ aviso() }}</p>
     <p class="mt-2 text-sm font-medium text-critico empty:hidden" role="alert">{{ errorPdf() }}</p>
@@ -239,7 +261,7 @@ const LISTA = new Intl.ListFormat('es');
         <ul class="mt-1 space-y-1">
           @if (base(); as b) {
             <li class="flex flex-wrap items-baseline gap-x-2">
-              <span class="text-texto-suave">Basada en</span>
+              <span class="text-texto-suave">{{ c().reemplazaId === b.id ? 'Mejora la oferta' : 'Basada en' }}</span>
               <a [routerLink]="['/ventas/cotizaciones', b.id]" [class]="enlace">{{ b.folio }}</a>
               <span>neto \${{ pesos(b.total) }}</span>
               <span [class]="diferencia(c(), b).clase">esta: {{ diferencia(c(), b).texto }}</span>
@@ -257,7 +279,7 @@ const LISTA = new Intl.ListFormat('es');
           }
           @for (d of derivadas(); track d.id) {
             <li class="flex flex-wrap items-baseline gap-x-2">
-              <span class="text-texto-suave">↳ Nueva</span>
+              <span class="text-texto-suave">{{ d.reemplazaId === c().id ? '↳ Mejor oferta' : '↳ Nueva' }}</span>
               <a [routerLink]="['/ventas/cotizaciones', d.id]" [class]="enlace">{{ d.folio }}</a>
               <span class="text-texto-suave">({{ estados[d.estado].nombre }})</span>
               <span>neto \${{ pesos(d.total) }}</span>
@@ -286,6 +308,13 @@ const LISTA = new Intl.ListFormat('es');
     }
 
     <app-enviar-cotizacion [c]="c()" [(abierto)]="enviando" (enviada)="aviso.set($event)" />
+    <app-confirmar-orden
+      [titulo]="'Confirmar ' + c().folio + ' como orden de venta'"
+      [entregas]="entregas()"
+      [acciones]="accionesConfirmar()"
+      [(abierto)]="confirmando"
+      (elegido)="confirmar($event === 'confirmar')"
+    />
   `,
 })
 export class DetalleCotizacion {
@@ -302,6 +331,7 @@ export class DetalleCotizacion {
 
   private readonly auth = inject(AuthService);
   protected readonly iconos = {
+    oferta: HandCoins,
     cancelar: Ban,
     cerrar: X,
     completa: Maximize2,
@@ -344,6 +374,15 @@ export class DetalleCotizacion {
   }
 
   /** "Nueva basada en esta": la hoja de Nueva cotización con sus datos (?base=ID). */
+  /** Se negocia lo que el cliente ya tiene (recibida o enviada) y sigue vigente. */
+  protected readonly negociable = computed(
+    () => ['recibida', 'enviada'].includes(this.c().estado) && !this.c().reemplazadaPorId && this.puede('ventas.cotizaciones.crear'),
+  );
+  protected readonly reemplazo = computed(() => this.ventas.cotizaciones().find((x) => x.id === this.c().reemplazadaPorId));
+  protected mejorarOferta(): void {
+    void this.router.navigate(['/ventas/cotizaciones/nueva'], { queryParams: { base: this.c().id, oferta: 1 } });
+  }
+
   protected basadaEnEsta(): void {
     void this.router.navigate(['/ventas/cotizaciones/nueva'], { queryParams: { base: this.c().id } });
   }
@@ -428,16 +467,42 @@ export class DetalleCotizacion {
   readonly sinGuardar = computed(() => this.editor()?.sinGuardar() ?? false);
 
   /** Pasa a pedido (sus pedidos aparecen arriba) y el foco va al primero: es a donde se va después. */
-  protected async confirmar(): Promise<void> {
+  /** "Confirmar pedido": primero recuerda cada entrega; quien confirma puede dejar las órdenes ya confirmadas. */
+  protected readonly confirmando = signal(false);
+  protected readonly entregas = computed<EntregaPorConfirmar[]>(() =>
+    this.c().partidas.map((p) => {
+      const o = this.obras().find((x) => x.id === p.obraId);
+      return {
+        id: p.id,
+        titulo: p.nombre,
+        fecha: p.entrega,
+        zona: this.c().zonaHoraria,
+        lugar: o ? [o.nombre, o.direccion, o.municipio].filter((x) => !!x).join(' · ') : 'Sin obra',
+        m3: p.volumenM3,
+      };
+    }),
+  );
+  protected readonly accionesConfirmar = computed<AccionConfirmar[]>(() => {
+    const una = this.c().partidas.length === 1;
+    return [
+      ...(this.puede('ventas.pedidos.confirmar') ? [{ id: 'confirmar', texto: una ? 'Crear y confirmar la orden' : 'Crear y confirmar las órdenes', primaria: true }] : []),
+      { id: 'crear', texto: una ? 'Crear orden (por confirmar)' : 'Crear órdenes (por confirmar)', primaria: !this.puede('ventas.pedidos.confirmar') },
+    ];
+  });
+
+  protected async confirmar(confirmarOrdenes: boolean): Promise<void> {
     let nuevos;
     try {
-      nuevos = await this.ventas.confirmar(this.c().id);
+      nuevos = await this.ventas.confirmar(this.c().id, 'sin_metodo', confirmarOrdenes);
     } catch (e) {
       return this.aviso.set(mensajeDe(e));
     }
     const folios = LISTA.format(nuevos.map((p) => p.folio));
+    const estado = confirmarOrdenes ? 'confirmada' : 'por confirmar';
     this.aviso.set(
-      nuevos.length === 1 ? `Se generó el pedido ${folios}.` : `Se generaron ${nuevos.length} pedidos, uno por entrega: ${folios}.`,
+      nuevos.length === 1
+        ? `Se generó la orden ${folios}, ${estado}.`
+        : `Se generaron ${nuevos.length} órdenes, una por entrega (${estado}s): ${folios}.`,
     );
     afterNextRender(() => document.querySelector<HTMLElement>('#pedidos-cotizacion a')?.focus(), { injector: this.injector });
   }

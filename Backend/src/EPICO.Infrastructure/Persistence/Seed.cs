@@ -15,7 +15,7 @@ namespace EPICO.Infrastructure.Persistence;
 /// </summary>
 public static class Seed
 {
-    public const string RolRoot = "Root", RolAdministrador = "Administrador", RolVentas = "Ventas";
+    public const string RolRoot = "Root", RolAdministrador = "Administrador", RolVentas = "Ventas", RolLogistica = "Logística", RolLaboratorio = "Laboratorio";
 
     /// <summary>Contraseña del usuario inicial si no se configura Seed__RootPassword. Cámbiala al primer ingreso.</summary>
     public const string PasswordInicial = "EpicoERP1.";
@@ -28,12 +28,35 @@ public static class Seed
     [
         (RolRoot, "Acceso total, sin restricción de empresa", ["*"]),
         (RolAdministrador, "Administra la organización: configuración, usuarios y todos los módulos",
-            ["config.*", "general.*", "ventas.*", "crm.*", "inventario.*", "flota.*", "operacion.*"]),
+            ["config.*", "general.*", "ventas.*", "crm.*", "inventario.*", "flota.*", "operacion.*", "calidad.*"]),
         (RolVentas, "Clientes, cotizaciones y pedidos; consulta catálogos y existencias",
             ["ventas.clientes.*", "ventas.obras.*", "ventas.cotizaciones.*", "ventas.pedidos.*", "crm.*", "general.*",
              "ventas.productos.ver", "ventas.listas_precios.ver", "ventas.programas.ver",
-             "inventario.existencias.ver", "flota.equipos.ver", "operacion.remisiones.ver"]),
+             "inventario.existencias.ver", "flota.equipos.ver",
+             "operacion.remisiones.ver", "operacion.remisiones.crear", "operacion.remisiones.editar", "flota.operadores.ver",
+             "ventas.pedidos.reagendar", "operacion.reagenda.solicitar", "flota.trayectos.ver",
+             "calidad.muestras.ver"]),
+        (RolLogistica, "Flota, viajes y remisiones; consulta pedidos y clientes",
+            ["flota.*", "operacion.*", "ventas.pedidos.ver", "ventas.clientes.ver", "ventas.pedidos.reagendar", "calidad.muestras.ver"]),
+        (RolLaboratorio, "Muestras, ensayes y certificados de calidad; consulta pedidos", ["calidad.*", "ventas.pedidos.ver"]),
     ];
+
+    /// <summary>Lo mínimo que el seed asegura en Ventas y Administrador en cada corrida: confirmar órdenes y asignarles camiones.</summary>
+    public static readonly string[] Obligatorios =
+        ["ventas.pedidos.confirmar", "ventas.cotizaciones.confirmar", "ventas.pedidos.planta", "ventas.clientes.crear",
+         "operacion.remisiones.ver", "operacion.remisiones.crear", "operacion.remisiones.editar", "flota.equipos.ver",
+         "flota.operadores.ver", "ventas.pedidos.reagendar", "operacion.reagenda.solicitar", "flota.trayectos.ver",
+         "calidad.muestras.ver"];
+
+    /// <summary>Lo que el seed asegura en Logística en cada corrida.</summary>
+    public static readonly string[] ObligatoriosLogistica = ["ventas.pedidos.reagendar", "operacion.reagenda.solicitar", "calidad.muestras.ver"];
+
+    /// <summary>El administrador cubre todos los módulos: los nuevos se le agregan aquí.</summary>
+    public static readonly string[] ObligatoriosAdministrador = [.. Obligatorios, "calidad.*"];
+
+    // Igual que Permisos.Cubre (en la Api): "*", exacto o "modulo.*".
+    static bool Cubre(string otorgado, string pedido) =>
+        otorgado == "*" || otorgado == pedido || otorgado.EndsWith(".*") && pedido.StartsWith(otorgado[..^1], StringComparison.Ordinal);
 
     static readonly (string Razon, string Zona, (string Codigo, string Nombre, decimal Lat, decimal Lng)[] Plantas)[] Empresas =
     [
@@ -88,6 +111,16 @@ public static class Seed
                 db.AddRange(permisos.Select(p => new RolPermiso { RolId = rol.Id, Permiso = p }));
             }
             roles[nombre] = rol;
+        }
+        // Permisos que Ventas, Administrador y Logística deben tener aunque su rol se haya editado: se agregan si ningún permiso
+        // del rol los cubre (exacto o comodín); nunca se quita nada.
+        foreach (var (nombre, obligatorios) in new[] { (RolAdministrador, ObligatoriosAdministrador), (RolVentas, Obligatorios), (RolLogistica, ObligatoriosLogistica) })
+        {
+            var rid = roles[nombre].Id;
+            var tiene = await db.Set<RolPermiso>().Where(p => p.RolId == rid).Select(p => p.Permiso).ToListAsync(ct);
+            tiene.AddRange(db.ChangeTracker.Entries<RolPermiso>().Where(e => e.Entity.RolId == rid).Select(e => e.Entity.Permiso));
+            foreach (var p in obligatorios.Where(p => !tiene.Any(t => Cubre(t, p))))
+                db.Add(new RolPermiso { RolId = rid, Permiso = p });
         }
         var rolRoot = roles[RolRoot];
         if (!await db.Set<RolPermiso>().AnyAsync(p => p.RolId == rolRoot.Id && p.Permiso == "*", ct) &&

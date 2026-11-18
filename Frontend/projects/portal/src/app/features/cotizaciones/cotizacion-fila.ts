@@ -37,7 +37,9 @@ import { PedidosService } from '../../core/services/pedidos.service';
             {{ c().folio }}
           }
           <span class="rounded-md bg-carbon/6 px-2 py-0.5 text-xs font-semibold text-carbon">{{ estado() }}</span>
-          @if (vigente()) {
+          @if (c().reemplazadaPorId) {
+            <span class="rounded-md bg-[#FBF0DD] px-2 py-0.5 text-xs font-semibold text-[#7A5410]">Reemplazada por una mejor oferta</span>
+          } @else if (vigente()) {
             <span class="rounded-md bg-[#E5F0EA] px-2 py-0.5 text-xs font-semibold text-[#2E5E4A]">Vigente</span>
           } @else if (anidada()) {
             <span class="rounded-md bg-carbon/6 px-2 py-0.5 text-xs font-semibold text-texto-suave">Sustituida</span>

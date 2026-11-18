@@ -135,6 +135,9 @@ import { permisosSesion } from '../../core/permisos';
                       <span class="inline-block rounded-md px-2 py-0.5 text-xs font-bold {{ estados[c.estado].clase }}">
                         {{ estados[c.estado].nombre }}
                       </span>
+                      @if (c.reemplazadaPorId) {
+                        <span class="ml-1 inline-block rounded-md bg-[#FBF0DD] px-2 py-0.5 text-xs font-bold text-[#7A5410]">Reemplazada</span>
+                      }
                     </td>
                   </tr>
                 } @empty {
@@ -204,6 +207,7 @@ export default class Cotizaciones {
         pasaFiltro(f, 'vendedor', c.vendedorId) &&
         pasaFiltro(f, 'estado', c.estado) &&
         pasaFiltro(f, 'planta', c.plantaId) &&
+        pasaFiltro(f, 'oferta', c.reemplazadaPorId ? 'reemplazada' : 'vigente') &&
         enRango(f, 'fecha', c.fecha) &&
         enRango(f, 'total', c.total),
     );
@@ -240,6 +244,14 @@ export default class Cotizaciones {
         })),
       },
       { id: 'planta', titulo: 'Planta', opciones: opcionesDe(base, (c) => c.plantaId, (id) => plantas.get(id) ?? id) },
+      {
+        id: 'oferta',
+        titulo: 'Negociación',
+        opciones: [
+          { id: 'vigente', nombre: 'Oferta vigente', n: base.filter((c) => !c.reemplazadaPorId).length },
+          { id: 'reemplazada', nombre: 'Reemplazada por otra oferta', n: base.filter((c) => c.reemplazadaPorId).length },
+        ],
+      },
       { id: 'fecha', titulo: 'Fecha', rango: 'fecha' },
       { id: 'total', titulo: 'Total', rango: 'numero', prefijo: '$' },
     ];

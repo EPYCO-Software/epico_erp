@@ -110,4 +110,17 @@ describe('PerfilService', () => {
       rechazados: ['datos.exe'],
     });
   });
+
+  it('el límite de su asesor: sin límite nunca avisa; al llegar avisa (singular y plural)', () => {
+    const s = TestBed.inject(PerfilService);
+    expect(s.tope('obras', 99)).toBe('');
+    s.limites.set({ cotizaciones: 2, obras: 1, cotizacionesUsadas: 1, obrasUsadas: 0 });
+    expect(s.tope('cotizaciones')).toBe('');
+    s.contarCotizacion();
+    expect(s.tope('cotizaciones')).toBe('Llegaste al límite de 2 cotizaciones; pide a tu asesor que lo amplíe.');
+    expect(s.tope('obras', 0)).toBe('');
+    expect(s.tope('obras', 1)).toBe('Llegaste al límite de 1 obra; pide a tu asesor que lo amplíe.');
+    s.limites.set({ cotizaciones: null, obras: null, cotizacionesUsadas: 50, obrasUsadas: 50 });
+    expect(s.tope('cotizaciones')).toBe('');
+  });
 });

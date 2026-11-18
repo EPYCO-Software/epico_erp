@@ -30,7 +30,7 @@ import { CotizacionFila } from './cotizacion-fila';
         <p class="mb-4 flex items-start gap-2 rounded-xl bg-[#EAF3F7] px-4 py-3 text-sm">
           <ui-icon [icono]="iconos.info" [tamano]="18" class="mt-px shrink-0 text-[#2B5F75]" />
           <span>
-            Esta versión fue sustituida por
+            {{ c.reemplazadaPorId ? 'Te enviamos una mejor oferta:' : 'Esta versión fue sustituida por' }}
             <a [routerLink]="['/cotizaciones', s.folio]" class="font-semibold text-[#2B5F75] underline underline-offset-4">{{ s.folio }}</a>.
           </span>
         </p>
@@ -72,6 +72,9 @@ export default class Cotizacion {
   private readonly serie = computed(() => this.cotizaciones.series().find((s) => s.actual.serie === this.cot()?.serie));
   /** Versión vigente de la serie, si no es esta. */
   protected readonly sustituta = computed(() => {
+    // Negociación: la concretera la reemplazó con una oferta mejor (otra serie); solo esa se acepta
+    const oferta = this.cotizaciones.buscarCotizacion(this.cot()?.reemplazadaPorId);
+    if (oferta) return oferta;
     const vigente = this.serie()?.actual;
     return vigente && vigente.id !== this.cot()?.id ? vigente : null;
   });

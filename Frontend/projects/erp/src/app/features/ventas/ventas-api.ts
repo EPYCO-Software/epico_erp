@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -10,6 +10,7 @@ import {
   EstadoCotizacion,
   EstadoPedido,
   EstatusPlanta,
+  LimitesCliente,
   Maquinaria,
   MetodoPago,
   Obra,
@@ -121,6 +122,16 @@ export function aEvento(e: ApiEvento, registro: string, nombre: (id: string) => 
 
 const BASE = '/api/v1';
 
+/** La cuenta del portal de un cliente (GET /clientes/{id}/cuenta-portal). */
+export interface CuentaPortal {
+  usuarioId: string;
+  contactoId: string;
+  correo: string;
+  nombre: string;
+  activa: boolean;
+  ultimoAcceso: string | null;
+}
+
 // claveSat vive en ui (también la usa el portal)
 export { claveSat };
 
@@ -179,6 +190,37 @@ interface ApiProductoEquipo {
   productoId: string;
   equipoId: string;
 }
+
+/** Los campos del cliente que captura el ERP (alta y edición). */
+const datosCliente = (c: CambiosCliente) => ({
+  nombre: c.nombre,
+  giro: c.empresa.giro || null,
+  correo: c.empresa.correo || null,
+  telefono: c.empresa.telefono || null,
+  sitioWeb: c.empresa.sitioWeb || null,
+});
+const contactoApi = (clienteId: string, c: CambiosCliente) => ({
+  clienteId,
+  nombre: c.contacto.nombre,
+  apellidos: c.contacto.apellidos || null,
+  puesto: c.contacto.puesto || null,
+  correo: c.contacto.correo || null,
+  telefono: c.contacto.telefono || null,
+  principal: true,
+});
+const fiscalApi = (clienteId: string, f: CambiosCliente['facturacion'][number]) => ({
+  clienteId,
+  alias: f.alias,
+  razonSocial: f.razonSocial,
+  rfc: f.rfc,
+  // El backend guarda la clave del SAT ("601", "G03"); el front puede traer "G03 · Gastos en general"
+  regimenFiscal: claveSat(f.regimenFiscal),
+  usoCfdi: claveSat(f.usoCfdi),
+  codigoPostal: f.codigoPostal,
+  correo: f.correo || null,
+  direccionFiscal: f.direccionFiscal || null,
+  predeterminado: f.predeterminado,
+});
 
 /** Sin permiso de ver ese recurso (403): lista vacía. Cualquier otro error sigue fallando. */
 function vacioSinPermiso<T>(peticion: Promise<T[]>): Promise<T[]> {
@@ -324,12 +366,45 @@ export class VentasApi {
     return firstValueFrom(this.http.delete(`${BASE}/clientes/${id}`));
   }
 
+  /** La cuenta del portal del cliente; null si no tiene (404). */
+  async cuentaPortal(clienteId: string): Promise<CuentaPortal | null> {
+    try {
+      return await this.get<CuentaPortal>(`/clientes/${clienteId}/cuenta-portal`);
+    } catch (e) {
+      if (e instanceof HttpErrorResponse && e.status === 404) return null;
+      throw e;
+    }
+  }
+  /** Crea el usuario del portal (solo portal, nunca ERP) y le manda sus credenciales por correo. */
+  async crearCuentaPortal(clienteId: string, d: { correo: string; nombre: string }): Promise<CuentaPortal & { correoEnviado: boolean }> {
+    // Si ese correo ya es de un contacto del cliente, la cuenta es de ese contacto (si no, el backend crearía otro).
+    const contactos = await this.get<ApiContacto[]>(`/cliente-contactos?clienteId=${clienteId}`);
+    const contacto = contactos.find((x) => x.correo?.toLowerCase() === d.correo.toLowerCase() && !x.usuarioId);
+    return this.post(`/clientes/${clienteId}/cuenta-portal`, contacto ? { contactoId: contacto.id } : d);
+  }
+  /** Contraseña temporal nueva por correo (cierra sus sesiones y lo desbloquea). */
+  reenviarCredenciales(clienteId: string): Promise<{ correoEnviado: boolean }> {
+    return this.post(`/clientes/${clienteId}/cuenta-portal/reenviar`);
+  }
+  activarCuentaPortal(clienteId: string, activa: boolean): Promise<unknown> {
+    return this.put(`/clientes/${clienteId}/cuenta-portal/activa`, { activa });
+  }
+  /** PUT manda el cliente completo (se parte del que tiene el backend). */
+  async guardarCredito(clienteId: string, c: { limite: number | null; dias: number }): Promise<void> {
+    const antes = await this.get<ApiCliente & Record<string, unknown>>(`/clientes/${clienteId}`);
+    await this.put(`/clientes/${clienteId}`, { ...antes, limiteCredito: c.limite, diasCredito: c.dias });
+  }
+  async guardarLimites(clienteId: string, l: LimitesCliente): Promise<void> {
+    const antes = await this.get<ApiCliente & Record<string, unknown>>(`/clientes/${clienteId}`);
+    await this.put(`/clientes/${clienteId}`, { ...antes, limiteCotizaciones: l.cotizaciones, limiteObras: l.obras });
+  }
+
   ocultar(id: string, oculta: boolean): Promise<unknown> {
     return this.post(`/cotizaciones/${id}/ocultar`, { oculta });
   }
 
-  async confirmar(id: string, ctx: Contexto): Promise<Pedido[]> {
-    const pedidos = await this.post<ApiPedido[]>(`/cotizaciones/${id}/confirmar`);
+  async confirmar(id: string, ctx: Contexto, confirmarOrdenes = false): Promise<Pedido[]> {
+    const pedidos = await this.post<ApiPedido[]>(`/cotizaciones/${id}/confirmar`, { confirmarOrdenes });
     for (const p of pedidos) this.apiPedidos.set(p.id, p);
     return pedidos.map((p) => aPedido(p, ctx));
   }
@@ -366,7 +441,7 @@ export class VentasApi {
     return aPedido(p, ctx);
   }
 
-  async accionPedido(id: string, accion: 'cobro' | 'metodo-pago' | 'planta', cuerpo: object, ctx: Contexto): Promise<Pedido> {
+  async accionPedido(id: string, accion: 'cobro' | 'metodo-pago' | 'planta' | 'confirmar', cuerpo: object, ctx: Contexto): Promise<Pedido> {
     await this.post(`/pedidos/${id}/${accion}`, cuerpo);
     return this.pedido(id, ctx);
   }
@@ -386,14 +461,16 @@ export class VentasApi {
   }
 
   /**
-   * Alta completa (Clientes → Nuevo): crea el cliente y le guarda contacto, empresa y datos fiscales con guardarCliente.
-   * shortcut: no es una sola operación; si falla después de crearlo, el cliente queda con solo su nombre y se completa
-   * editándolo. Con un endpoint de alta en el backend, usarlo.
+   * Alta completa (Clientes → Nuevo): cliente, contacto y datos fiscales, todo con POST (basta ventas.clientes.crear;
+   * PUT pediría editar). shortcut: no es una sola operación; si algo falla se deshace lo creado (si el rol puede borrar).
    */
   async altaCliente(c: CambiosCliente): Promise<Cliente> {
-    const nuevo = await this.post<ApiCliente>('/clientes', { nombre: c.nombre, esPublicoGeneral: false, diasCredito: 0 });
+    const nuevo = await this.post<ApiCliente>('/clientes', { ...datosCliente(c), esPublicoGeneral: false, diasCredito: 0 });
     try {
-      return await this.guardarCliente(nuevo.id, c);
+      const contactos = c.contacto.nombre ? [await this.post<ApiContacto>('/cliente-contactos', contactoApi(nuevo.id, c))] : [];
+      const fiscales: ApiDatoFiscal[] = [];
+      for (const f of c.facturacion) fiscales.push(await this.post<ApiDatoFiscal>('/cliente-datos-fiscales', fiscalApi(nuevo.id, f)));
+      return aCliente(nuevo, contactos, fiscales);
     } catch (e) {
       // No dejar un cliente a medias: se borra lo que alcanzó a crearse y se avisa el error original
       await this.borrarCliente(nuevo.id).catch(() => undefined);
@@ -465,40 +542,13 @@ export class VentasApi {
       this.get<ApiContacto[]>(`/cliente-contactos?clienteId=${id}`),
       this.get<ApiDatoFiscal[]>(`/cliente-datos-fiscales?clienteId=${id}`),
     ]);
-    await this.put(`/clientes/${id}`, {
-      ...cliente,
-      nombre: c.nombre,
-      giro: c.empresa.giro || null,
-      correo: c.empresa.correo || null,
-      telefono: c.empresa.telefono || null,
-      sitioWeb: c.empresa.sitioWeb || null,
-    });
+    await this.put(`/clientes/${id}`, { ...cliente, ...datosCliente(c) });
     const principal = contactos.find((x) => x.principal) ?? contactos[0];
-    const contacto = {
-      clienteId: id,
-      nombre: c.contacto.nombre,
-      apellidos: c.contacto.apellidos || null,
-      puesto: c.contacto.puesto || null,
-      correo: c.contacto.correo || null,
-      telefono: c.contacto.telefono || null,
-      principal: true,
-    };
+    const contacto = contactoApi(id, c);
     if (principal) await this.put(`/cliente-contactos/${principal.id}`, { ...principal, ...contacto });
     else if (c.contacto.nombre) await this.post('/cliente-contactos', contacto);
     for (const f of c.facturacion) {
-      const cuerpo = {
-        clienteId: id,
-        alias: f.alias,
-        razonSocial: f.razonSocial,
-        rfc: f.rfc,
-        // El backend guarda la clave del SAT ("601", "G03"); el front puede traer "G03 · Gastos en general"
-        regimenFiscal: claveSat(f.regimenFiscal),
-        usoCfdi: claveSat(f.usoCfdi),
-        codigoPostal: f.codigoPostal,
-        correo: f.correo || null,
-        direccionFiscal: f.direccionFiscal || null,
-        predeterminado: f.predeterminado,
-      };
+      const cuerpo = fiscalApi(id, f);
       const existe = fiscales.find((x) => x.id === f.id);
       if (existe) await this.put(`/cliente-datos-fiscales/${f.id}`, { ...existe, ...cuerpo });
       else await this.post('/cliente-datos-fiscales', cuerpo);
@@ -539,6 +589,8 @@ export class VentasApi {
       monedaCodigo: 'MXN',
       controlaExistencias: tipo === 'general',
       minimoExistencias: n.minimoExistencias ?? null,
+      pedidoMinimo: n.pedidoMinimo ?? null,
+      tiempoServicioMin: n.tiempoServicioMin ?? null,
       concretoFc: cfg?.fc ?? null,
       concretoEdadDias: cfg ? Number(cfg.edad) : null,
       concretoRevenimientoCm: cfg ? Number(cfg.rev) : null,

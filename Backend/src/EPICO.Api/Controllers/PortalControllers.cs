@@ -23,6 +23,26 @@ public abstract class PortalBase : ControllerBase
     protected Guid ClienteId => Guid.Parse(User.FindFirstValue(Tokens.Cliente)!);
 }
 
+/// <summary>Límites del cliente en el portal (Cliente.LimiteCotizaciones / LimiteObras). Sin filtros: cuenta todo lo suyo.</summary>
+public static class LimitesPortal
+{
+    /// <summary>Series de cotizaciones pedidas en el portal y no canceladas: una revisión (-R1) no cuenta como otra.</summary>
+    public static Task<int> CotizacionesUsadas(IAppDbContext db, Guid clienteId, CancellationToken ct) =>
+        db.Set<Cotizacion>().IgnoreQueryFilters()
+            .Where(c => c.ClienteId == clienteId && !c.IsDeleted && c.Origen == OrigenCotizacion.Portal && c.Estado != EstadoCotizacion.Cancelada)
+            .Select(c => c.Serie).Distinct().CountAsync(ct);
+
+    public static Task<int> ObrasUsadas(IAppDbContext db, Guid clienteId, CancellationToken ct) =>
+        db.Set<Obra>().IgnoreQueryFilters().CountAsync(o => o.ClienteId == clienteId && !o.IsDeleted, ct);
+
+    // shortcut: sin candado; dos altas al mismo tiempo pueden pasar el límite por una.
+    public static async Task Revisar(int? limite, Func<Task<int>> usadas, string que)
+    {
+        if (limite is int n && await usadas() >= n)
+            throw new ReglaException($"Llegaste al límite de {n} {que}; pide a tu asesor que lo amplíe.", 409);
+    }
+}
+
 /// <summary>CRUD de una tabla del cliente: solo ve y escribe los renglones de su cliente.</summary>
 public abstract class PortalCrud<T>(IAppDbContext db) : PortalBase where T : BaseEntity, IDeCliente
 {
@@ -103,8 +123,11 @@ public class PortalObrasController(IAppDbContext db) : PortalCrud<Obra>(db)
 
     protected override async Task AntesDeGuardar(Obra x, Obra? actual, CancellationToken ct)
     {
-        x.OrganizacionId = await Db.Set<Cliente>().IgnoreQueryFilters().Where(c => c.Id == ClienteId).Select(c => c.OrganizacionId).FirstAsync(ct);
+        var c = await Db.Set<Cliente>().IgnoreQueryFilters().Where(c => c.Id == ClienteId)
+            .Select(c => new { c.OrganizacionId, c.LimiteObras }).FirstAsync(ct);
+        x.OrganizacionId = c.OrganizacionId;
         x.EmpresaRestringidaId = actual?.EmpresaRestringidaId;
+        if (actual is null) await LimitesPortal.Revisar(c.LimiteObras, () => LimitesPortal.ObrasUsadas(Db, ClienteId, ct), "obras");
         if (actual is not null && await ConPedidos(actual.Id, true, ct))
             throw new ReglaException("La obra tiene pedidos en curso: pide el cambio a tu asesor.", 409);
     }
@@ -124,7 +147,13 @@ public class PortalDisenosController(IAppDbContext db) : PortalCrud<DisenoPortal
 public record ClientePortal(Guid Id, string Nombre, string? Giro, string? Correo, string? Telefono, string? SitioWeb,
     int DiasCredito, decimal? LimiteCredito);
 
-public record PerfilPortal(Usuario Usuario, ClientePortal Cliente);
+/// <summary>Cotizaciones/Obras null = sin límite.</summary>
+public record LimitesCliente(int? Cotizaciones, int? Obras, int CotizacionesUsadas, int ObrasUsadas);
+
+/// <summary>Disponible null = sin límite.</summary>
+public record CreditoPortal(decimal? Limite, int Dias, decimal Usado, decimal? Disponible);
+
+public record PerfilPortal(Usuario Usuario, ClientePortal Cliente, LimitesCliente Limites, CreditoPortal Credito);
 
 public record PlantaPortal(Guid Id, Guid EmpresaId, string Empresa, string Codigo, string Nombre, string? Direccion,
     string? Telefono, string ZonaHoraria, decimal? Lat, decimal? Lng, decimal KmIncluidos, decimal PrecioKm);
@@ -136,7 +165,7 @@ public record CatalogoPortal(List<Producto> Productos, List<CategoriaProducto> C
 /// <summary>Pagado: el pedido completo cuando el cobro está pagado o finalizado (aún no hay pagos parciales).</summary>
 public record CobroPortal(EstadoCobro Estado, decimal Subtotal, decimal Descuento, decimal Iva, decimal Total, decimal Pagado, decimal Pendiente);
 
-/// <summary>Lat/Lng: posición del camión; siempre null mientras no haya GPS de flota.</summary>
+/// <summary>Lat/Lng: posición GPS del camión mientras el viaje no termina (null sin GPS o si no reporta).</summary>
 public record ViajePortal(Guid Id, string Folio, Guid PedidoId, string PedidoFolio, EstadoViaje Estado, decimal VolumenM3,
     string? Camion, string? Operador, DateTime? SalidaEn, DateTime? LlegadaEstimada, DateTime? LlegadaEn, DateTime? TerminadaEn,
     decimal? Lat, decimal? Lng);
@@ -144,12 +173,14 @@ public record ViajePortal(Guid Id, string Folio, Guid PedidoId, string PedidoFol
 /// <summary>Lugar de entrega capturado sin obra.</summary>
 public record LugarPortal(string? Direccion, string? Municipio, string? Referencias, decimal? Lat, decimal? Lng);
 
-/// <summary>Obra o Lugar: uno de los dos viene (el otro null).</summary>
+/// <summary>Obra o Lugar: uno de los dos viene (el otro null). ConfirmadaEn = la concretera la confirmó (null = por confirmar).</summary>
 public record PedidoPortal(Guid Id, string Folio, Guid? CotizacionId, EstadoPedido Estado, EstatusPlanta EstatusPlanta,
-    DateTime FechaHoraEntrega, Obra? Obra, LugarPortal? Lugar, PlantaPortal? Planta, CobroPortal Cobro, List<PedidoLinea>? Lineas, List<ViajePortal> Remisiones);
+    DateTime FechaHoraEntrega, Obra? Obra, LugarPortal? Lugar, PlantaPortal? Planta, CobroPortal Cobro, List<PedidoLinea>? Lineas,
+    List<ViajePortal> Remisiones, DateTime? ConfirmadaEn);
 
 [Route("api/v1/portal")]
-public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServicio ventas, IConfiguration cfg, IWebHostEnvironment env)
+public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServicio ventas, IConfiguration cfg, IWebHostEnvironment env,
+    Application.Flota.FlotaServicio flota)
     : PortalBase
 {
     // ---------------------------------------------------------------------------------------------
@@ -165,7 +196,10 @@ public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServici
     {
         var c = await Cliente(ct);
         var u = await db.Set<Usuario>().AsNoTracking().FirstAsync(x => x.Id == yo.Id, ct);
-        return new(u, new(c.Id, c.Nombre, c.Giro, c.Correo, c.Telefono, c.SitioWeb, c.DiasCredito, c.LimiteCredito));
+        var credito = await ventas.Credito(c.Id, ct);
+        return new(u, new(c.Id, c.Nombre, c.Giro, c.Correo, c.Telefono, c.SitioWeb, c.DiasCredito, c.LimiteCredito),
+            new(c.LimiteCotizaciones, c.LimiteObras, await LimitesPortal.CotizacionesUsadas(db, c.Id, ct), await LimitesPortal.ObrasUsadas(db, c.Id, ct)),
+            new(credito.Limite, credito.Dias, credito.Usado, credito.Disponible));
     }
 
     /// <summary>Editar mi perfil</summary>
@@ -235,7 +269,8 @@ public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServici
     /// <remarks>Queda "recibida" (origen portal) para que el asesor la revise; le llega una notificación. Cliente, vendedor,
     /// lista de precios y descuento los pone el back, y los precios siempre salen de la tarifa (precioM3, precioUnitario y
     /// km incluidos/precio por km que mande el cliente se ignoran). revisionDeId = modificar una suya; baseId = usar una
-    /// suya como base. La entrega es obraId (una obra suya); el lugar (entrega*) se ignora.</remarks>
+    /// suya como base. La entrega es obraId (una obra suya); el lugar (entrega*) se ignora. Una nueva (sin revisionDeId) con el
+    /// cliente en su límite de cotizaciones da 409.</remarks>
     [HttpPost("cotizaciones")]
     public async Task<ActionResult<Cotizacion>> PedirCotizacion(CotizacionRequest r, CancellationToken ct)
     {
@@ -244,6 +279,8 @@ public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServici
         foreach (var otra in new[] { r.RevisionDeId, r.BaseId }.OfType<Guid>())
             if (!await Cotizaciones().AnyAsync(c => c.Id == otra, ct)) return NotFound();
         var cliente = await Cliente(ct);
+        if (r.RevisionDeId is null)
+            await LimitesPortal.Revisar(cliente.LimiteCotizaciones, () => LimitesPortal.CotizacionesUsadas(db, ClienteId, ct), "cotizaciones");
         var c = await ventas.CrearCotizacion(r with
         {
             ClienteId = ClienteId,
@@ -251,6 +288,7 @@ public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServici
             ListaPreciosId = cliente.ListaPreciosId,
             DescuentoPct = 0,
             EntregaDireccion = null, EntregaMunicipio = null, EntregaReferencias = null, EntregaLat = null, EntregaLng = null,
+            ReemplazaId = null,
             Partidas = [.. r.Partidas.Select(p => p with
             {
                 Id = null, PrecioM3 = null, TrasladoIncluidosKm = null, TrasladoPrecioKm = null,
@@ -335,7 +373,7 @@ public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServici
                     ? new LugarPortal(p.EntregaDireccion, p.EntregaMunicipio, p.EntregaReferencias, p.EntregaLat, p.EntregaLng) : null,
                 plantas.TryGetValue(p.SucursalId, out var s) ? Planta(s, empresas) : null,
                 new CobroPortal(p.Cobro, p.Subtotal, p.Descuento, p.Iva, p.Total, pagado, p.Total - pagado),
-                lineas ? p.Lineas : null, [.. viajes[p.Id]]);
+                lineas ? p.Lineas : null, [.. viajes[p.Id]], p.ConfirmadaEn);
         })];
     }
 
@@ -345,9 +383,14 @@ public class PortalController(IAppDbContext db, IUsuarioActual yo, VentasServici
         var folios = await db.Set<Pedido>().AsNoTracking().Where(p => pedidoIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Folio, ct);
         var equipoIds = remisiones.Select(r => r.EquipoId).OfType<Guid>().Distinct().ToList();
         var camiones = await db.Set<Equipo>().AsNoTracking().Where(e => equipoIds.Contains(e.Id)).ToDictionaryAsync(e => e.Id, e => e.NumeroEconomico, ct);
-        return [.. remisiones.Select(r => new ViajePortal(r.Id, r.Folio, r.PedidoId, folios.GetValueOrDefault(r.PedidoId, ""), r.Estado,
-            r.VolumenM3, r.EquipoId is Guid eq ? camiones.GetValueOrDefault(eq) : null, r.OperadorNombre, r.SalidaEn, r.LlegadaEstimada,
-            r.LlegadaEn, r.TerminadaEn, null, null))];
+        var posiciones = await flota.Posiciones(remisiones.Where(r => r.Estado != EstadoViaje.Terminado).Select(r => r.EquipoId).OfType<Guid>(), ct);
+        return [.. remisiones.Select(r =>
+        {
+            var pos = r.Estado != EstadoViaje.Terminado && r.EquipoId is Guid q ? posiciones.GetValueOrDefault(q) : null;
+            return new ViajePortal(r.Id, r.Folio, r.PedidoId, folios.GetValueOrDefault(r.PedidoId, ""), r.Estado,
+                r.VolumenM3, r.EquipoId is Guid eq ? camiones.GetValueOrDefault(eq) : null, r.OperadorNombre, r.SalidaEn, r.LlegadaEstimada,
+                r.LlegadaEn, r.TerminadaEn, pos?.Lat, pos?.Lng);
+        })];
     }
 
     // ---------------------------------------------------------------------------------------------

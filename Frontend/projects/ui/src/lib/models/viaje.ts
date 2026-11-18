@@ -1,7 +1,7 @@
 import { UbicacionGps } from './obra';
 
-/** Etapa de un camión (olla) dentro de la entrega de un pedido. */
-export type EstadoViaje = 'cargando' | 'en_ruta' | 'en_obra' | 'regresando';
+/** Etapa de un camión (olla) dentro de la entrega de un pedido. "programado": ya tiene unidad, aún no carga. */
+export type EstadoViaje = 'programado' | 'cargando' | 'en_ruta' | 'en_obra' | 'regresando';
 
 export interface PosicionGps extends UbicacionGps {
   /** Cuándo la reportó la unidad, ISO 8601 con offset. */

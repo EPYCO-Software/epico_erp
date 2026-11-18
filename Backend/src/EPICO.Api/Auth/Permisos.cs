@@ -48,7 +48,9 @@ public static class Permisos
     static readonly Dictionary<string, string> Nombres = new()
     {
         ["config"] = "Configuración", ["general"] = "General", ["ventas"] = "Ventas", ["crm"] = "CRM",
-        ["inventario"] = "Inventario", ["flota"] = "Flota", ["operacion"] = "Operación",
+        ["inventario"] = "Inventario", ["flota"] = "Flota", ["operacion"] = "Operación", ["calidad"] = "Calidad",
+        ["muestras"] = "Muestras", ["ensayes"] = "Ensayes", ["inspecciones"] = "Inspecciones", ["trayectos"] = "Trayectos",
+        ["operadores"] = "Operadores", ["combustible"] = "Combustible", ["mantenimiento"] = "Mantenimiento",
         ["accesos"] = "Accesos", ["organizaciones"] = "Organizaciones", ["secuencias"] = "Folios", ["sesiones"] = "Sesiones",
         ["sucursales"] = "Plantas", ["actividades"] = "Actividades", ["archivos"] = "Archivos", ["historial"] = "Historial",
         ["prospectos"] = "Prospectos", ["obras"] = "Obras", ["equipos"] = "Equipos", ["existencias"] = "Existencias", ["movimientos"] = "Movimientos",

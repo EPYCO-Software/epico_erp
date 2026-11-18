@@ -289,6 +289,145 @@ public class VentasTests(Api api) : IClassFixture<Api>
     }
 
     [Fact]
+    public async Task Mejorar_oferta_reemplaza_a_la_anterior_al_enviar()
+    {
+        var (c, esc, cliente, obra, prod) = await Preparar();
+        object Mejora(Guid reemplaza, Guid? otroCliente = null, Guid? otraObra = null)
+        {
+            var n = JsonSerializer.SerializeToNode(Cotizacion(esc, otroCliente ?? cliente, otraObra ?? obra, prod))!;
+            n["reemplazaId"] = reemplaza;
+            n["descuentoPct"] = 20;
+            return n;
+        }
+        async Task<JsonElement> Ver(Guid id) => await c.GetFromJsonAsync<JsonElement>($"/api/v1/cotizaciones/{id}");
+        async Task<HttpStatusCode> Accion(Guid id, string accion) => (await c.PostAsync($"/api/v1/cotizaciones/{id}/{accion}", null)).StatusCode;
+        static Guid? Id(JsonElement x, string campo) => x.GetProperty(campo).ValueKind == JsonValueKind.Null ? null : x.GetProperty(campo).GetGuid();
+
+        var original = await Crear(c, "/api/v1/cotizaciones", Cotizacion(esc, cliente, obra, prod));
+        Assert.Equal(HttpStatusCode.OK, await Accion(original, "enviar"));
+        var otro = await Crear(c, "/api/v1/clientes", new { nombre = $"Otro {Guid.NewGuid():N}" });
+        var obraOtro = await Crear(c, "/api/v1/obras", new { clienteId = otro, nombre = "Casa", direccion = "Calle 9" });
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/api/v1/cotizaciones", Mejora(original, otro, obraOtro))).StatusCode);
+
+        var mejora = await Crear(c, "/api/v1/cotizaciones", Mejora(original));
+        var m = await Ver(mejora);
+        Assert.Equal((original, original), (Id(m, "reemplazaId"), Id(m, "baseId")));
+        Assert.Null(Id(await Ver(original), "reemplazadaPorId")); // un borrador no reemplaza nada
+        Assert.Equal(HttpStatusCode.OK, await Accion(mejora, "enviar"));
+        Assert.Equal(mejora, Id(await Ver(original), "reemplazadaPorId"));
+        var r = await c.PostAsync($"/api/v1/cotizaciones/{original}/confirmar", null);
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains($"Esta oferta fue reemplazada por {m.GetProperty("folio").GetString()}.", await r.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Conflict, await Accion(original, "enviar"));
+        await using (var db = api.Db())
+        {
+            Assert.Contains(await db.Set<Evento>().Where(e => e.RegistroId == original).Select(e => e.Texto).ToListAsync(),
+                t => t.StartsWith($"Reemplazada por la oferta {m.GetProperty("folio").GetString()} ($") && t.Contains(" → $"));
+            Assert.Contains(await db.Set<Evento>().Where(e => e.RegistroId == mejora).Select(e => e.Texto).ToListAsync(),
+                t => t.StartsWith("Mejora la oferta "));
+        }
+
+        // Cancelar la mejora devuelve la anterior; ya en pedido no se negocia.
+        Assert.Equal(HttpStatusCode.OK, await Accion(mejora, "cancelar"));
+        Assert.Null(Id(await Ver(original), "reemplazadaPorId"));
+        Assert.Equal(HttpStatusCode.OK, await Accion(original, "confirmar"));
+        r = await c.PostAsJsonAsync("/api/v1/cotizaciones", Mejora(original));
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("Esa cotización ya no se puede negociar.", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Credito_del_cliente_limita_el_cobro_a_credito()
+    {
+        var (c, esc, cliente, obra, prod) = await Preparar();
+        var cot = await Crear(c, "/api/v1/cotizaciones", Cotizacion(esc, cliente, obra, prod));
+        var pedidos = (await (await c.PostAsync($"/api/v1/cotizaciones/{cot}/confirmar", null)).Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().Select(p => (Id: p.GetProperty("id").GetGuid(), Total: p.GetProperty("total").GetDecimal())).ToList();
+        Task<HttpResponseMessage> Cobro(Guid id, string valor) => c.PostAsJsonAsync($"/api/v1/pedidos/{id}/cobro", new { valor });
+
+        var r = await Cobro(pedidos[0].Id, "credito");
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("El cliente no tiene crédito asignado.", await r.Content.ReadAsStringAsync());
+
+        var cli = JsonSerializer.Deserialize<Dictionary<string, object?>>(await c.GetStringAsync($"/api/v1/clientes/{cliente}"))!;
+        (cli["limiteCredito"], cli["diasCredito"]) = (pedidos[0].Total + 1, 15);
+        Assert.Equal(HttpStatusCode.OK, (await c.PutAsJsonAsync($"/api/v1/clientes/{cliente}", cli)).StatusCode);
+
+        r = await Cobro(pedidos[0].Id, "credito");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var desde = (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("creditoDesde").GetDateTime();
+        r = await Cobro(pedidos[1].Id, "credito");
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("Excede el crédito del cliente: disponible $1.00.", await r.Content.ReadAsStringAsync());
+
+        var credito = await c.GetFromJsonAsync<JsonElement>($"/api/v1/clientes/{cliente}/credito");
+        Assert.Equal((pedidos[0].Total, 1m, 15), (credito.GetProperty("usado").GetDecimal(), credito.GetProperty("disponible").GetDecimal(),
+            credito.GetProperty("dias").GetInt32()));
+        var p0 = Assert.Single(credito.GetProperty("pedidos").EnumerateArray());
+        Assert.Equal((pedidos[0].Id, false), (p0.GetProperty("id").GetGuid(), p0.GetProperty("vencido").GetBoolean()));
+        Assert.Equal(desde.AddDays(15), p0.GetProperty("vence").GetDateTime(), TimeSpan.FromMilliseconds(1)); // la base guarda microsegundos
+
+        r = await Cobro(pedidos[0].Id, "pagado");
+        Assert.Equal(JsonValueKind.Null, (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("creditoDesde").ValueKind);
+        Assert.Equal(0m, (await c.GetFromJsonAsync<JsonElement>($"/api/v1/clientes/{cliente}/credito")).GetProperty("usado").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Ventas_confirma_ordenes_y_la_planta_tambien()
+    {
+        var (c, esc, cliente, obra, prod) = await Preparar();
+        async Task<List<JsonElement>> Confirmar(HttpClient h, object? cuerpo)
+        {
+            var cot = await Crear(c, "/api/v1/cotizaciones", Cotizacion(esc, cliente, obra, prod));
+            var r = cuerpo is null ? await h.PostAsync($"/api/v1/cotizaciones/{cot}/confirmar", null)
+                : await h.PostAsJsonAsync($"/api/v1/cotizaciones/{cot}/confirmar", cuerpo);
+            Assert.True(r.IsSuccessStatusCode, $"{(int)r.StatusCode} {await r.Content.ReadAsStringAsync()}");
+            return [.. (await r.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()];
+        }
+        static bool Confirmada(JsonElement p) => p.GetProperty("confirmadaEn").ValueKind != JsonValueKind.Null;
+
+        var peds = await Confirmar(c, null); // sin body: por confirmar
+        Assert.DoesNotContain(peds, Confirmada);
+        var id = peds[0].GetProperty("id").GetGuid();
+        var r = await c.PostAsync($"/api/v1/pedidos/{id}/confirmar", null);
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var p = await r.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(Confirmada(p));
+        Assert.NotEqual(JsonValueKind.Null, p.GetProperty("confirmadaPorId").ValueKind);
+        r = await c.PostAsync($"/api/v1/pedidos/{id}/confirmar", null);
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("La orden ya está confirmada.", await r.Content.ReadAsStringAsync());
+
+        // La planta confirma: se confirma sola.
+        var otro = peds[1].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync($"/api/v1/pedidos/{otro}/planta", new { accion = "enviar" })).StatusCode);
+        Assert.False(Confirmada(await c.GetFromJsonAsync<JsonElement>($"/api/v1/pedidos/{otro}")));
+        Assert.True(Confirmada(await (await c.PostAsJsonAsync($"/api/v1/pedidos/{otro}/planta", new { accion = "confirmar" }))
+            .Content.ReadFromJsonAsync<JsonElement>()));
+        await using (var db = api.Db())
+            foreach (var pid in new[] { id, otro })
+                Assert.Single(await db.Set<Evento>().Where(e => e.RegistroId == pid && e.Texto.StartsWith("Orden confirmada (entrega ")).ToListAsync());
+
+        // Nacen confirmadas solo con el permiso.
+        Assert.All(await Confirmar(c, new { confirmarOrdenes = true }), x => Assert.True(Confirmada(x)));
+        Domain.Acceso.Empresa empresa;
+        await using (var db = api.Db()) empresa = await db.Set<Domain.Acceso.Empresa>().FirstAsync(e => db.Set<Sucursal>().Any(s => s.Id == esc && s.EmpresaId == e.Id));
+        var correo = $"sinconf{Guid.NewGuid():N}@epico.mx";
+        await api.CrearUsuario(correo, "Clave.Sin.1", ["ventas.cotizaciones.*", "ventas.pedidos.ver", "ventas.pedidos.crear"], empresa);
+        var (sin, _) = await api.Entrar(correo, "Clave.Sin.1");
+        var cot2 = await Crear(c, "/api/v1/cotizaciones", Cotizacion(esc, cliente, obra, prod));
+        Assert.Equal(HttpStatusCode.Forbidden, (await sin.PostAsJsonAsync($"/api/v1/cotizaciones/{cot2}/confirmar", new { confirmarOrdenes = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await sin.PostAsync($"/api/v1/pedidos/{id}/confirmar", null)).StatusCode);
+
+        // Cancelada no se confirma.
+        var cancelada = (await Confirmar(c, null))[0].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync($"/api/v1/pedidos/{cancelada}/cancelar", null)).StatusCode);
+        r = await c.PostAsync($"/api/v1/pedidos/{cancelada}/confirmar", null);
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("La orden está cancelada.", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Cliente_en_uso_o_publico_general_no_se_borra()
     {
         var (c, _, cliente, _, _) = await Preparar(); // tiene una obra

@@ -2,11 +2,11 @@ import { CategoriaProducto, PRODUCTOS, ProductoTarifa, conceptoConcreto, kmExtra
 import { Cliente } from '../models/cliente';
 import { Cotizacion, EstadoCotizacion, Maquinaria, PartidaCotizacion, ServicioObra } from '../models/cotizacion';
 import { LugarDeEntrega, Obra, idLugar } from '../models/obra';
-import { EstadoCobro, EstadoPedido, EstatusPlanta, MetodoPago, Pedido } from '../models/pedido';
+import { EstadoCobro, EstadoPedido, EstatusPlanta, MetodoPago, Pedido, ReagendaPendiente, TiemposViaje } from '../models/pedido';
 import { isoEnZona } from '../time/zona';
 
 /** Lo que se manda al crear una cotización. `baseId`: la cotización de la que se partió, para comparar precios. */
-export type NuevaCotizacion = Pick<Cotizacion, 'clienteId' | 'plantaId' | 'partidas' | 'descuento' | 'baseId' | 'lugar'>;
+export type NuevaCotizacion = Pick<Cotizacion, 'clienteId' | 'plantaId' | 'partidas' | 'descuento' | 'baseId' | 'reemplazaId' | 'lugar'>;
 
 /**
  * El backend de Ventas (/api/v1): lo que responde tiene la forma del esquema (dbml) y aquí se traduce a los modelos del
@@ -36,6 +36,10 @@ export interface ApiCliente extends Base {
   telefono: string | null;
   sitioWeb: string | null;
   esPublicoGeneral: boolean;
+  limiteCredito?: number | null;
+  diasCredito?: number;
+  limiteCotizaciones?: number | null;
+  limiteObras?: number | null;
 }
 export interface ApiContacto extends Base {
   clienteId: string;
@@ -82,6 +86,10 @@ export interface ApiProducto extends Base {
   unidadId: string;
   precioLista: number;
   minimoCobro: number | null;
+  /** Lo menos que se puede pedir, en su unidad. */
+  pedidoMinimo?: number | null;
+  /** Minutos de servicio por viaje (descarga, bombeo o uso). */
+  tiempoServicioMin?: number | null;
   controlaExistencias: boolean;
   minimoExistencias: number | null;
   concretoFc: string | null;
@@ -182,6 +190,8 @@ export interface ApiCotizacion extends Base, ApiEntrega {
   serie: string;
   revision: number;
   baseId: string | null;
+  reemplazaId?: string | null;
+  reemplazadaPorId?: string | null;
   estado: EstadoCotizacion;
   origen: 'erp' | 'portal';
   ocultaAlCliente: boolean;
@@ -211,6 +221,15 @@ export interface ApiPedido extends Base, ApiEntrega {
   fechaHoraEntrega: string;
   estado: EstadoPedido;
   cobro: EstadoCobro;
+  creditoDesde?: string | null;
+  confirmadaEn?: string | null;
+  confirmadaPorId?: string | null;
+  /** Números económicos de las unidades asignadas (sus viajes) y los m³ que ya llevan. */
+  unidades?: string[] | null;
+  m3Asignados?: number | null;
+  tiempos?: TiemposViaje | null;
+  reagendaPendiente?: ReagendaPendiente | null;
+  clienteTieneCorreo?: boolean | null;
   metodoPago: MetodoPago;
   estatusPlanta: EstatusPlanta;
   solicitudPlantaFecha: string | null;
@@ -313,6 +332,8 @@ export function aCliente(c: ApiCliente, contactos: ApiContacto[], fiscales: ApiD
       documentos: [],
     })),
     portal: contactos.some((x) => x.usuarioId),
+    limites: { cotizaciones: c.limiteCotizaciones ?? null, obras: c.limiteObras ?? null },
+    credito: { limite: c.limiteCredito ?? null, dias: c.diasCredito ?? 0 },
   };
 }
 
@@ -345,6 +366,8 @@ export function aProducto(
     unidad: unidades.get(p.unidadId) ?? '',
     precio: p.precioLista,
     ...(p.minimoCobro != null ? { minimo: p.minimoCobro } : {}),
+    ...(p.pedidoMinimo ? { pedidoMinimo: p.pedidoMinimo } : {}),
+    ...(p.tiempoServicioMin ? { tiempoServicioMin: p.tiempoServicioMin } : {}),
     descripcion: p.descripcion,
     ...(p.controlaExistencias ? { existencias: existencias ?? 0, minimoExistencias: p.minimoExistencias ?? 0 } : {}),
     // Solo los dados de alta (los del tarifario conservan su id del front y no se configuran).
@@ -413,6 +436,8 @@ export function aCotizacion(c: ApiCotizacion, ctx: Contexto): Cotizacion {
     serie: c.serie,
     revision: c.revision,
     ...(c.baseId ? { baseId: c.baseId } : {}),
+    ...(c.reemplazaId ? { reemplazaId: c.reemplazaId } : {}),
+    ...(c.reemplazadaPorId ? { reemplazadaPorId: c.reemplazadaPorId } : {}),
     // El front guarda el % (la API, el importe)
     ...(c.descuento && c.subtotal ? { descuento: redondear((c.descuento / c.subtotal) * 100) } : {}),
     // Sin obra, las partidas apuntan a su lugar de entrega
@@ -447,6 +472,13 @@ export function aPedido(p: ApiPedido, ctx: Contexto): Pedido {
     ...(p.partidaId ? { partidaId: p.partidaId } : {}),
     importe: p.total,
     cobro: p.cobro,
+    ...(p.creditoDesde ? { creditoDesde: p.creditoDesde } : {}),
+    ...(p.confirmadaEn ? { confirmadaEn: p.confirmadaEn } : {}),
+    ...(p.confirmadaPorId ? { confirmadaPorId: p.confirmadaPorId } : {}),
+    ...(p.unidades?.length ? { unidades: p.unidades, m3Asignados: p.m3Asignados ?? 0 } : {}),
+    ...(p.tiempos ? { tiempos: p.tiempos } : {}),
+    ...(p.reagendaPendiente ? { reagendaPendiente: p.reagendaPendiente } : {}),
+    ...(p.clienteTieneCorreo != null ? { clienteTieneCorreo: p.clienteTieneCorreo } : {}),
     metodoPago: p.metodoPago,
     estatusPlanta: p.estatusPlanta,
     ...(p.solicitudPlantaFecha || p.solicitudPlantaNota
@@ -509,6 +541,7 @@ export function cotizacionApi(n: NuevaCotizacion, ctx: Contexto, unidadDe: (fron
     ...entregaApi(n.lugar),
     descuentoPct: n.descuento ?? 0,
     ...(n.baseId ? { baseId: n.baseId } : {}),
+    ...(n.reemplazaId ? { reemplazaId: n.reemplazaId } : {}),
     partidas: n.partidas.map((p, i) => partidaApi(p, i, ctx, unidadDe, existentes)),
     ...extra,
   };

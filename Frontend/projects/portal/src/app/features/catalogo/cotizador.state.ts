@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { form, min, required, submit } from '@angular/forms/signals';
-import { type ConcretoDisponible, DisenoGuardado, EspecificacionConcreto, concretoExistente, Maquinaria, Obra, PERSONALIZADO, RentaMaquinaria, ServicioObra, aIsoConOffset, avisos, buscarSolucion, colocacionParaServicios, deInputLocal, esNocturna, etiquetas, mensajeError, serviciosParaColocacion, sugeridaDisponible, validarEntrega } from 'ui';
+import { form, min, required, submit, validate } from '@angular/forms/signals';
+import { type ConcretoDisponible, DisenoGuardado, EspecificacionConcreto, concretoExistente, Maquinaria, Obra, PERSONALIZADO, RentaMaquinaria, ServicioObra, aIsoConOffset, avisos, buscarSolucion, colocacionParaServicios, deInputLocal, esNocturna, etiquetas, mensajeError, serviciosParaColocacion, sugeridaDisponible, validarEntrega, pedidoMinimoDe } from 'ui';
 import { CotizacionService } from '../../core/services/cotizacion.service';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
 
@@ -64,7 +64,14 @@ export class CotizadorState {
   readonly f = form(this.modelo, (p) => {
     required(p.volumenM3, { message: 'Indica el volumen estimado.' });
     min(p.volumenM3, 1, { message: 'El volumen mínimo es 1 m³.' });
+    // El pedido mínimo del concreto (lo pone la concretera en Productos): con menos no se deja agregar
+    validate(p.volumenM3, ({ value }) => {
+      const m = this.pedidoMinimo();
+      return m && value() != null && value() < m ? { kind: 'pedido-minimo', message: `El pedido mínimo de este concreto es ${m} m³.` } : undefined;
+    });
   });
+  /** m³ mínimos del concreto elegido (undefined: sin mínimo). */
+  readonly pedidoMinimo = computed(() => pedidoMinimoDe(this.especificacion()));
 
   readonly etiquetas = computed(() => etiquetas(this.especificacion()));
   readonly avisos = computed(() => avisos(this.especificacion()));

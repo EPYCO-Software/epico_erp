@@ -71,6 +71,15 @@ export interface Cliente {
   contacto: Omit<PerfilUsuario, 'representaEmpresa' | 'empresa'>;
   facturacion: DatosFacturacion[];
   portal: boolean;
+  /** Cuántas cotizaciones y obras puede crear en el portal; null = sin límite. */
+  limites?: LimitesCliente;
+  /** Crédito que le da la concretera: límite en pesos (null = sin crédito) y días para pagar. */
+  credito?: { limite: number | null; dias: number };
+}
+
+export interface LimitesCliente {
+  cotizaciones: number | null;
+  obras: number | null;
 }
 
 /** RFC de 12 (persona moral) o 13 caracteres (física), sin importar espacios ni mayúsculas; la misma regla en portal y ERP. */

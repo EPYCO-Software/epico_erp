@@ -1,6 +1,6 @@
 import { Component, Injector, OnInit, afterNextRender, computed, inject, input, output, signal } from '@angular/core';
-import { FormField, form, min, required, submit } from '@angular/forms/signals';
-import { FieldError, METODO_PAGO, MetodoPago, PedidoVista, lineasPartida, pesos, precioConcreto, totales } from 'ui';
+import { FormField, form, min, required, submit, validate } from '@angular/forms/signals';
+import { FieldError, METODO_PAGO, MetodoPago, PedidoVista, lineasPartida, pedidoMinimoDe, pesos, precioConcreto, totales } from 'ui';
 import { CambiosPedido, VentasService } from './datos';
 
 interface Edicion {
@@ -49,10 +49,13 @@ const offset = (iso: string) => /[+-]\d{2}:\d{2}$/.exec(iso)?.[0] ?? 'Z';
             type="number"
             step="0.5"
             class="campo mt-1 h-9 px-3 text-right tabular-nums"
-            aria-describedby="editar-volumen-error"
+            aria-describedby="editar-volumen-error editar-volumen-minimo"
             [formField]="f.volumen"
           />
           <ui-field-error [campo]="f.volumen" errorId="editar-volumen-error" />
+          @if (minimo(); as m) {
+            <p id="editar-volumen-minimo" class="mt-1 text-xs text-texto-suave">Pedido mínimo: {{ m }} m³</p>
+          }
         </div>
         <div>
           <label for="editar-precio" class="font-medium">Precio especial del concreto (por m³)</label>
@@ -108,10 +111,19 @@ export class EditorPedido implements OnInit {
     required(m.entrega, { message: 'Elige la fecha y hora de entrega.' });
     required(m.volumen, { message: 'Escribe el volumen.' });
     min(m.volumen, 0.5, { message: 'El mínimo es 0.5 m³.' });
+    validate(m.volumen, ({ value }) => {
+      const min = this.minimo();
+      return min && value() != null && value()! < min ? { kind: 'pedido-minimo', message: `El pedido mínimo de este concreto es ${min} m³.` } : undefined;
+    });
     min(m.precio, 1, { message: 'El precio debe ser mayor a cero.' });
   });
 
   private readonly base = computed(() => this.ventas.partidaDe(this.p()));
+  /** Pedido mínimo (m³) de su concreto, si lo tiene. */
+  protected readonly minimo = computed(() => {
+    const b = this.base().partida;
+    return b ? pedidoMinimoDe(b.especificacion) : undefined;
+  });
   protected readonly tarifa = computed(() => {
     const b = this.base().partida;
     return b ? precioConcreto({ ...b, precioM3: undefined }) : null;

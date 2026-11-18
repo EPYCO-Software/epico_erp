@@ -19,13 +19,15 @@ import { colocarBajo } from './popover';
       type="button"
       popovertarget="selector-plantas"
       class="flex min-h-11 items-center gap-2.5 rounded-xl px-2.5 text-[15px] text-carbon transition-colors hover:bg-carbon/5 focus-visible:outline-2 focus-visible:outline-epico"
-      [attr.aria-label]="etiqueta()"
     >
+      <!-- El nombre accesible es el propio texto (sin aria-label: axe exige que contenga lo visible, y con "+5" no lo hacía) -->
       <ui-icon [icono]="iconoPlanta" [tamano]="23" [grosor]="1.7" />
-      <span class="hidden whitespace-nowrap sm:inline">{{ plantas.actual().nombre }}</span>
+      <span class="sr-only">Plantas: </span>
+      <span class="whitespace-nowrap max-sm:sr-only">{{ plantas.actual().nombre }}</span>
       @if (plantas.otras()) {
         <span class="rounded-full bg-epico px-1.5 text-xs leading-5 font-bold text-white" aria-hidden="true">+{{ plantas.otras() }}</span>
       }
+      <span class="sr-only">{{ extra() }}. Cambiar plantas</span>
     </button>
 
     <div
@@ -102,10 +104,10 @@ export class SelectorPlantas {
   private readonly disparador = viewChild.required<ElementRef<HTMLButtonElement>>('disparador');
   private readonly panel = viewChild.required<ElementRef<HTMLElement>>('panel');
 
-  protected etiqueta(): string {
+  /** " y 2 plantas más" (lo que el "+2" dice con color), para lectores de pantalla. */
+  protected extra(): string {
     const otras = this.plantas.otras();
-    const extra = otras ? ` y ${otras} ${otras === 1 ? 'planta más' : 'plantas más'}` : '';
-    return `Plantas: ${this.plantas.actual().nombre}${extra}. Cambiar plantas`;
+    return otras ? ` y ${otras} ${otras === 1 ? 'planta más' : 'plantas más'}` : '';
   }
 
   protected alAbrir(e: Event): void {

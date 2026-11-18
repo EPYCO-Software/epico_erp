@@ -14,6 +14,9 @@ public interface IAppDbContext
     /// Para que no se salte un número, llámalo dentro de la misma transacción que guarda el documento.
     /// </summary>
     Task<string> SiguienteFolioAsync(Guid empresaId, Guid? sucursalId, string tipo, CancellationToken ct = default);
+
+    /// <summary>Internos activos con acceso a la empresa y ese permiso efectivo (exacto o comodín de módulo/recurso; root no cuenta).</summary>
+    Task<List<Guid>> UsuariosConPermisoAsync(Guid empresaId, string permiso, CancellationToken ct = default);
 }
 
 /// <summary>Quién hace la petición (sale del JWT). Todo vacío = el sistema (seed, migraciones, login).</summary>

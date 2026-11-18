@@ -41,6 +41,16 @@ public class DemoTests(Api api) : IClassFixture<Api>
         await Todos<TipoEquipo, Equipo>(q => q.Select(e => e.Tipo));
         Assert.Contains(await d.Set<Cotizacion>().Where(c => c.EmpresaId == emp.Id).ToListAsync(), c => c.Descuento > 0);
 
+        // Logística: 4 operadores (uno con la licencia vencida), un documento vencido, 6 cargas y un mantenimiento en proceso.
+        var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+        var ops = await d.Set<Operador>().Where(o => d.Set<Domain.Acceso.Sucursal>().Any(s => s.Id == o.SucursalId && s.EmpresaId == emp.Id)).ToListAsync();
+        Assert.Equal(4, ops.Count);
+        Assert.Single(ops, o => o.LicenciaVence < hoy);
+        Assert.Contains(await d.Set<DocumentoEquipo>().ToListAsync(), x => x.Vence < hoy);
+        Assert.Equal(6, await d.Set<CargaCombustible>().CountAsync());
+        var enProceso = await d.Set<Mantenimiento>().SingleAsync(m => m.Estado == EstadoMantenimiento.EnProceso);
+        Assert.Equal(EstadoEquipo.Mantenimiento, (await d.Set<Equipo>().SingleAsync(e => e.Id == enProceso.EquipoId)).Estado);
+
         // La secuencia sigue después de los folios sembrados: la siguiente cotización no choca.
         var folio = await d.SiguienteFolioAsync(emp.Id, (await d.Set<Domain.Acceso.Sucursal>().SingleAsync(s => s.Codigo == "DMA")).Id, "cotizacion");
         Assert.False(await d.Set<Cotizacion>().AnyAsync(c => c.Folio == folio));

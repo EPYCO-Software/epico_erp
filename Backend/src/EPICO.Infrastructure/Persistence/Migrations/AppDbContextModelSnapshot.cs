@@ -28,23 +28,32 @@ namespace EPICO.Infrastructure.Persistence.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_cobro", new[] { "credito", "facturado", "finalizado", "pagado", "por_cobrar", "por_facturar" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_correo", new[] { "enviado", "fallido", "pendiente" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_cotizacion", new[] { "borrador", "cancelada", "enviada", "pedido", "recibida" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_equipo", new[] { "disponible", "fuera_de_servicio", "mantenimiento" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_mantenimiento", new[] { "cancelado", "en_proceso", "programado", "terminado" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_pedido", new[] { "cancelado", "en_obra", "en_planta", "en_ruta", "entregado", "programado" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_viaje", new[] { "cargando", "en_obra", "en_ruta", "regresando", "terminado" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_solicitud", new[] { "aceptada", "pendiente", "rechazada" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estado_viaje", new[] { "cargando", "en_obra", "en_ruta", "programado", "regresando", "terminado" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "estatus_planta", new[] { "actualizacion", "confirmado", "enviado", "no_enviado", "rechazada" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "etapa_prospecto", new[] { "calificado", "contactado", "ganado", "nuevo", "perdido", "propuesta" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "metodo_pago", new[] { "sin_metodo", "transferencia" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "fuente_posicion", new[] { "demo", "manual", "traccar" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "metodo_pago", new[] { "cheque", "efectivo", "sin_metodo", "tarjeta", "transferencia" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "origen_cotizacion", new[] { "erp", "portal" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "origen_reagenda", new[] { "cliente", "logistica", "planta", "ventas" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "resultado_inspeccion", new[] { "aprobada", "con_observaciones", "rechazada" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "seguridad_smtp", new[] { "ninguna", "ssl", "start_tls" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_actividad", new[] { "correo", "documento", "llamada", "pendiente", "reunion" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_dato_cambio", new[] { "booleano", "dinero", "fecha", "fecha_hora", "numero", "opcion", "referencia", "texto" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_equipo", new[] { "allanadora", "aplanadora", "bomba_estacionaria", "bomba_pluma", "otro", "revolvedor", "vibrador" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_documento_equipo", new[] { "calibracion", "otro", "permiso_sct", "seguro", "tarjeta_circulacion", "tenencia", "verificacion" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_equipo", new[] { "allanadora", "aplanadora", "bomba_estacionaria", "bomba_pluma", "camioneta", "cargador", "excavadora", "grua", "montacargas", "otro", "pipa", "plataforma", "retroexcavadora", "revolvedor", "tractocamion", "vibrador", "volteo" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_evento", new[] { "actividad", "cambio", "creado", "eliminado", "mensaje", "nota", "restaurado", "sistema" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_impuesto", new[] { "retencion", "traslado" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_mantenimiento", new[] { "correctivo", "preventivo" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_movimiento_inventario", new[] { "ajuste", "entrada", "salida" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_producto", new[] { "concreto", "general", "servicio" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_programa", new[] { "codigo", "compra_x", "cupones", "lealtad", "promocion", "proxima_orden", "sellos" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_recompensa", new[] { "monto", "porcentaje", "traslado" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_regla_precio", new[] { "descuento", "fijo", "formula" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_trayecto", new[] { "entrega", "flete", "mantenimiento", "otro", "traslado" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tipo_usuario", new[] { "interno", "portal" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
@@ -1084,6 +1093,73 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.ToTable("Seguidor");
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.CargaCombustible", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("CostoTotal")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EquipoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("Horometro")
+                        .HasPrecision(10, 1)
+                        .HasColumnType("numeric(10,1)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("Litros")
+                        .HasPrecision(10, 3)
+                        .HasColumnType("numeric(10,3)");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("OdometroKm")
+                        .HasPrecision(12, 1)
+                        .HasColumnType("numeric(12,1)");
+
+                    b.Property<Guid?>("OperadorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SucursalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("OperadorId");
+
+                    b.HasIndex("SucursalId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.HasIndex("EquipoId", "Fecha");
+
+                    b.ToTable("CargaCombustible");
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.CategoriaProducto", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1164,9 +1240,15 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("LimiteCotizaciones")
+                        .HasColumnType("integer");
+
                     b.Property<decimal?>("LimiteCredito")
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)");
+
+                    b.Property<int?>("LimiteObras")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("ListaPreciosId")
                         .HasColumnType("uuid");
@@ -1447,6 +1529,12 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<OrigenCotizacion>("Origen")
                         .HasColumnType("origen_cotizacion");
 
+                    b.Property<Guid?>("ReemplazaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReemplazadaPorId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Revision")
                         .HasColumnType("integer");
 
@@ -1489,6 +1577,10 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasIndex("MonedaCodigo");
 
                     b.HasIndex("ObraId");
+
+                    b.HasIndex("ReemplazaId");
+
+                    b.HasIndex("ReemplazadaPorId");
 
                     b.HasIndex("SucursalId");
 
@@ -1770,6 +1862,113 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.ToTable("DisenoPortal");
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.DocumentoEquipo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ArchivoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EquipoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Numero")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<TipoDocumentoEquipo>("Tipo")
+                        .HasColumnType("tipo_documento_equipo");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("Vence")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArchivoId");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("EquipoId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.ToTable("DocumentoEquipo");
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.EnsayeLaboratorio", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EdadDias")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("FechaEnsaye")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("FechaProgramada")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LaboratoristaNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("MuestraId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ResistenciaKgCm2")
+                        .HasPrecision(7, 1)
+                        .HasColumnType("numeric(7,1)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("FechaProgramada");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.HasIndex("MuestraId", "EdadDias");
+
+                    b.ToTable("EnsayeLaboratorio");
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.Equipo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1779,7 +1978,10 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Activo")
                         .HasColumnType("boolean");
 
-                    b.Property<decimal?>("CapacidadM3")
+                    b.Property<short?>("Anio")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal?>("Capacidad")
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)");
 
@@ -1793,13 +1995,38 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<EstadoEquipo>("Estado")
+                        .HasColumnType("estado_equipo");
+
+                    b.Property<string>("GpsId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("Marca")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Modelo")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
 
                     b.Property<string>("NumeroEconomico")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("OperadorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OperadorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Placas")
                         .HasMaxLength(15)
@@ -1808,8 +2035,24 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SucursalId")
                         .HasColumnType("uuid");
 
+                    b.PrimitiveCollection<List<Guid>>("SucursalIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
                     b.Property<TipoEquipo>("Tipo")
                         .HasColumnType("tipo_equipo");
+
+                    b.Property<decimal?>("UltimoHorometro")
+                        .HasPrecision(10, 1)
+                        .HasColumnType("numeric(10,1)");
+
+                    b.Property<decimal?>("UltimoOdometroKm")
+                        .HasPrecision(12, 1)
+                        .HasColumnType("numeric(12,1)");
+
+                    b.Property<string>("UnidadCapacidad")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1820,6 +2063,16 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedById");
+
+                    b.HasIndex("GpsId")
+                        .IsUnique()
+                        .HasFilter("\"GpsId\" IS NOT NULL AND NOT \"IsDeleted\"");
+
+                    b.HasIndex("OperadorId");
+
+                    b.HasIndex("SucursalIds");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SucursalIds"), "gin");
 
                     b.HasIndex("UpdatedById");
 
@@ -1918,6 +2171,77 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.ToTable("Impuesto");
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.InspeccionEquipo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EquipoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FirmaArchivoId")
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<List<Guid>>("FotoArchivoIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.Property<string>("InspectorNombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("OdometroKm")
+                        .HasPrecision(12, 1)
+                        .HasColumnType("numeric(12,1)");
+
+                    b.Property<Guid?>("OperadorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Puntos")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<ResultadoInspeccion>("Resultado")
+                        .HasColumnType("resultado_inspeccion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("FirmaArchivoId");
+
+                    b.HasIndex("OperadorId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.HasIndex("EquipoId", "Fecha");
+
+                    b.ToTable("InspeccionEquipo");
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.ListaPrecios", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1996,6 +2320,76 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.ToTable("ListaPreciosSucursal");
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.Mantenimiento", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("Costo")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Descripcion")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid>("EquipoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<EstadoMantenimiento>("Estado")
+                        .HasColumnType("estado_mantenimiento");
+
+                    b.Property<DateTime?>("FinEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("InicioEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("ProgramadoKm")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<DateOnly?>("ProgramadoPara")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Taller")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<TipoMantenimiento>("Tipo")
+                        .HasColumnType("tipo_mantenimiento");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("EquipoId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.ToTable("Mantenimiento");
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.MovimientoInventario", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2040,6 +2434,77 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProductoId", "SucursalId", "Fecha");
 
                     b.ToTable("MovimientoInventario");
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.MuestraLaboratorio", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Cilindros")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("FechaMuestreo")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Folio")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LaboratoristaNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PedidoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RemisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ResistenciaDisenoKgCm2")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("RevenimientoCm")
+                        .HasPrecision(5, 1)
+                        .HasColumnType("numeric(5,1)");
+
+                    b.Property<decimal?>("TemperaturaC")
+                        .HasPrecision(5, 1)
+                        .HasColumnType("numeric(5,1)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("Folio");
+
+                    b.HasIndex("PedidoId");
+
+                    b.HasIndex("RemisionId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.ToTable("MuestraLaboratorio");
                 });
 
             modelBuilder.Entity("EPICO.Domain.Ventas.Obra", b =>
@@ -2123,6 +2588,72 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.ToTable("Obra");
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.Operador", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LicenciaNumero")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("LicenciaTipo")
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)");
+
+                    b.Property<DateOnly?>("LicenciaVence")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OrganizacionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SucursalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Telefono")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("SucursalId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.HasIndex("OrganizacionId", "Nombre");
+
+                    b.ToTable("Operador");
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.Pedido", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2135,6 +2666,12 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<EstadoCobro>("Cobro")
                         .HasColumnType("estado_cobro");
 
+                    b.Property<DateTime?>("ConfirmadaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ConfirmadaPorId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("CotizacionId")
                         .HasColumnType("uuid");
 
@@ -2143,6 +2680,9 @@ namespace EPICO.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreditoDesde")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("Descuento")
                         .HasPrecision(14, 2)
@@ -2213,6 +2753,9 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SucursalId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("TiempoTransporteMin")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("Total")
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)");
@@ -2231,6 +2774,8 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasIndex("ClienteId");
 
                     b.HasIndex("Cobro");
+
+                    b.HasIndex("ConfirmadaPorId");
 
                     b.HasIndex("CotizacionId");
 
@@ -2292,6 +2837,51 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProductoId");
 
                     b.ToTable("PedidoLinea");
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.PosicionEquipo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("AltitudM")
+                        .HasPrecision(7, 1)
+                        .HasColumnType("numeric(7,1)");
+
+                    b.Property<JsonDocument>("Atributos")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("EquipoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<FuentePosicion>("Fuente")
+                        .HasColumnType("fuente_posicion");
+
+                    b.Property<decimal>("Lat")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal>("Lng")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal?>("Rumbo")
+                        .HasPrecision(5, 1)
+                        .HasColumnType("numeric(5,1)");
+
+                    b.Property<decimal?>("VelocidadKmh")
+                        .HasPrecision(6, 1)
+                        .HasColumnType("numeric(6,1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EquipoId", "Fecha");
+
+                    b.ToTable("PosicionEquipo");
                 });
 
             modelBuilder.Entity("EPICO.Domain.Ventas.Producto", b =>
@@ -2373,6 +2963,10 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OrganizacionId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("PedidoMinimo")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)");
+
                     b.Property<decimal>("PrecioLista")
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)");
@@ -2380,6 +2974,9 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.PrimitiveCollection<List<string>>("Soluciones")
                         .IsRequired()
                         .HasColumnType("text[]");
+
+                    b.Property<int?>("TiempoServicioMin")
+                        .HasColumnType("integer");
 
                     b.Property<TipoProducto>("Tipo")
                         .HasColumnType("tipo_producto");
@@ -2693,6 +3290,9 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("CargandoEn")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2732,7 +3332,20 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("PedidoId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("RecibeNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("RegresandoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RegresoEstimado")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("SalidaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("SalidaProgramada")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("TerminadaEn")
@@ -2792,6 +3405,171 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("SaldoLealtad");
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.SolicitudReagenda", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<EstadoSolicitud>("Estado")
+                        .HasColumnType("estado_solicitud");
+
+                    b.Property<DateTime>("FechaPropuesta")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("NotaResolucion")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<OrigenReagenda>("Origen")
+                        .HasColumnType("origen_reagenda");
+
+                    b.Property<Guid>("PedidoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ResueltaEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResueltaPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("SolicitadoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SolicitadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("PedidoId")
+                        .IsUnique()
+                        .HasFilter("\"Estado\" = 'pendiente' AND NOT \"IsDeleted\"");
+
+                    b.HasIndex("ResueltaPorId");
+
+                    b.HasIndex("SolicitadoPorId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.ToTable("SolicitudReagenda");
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.Trayecto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Destino")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("EquipoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("Fin")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("Inicio")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("Km")
+                        .HasPrecision(10, 1)
+                        .HasColumnType("numeric(10,1)");
+
+                    b.Property<bool>("KmEstimado")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notas")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("OdometroFin")
+                        .HasPrecision(12, 1)
+                        .HasColumnType("numeric(12,1)");
+
+                    b.Property<decimal?>("OdometroInicio")
+                        .HasPrecision(12, 1)
+                        .HasColumnType("numeric(12,1)");
+
+                    b.Property<Guid?>("OperadorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Origen")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("PedidoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RemisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SucursalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<TipoTrayecto>("Tipo")
+                        .HasColumnType("tipo_trayecto");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("OperadorId");
+
+                    b.HasIndex("PedidoId");
+
+                    b.HasIndex("RemisionId")
+                        .IsUnique()
+                        .HasFilter("\"RemisionId\" IS NOT NULL AND NOT \"IsDeleted\"");
+
+                    b.HasIndex("SucursalId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.HasIndex("EquipoId", "Inicio");
+
+                    b.ToTable("Trayecto");
                 });
 
             modelBuilder.Entity("EPICO.Domain.Ventas.UnidadMedida", b =>
@@ -3150,6 +3928,36 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.CargaCombustible", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Equipo", null)
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Ventas.Operador", null)
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Sucursal", null)
+                        .WithMany()
+                        .HasForeignKey("SucursalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.CategoriaProducto", b =>
                 {
                     b.HasOne("EPICO.Domain.Acceso.Usuario", null)
@@ -3284,6 +4092,16 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ObraId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("EPICO.Domain.Ventas.Cotizacion", null)
+                        .WithMany()
+                        .HasForeignKey("ReemplazaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Cotizacion", null)
+                        .WithMany()
+                        .HasForeignKey("ReemplazadaPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("EPICO.Domain.Acceso.Sucursal", null)
                         .WithMany()
                         .HasForeignKey("SucursalId")
@@ -3393,11 +4211,59 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.DocumentoEquipo", b =>
+                {
+                    b.HasOne("EPICO.Domain.Historial.Archivo", null)
+                        .WithMany()
+                        .HasForeignKey("ArchivoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Equipo", null)
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.EnsayeLaboratorio", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.MuestraLaboratorio", null)
+                        .WithMany()
+                        .HasForeignKey("MuestraId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.Equipo", b =>
                 {
                     b.HasOne("EPICO.Domain.Acceso.Usuario", null)
                         .WithMany()
                         .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Operador", null)
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("EPICO.Domain.Acceso.Sucursal", null)
@@ -3437,6 +4303,35 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasOne("EPICO.Domain.Acceso.Empresa", null)
                         .WithMany()
                         .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.InspeccionEquipo", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Equipo", null)
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Historial.Archivo", null)
+                        .WithMany()
+                        .HasForeignKey("FirmaArchivoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Operador", null)
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("EPICO.Domain.Acceso.Usuario", null)
@@ -3490,6 +4385,25 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.Mantenimiento", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Equipo", null)
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.MovimientoInventario", b =>
                 {
                     b.HasOne("EPICO.Domain.Ventas.Producto", null)
@@ -3507,6 +4421,30 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasOne("EPICO.Domain.Acceso.Usuario", null)
                         .WithMany()
                         .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.MuestraLaboratorio", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Pedido", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Ventas.Remision", null)
+                        .WithMany()
+                        .HasForeignKey("RemisionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
@@ -3544,6 +4482,30 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("EPICO.Domain.Ventas.Operador", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Organizacion", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizacionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Acceso.Sucursal", null)
+                        .WithMany()
+                        .HasForeignKey("SucursalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("EPICO.Domain.Ventas.Pedido", b =>
                 {
                     b.HasOne("EPICO.Domain.Ventas.Cliente", null)
@@ -3551,6 +4513,11 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ClienteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmadaPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("EPICO.Domain.Ventas.Cotizacion", null)
                         .WithMany()
@@ -3606,6 +4573,15 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                     b.HasOne("EPICO.Domain.Ventas.Producto", null)
                         .WithMany()
                         .HasForeignKey("ProductoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.PosicionEquipo", b =>
+                {
+                    b.HasOne("EPICO.Domain.Ventas.Equipo", null)
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -3781,7 +4757,7 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .HasForeignKey("FirmaArchivoId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                    b.HasOne("EPICO.Domain.Ventas.Operador", null)
                         .WithMany()
                         .HasForeignKey("OperadorId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -3811,6 +4787,74 @@ namespace EPICO.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ProgramaId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.SolicitudReagenda", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Pedido", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("ResueltaPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("SolicitadoPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("EPICO.Domain.Ventas.Trayecto", b =>
+                {
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Equipo", null)
+                        .WithMany()
+                        .HasForeignKey("EquipoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EPICO.Domain.Ventas.Operador", null)
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Pedido", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Ventas.Remision", null)
+                        .WithMany()
+                        .HasForeignKey("RemisionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Sucursal", null)
+                        .WithMany()
+                        .HasForeignKey("SucursalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("EPICO.Domain.Acceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("EPICO.Domain.Historial.Evento", b =>

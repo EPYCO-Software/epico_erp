@@ -132,7 +132,10 @@ public class UsuarioAccesosController(IAppDbContext db, IUsuarioActual yo) : Cru
 {
     protected override string Recurso => "config.accesos";
     // El acceso solo dice a qué empresa y plantas entra; los permisos van en el rol del usuario.
-    protected override Task<bool> PermitidoAsync(UsuarioAcceso x, CancellationToken ct) => PuedeAsignar(Db, Yo, x, ct);
+    // A un usuario del portal no se le dan accesos internos.
+    protected override async Task<bool> PermitidoAsync(UsuarioAcceso x, CancellationToken ct) =>
+        await PuedeAsignar(Db, Yo, x, ct)
+        && !await Db.Set<Usuario>().IgnoreQueryFilters().AnyAsync(u => u.Id == x.UsuarioId && u.Tipo == Domain.Common.TipoUsuario.Portal, ct);
 
     /// <summary>Empresa propia (o root) y planta de esa empresa a la que uno también entra.</summary>
     public static async Task<bool> PuedeAsignar(IAppDbContext db, IUsuarioActual yo, UsuarioAcceso x, CancellationToken ct)
@@ -151,9 +154,10 @@ public class UsuariosController(IAppDbContext db, IUsuarioActual yo) : CrudContr
 {
     protected override string Recurso => "config.usuarios";
     // Ve a los usuarios con acceso a sus empresas (UsuarioAcceso ya viene filtrado por empresa).
-    // shortcut: un usuario recién creado sin accesos solo lo ve root; los clientes del portal llegan con ClienteContacto.
-    protected override IQueryable<Usuario> Consulta() =>
-        Db.Set<Usuario>().Where(u => Yo.EsRoot || Db.Set<UsuarioAcceso>().Any(a => a.UsuarioId == u.Id));
+    // shortcut: un usuario recién creado sin accesos solo lo ve root. Los del portal no salen aquí: se administran desde la
+    // ficha del cliente (/clientes/{id}/cuenta-portal).
+    protected override IQueryable<Usuario> Consulta() => Db.Set<Usuario>().Where(u => u.Tipo != Domain.Common.TipoUsuario.Portal &&
+        (Yo.EsRoot || Db.Set<UsuarioAcceso>().Any(a => a.UsuarioId == u.Id)));
     // No se toca a quien tiene permisos que uno no tiene (p. ej. un admin de empresa no edita al root).
     protected override async Task<bool> PermitidoAsync(Usuario x, CancellationToken ct) =>
         Yo.EsRoot || (await PermisosDe(Db, x.Id, ct)).Efectivos.All(Yo.Tiene);
@@ -161,6 +165,7 @@ public class UsuariosController(IAppDbContext db, IUsuarioActual yo) : CrudContr
     /// <summary>Cambio de rol (PUT /usuarios/{id} o alta): nadie cambia el suyo y solo se da un rol cuyos permisos uno tiene.</summary>
     protected override async Task AntesDeGuardar(Usuario x, bool nuevo, CancellationToken ct)
     {
+        if (nuevo) x.Tipo = Domain.Common.TipoUsuario.Interno;
         var antes = nuevo ? null : (Guid?)Db.Entry(x).Property(nameof(Usuario.RolId)).OriginalValue;
         if (x.RolId == antes) return;
         if (x.Id == Yo.Id) throw new ReglaException("No puedes cambiar tu propio rol.", 403);

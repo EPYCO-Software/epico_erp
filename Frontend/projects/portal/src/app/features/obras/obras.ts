@@ -3,6 +3,7 @@ import { ChevronRight, Lock, MapPin, Phone, Plus, X } from 'lucide';
 import { Avatar, Icon, mensajeError, ObraForm, PageHeader, telefonoVisible } from 'ui';
 import { NuevaObra, ObrasService } from '../../core/services/obras.service';
 import { PedidosService } from '../../core/services/pedidos.service';
+import { PerfilService } from '../../core/services/perfil.service';
 import { ObraPanel } from './obra-panel';
 
 @Component({
@@ -12,9 +13,11 @@ import { ObraPanel } from './obra-panel';
     <ui-page-header title="Mis obras" subtitle="Dónde entregamos tu concreto y a quién contactar">
       <button
         type="button"
-        class="flex h-11 items-center gap-2 rounded-xl border border-acero-oscuro bg-white px-4 font-semibold hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico"
+        class="flex h-11 items-center gap-2 rounded-xl border border-acero-oscuro bg-white px-4 font-semibold hover:border-carbon focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico disabled:cursor-not-allowed disabled:opacity-50"
         [attr.aria-expanded]="agregando()"
         aria-controls="obra-alta"
+        [disabled]="!agregando() && !!tope()"
+        [attr.aria-describedby]="tope() ? 'obras-tope' : null"
         (click)="alternar()"
       >
         <ui-icon [icono]="agregando() ? iconos.cerrar : iconos.agregar" [tamano]="18" />{{
@@ -23,6 +26,9 @@ import { ObraPanel } from './obra-panel';
       </button>
     </ui-page-header>
 
+    @if (tope()) {
+      <p id="obras-tope" class="mb-4 rounded-xl bg-[#FBF0DD] px-4 py-2.5 text-sm font-medium text-[#7A5410]">{{ tope() }}</p>
+    }
     <p class="sr-only" aria-live="polite">{{ mensaje() }}</p>
     @if (agregando()) {
       <ui-obra-form
@@ -40,7 +46,6 @@ import { ObraPanel } from './obra-panel';
           <button
             type="button"
             class="glass group flex h-full w-full flex-col p-4 text-left transition-colors hover:bg-white/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-epico sm:p-5"
-            [attr.aria-label]="'Ver y editar la obra ' + o.nombre"
             (click)="abrirPanel(o.id)"
           >
             <span class="flex w-full flex-wrap items-start justify-between gap-2">
@@ -72,7 +77,7 @@ import { ObraPanel } from './obra-panel';
             </span>
             <span class="mt-3 flex items-center gap-1.5 text-sm">
               <ui-icon [icono]="iconos.tel" [tamano]="15" class="text-texto-suave" />
-              {{ telefono(o.contactos[0]) }}
+              {{ o.contactos.length ? telefono(o.contactos[0]) : 'Sin contacto' }}
               @if (o.contactos.length > 1) {
                 <span class="text-texto-suave"
                   >· {{ o.contactos.length - 1 }} contacto{{
@@ -104,6 +109,9 @@ export default class Obras {
   private readonly obrasService = inject(ObrasService);
   private readonly pedidos = inject(PedidosService);
   protected readonly obras = this.obrasService.obras;
+  private readonly perfil = inject(PerfilService);
+  /** Límite de obras que le puso su asesor (cuenta las que ve: las suyas activas, como el backend). */
+  protected readonly tope = computed(() => this.perfil.tope('obras', this.obras().length));
   protected readonly iconos = {
     agregar: Plus,
     cerrar: X,

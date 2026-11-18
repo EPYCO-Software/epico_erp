@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, input, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import type * as Leaflet from 'leaflet';
 
 export interface PuntoMapa {
@@ -10,6 +10,15 @@ export interface PuntoMapa {
   etiqueta: string;
   /** Camión sin señal reciente: se dibuja atenuado y con borde punteado. */
   atenuado?: boolean;
+  /** El elegido (su vista previa está abierta): más grande y con anillo. */
+  resaltado?: boolean;
+}
+
+/** Un recorrido dibujado como línea (historial de posiciones de un camión). */
+export interface RutaMapa {
+  id: string;
+  puntos: [number, number][];
+  color?: string;
 }
 
 const COLOR = { camion: '#D3181E', obra: '#1A1A1C', planta: '#696D71' };
@@ -32,12 +41,17 @@ const COLOR = { camion: '#D3181E', obra: '#1A1A1C', planta: '#696D71' };
 export class MapaSeguimiento {
   readonly puntos = input.required<PuntoMapa[]>();
   readonly titulo = input('Mapa de seguimiento');
+  readonly rutas = input<RutaMapa[]>([]);
+  /** Clic en un marcador (su id). Es un atajo con el mouse: quien lo usa ofrece la misma lista en texto. */
+  readonly elegir = output<string>();
 
   private readonly lienzo = viewChild.required<ElementRef<HTMLElement>>('lienzo');
   protected readonly error = signal(false);
   private L: typeof Leaflet | null = null;
   private mapa: Leaflet.Map | null = null;
   private readonly marcadores = new Map<string, Leaflet.Marker>();
+  private readonly lineas = new Map<string, Leaflet.Polyline>();
+  private idsRutas = '';
   /** Solo se encuadra al inicio o cuando cambia qué puntos hay, no en cada actualización de posición. */
   private ids = '';
 
@@ -64,6 +78,7 @@ export class MapaSeguimiento {
     });
     effect(() => {
       this.puntos();
+      this.rutas();
       this.sincronizar();
     });
     inject(DestroyRef).onDestroy(() => this.mapa?.remove());
@@ -86,7 +101,34 @@ export class MapaSeguimiento {
       if (m) {
         m.setLatLng([p.lat, p.lng]).setIcon(icono);
       } else {
-        this.marcadores.set(p.id, L.marker([p.lat, p.lng], { icon: icono, keyboard: false, title: p.etiqueta }).addTo(mapa));
+        const nuevo = L.marker([p.lat, p.lng], { icon: icono, keyboard: false, title: p.etiqueta }).addTo(mapa);
+        nuevo.on('click', () => this.elegir.emit(p.id));
+        this.marcadores.set(p.id, nuevo);
+      }
+      if (p.resaltado) this.marcadores.get(p.id)!.setZIndexOffset(1000);
+    }
+    // Las rutas: se reemplazan si cambian sus puntos
+    const rutas = this.rutas();
+    for (const [id, l] of this.lineas) {
+      if (!rutas.some((r) => r.id === id)) {
+        l.remove();
+        this.lineas.delete(id);
+      }
+    }
+    for (const r of rutas) {
+      const l = this.lineas.get(r.id);
+      if (l) l.setLatLngs(r.puntos);
+      else this.lineas.set(r.id, L.polyline(r.puntos, { color: r.color ?? '#D3181E', weight: 4, opacity: 0.85 }).addTo(mapa));
+    }
+    // Una ruta nueva se encuadra completa (manda sobre los puntos)
+    const idsRutas = rutas.map((r) => `${r.id}:${r.puntos.length}`).join();
+    if (idsRutas !== this.idsRutas) {
+      this.idsRutas = idsRutas;
+      const todos = rutas.flatMap((r) => r.puntos);
+      if (todos.length) {
+        mapa.fitBounds(L.latLngBounds(todos), { padding: [48, 48], maxZoom: 16 });
+        this.ids = puntos.map((p) => p.id).join();
+        return;
       }
     }
     const ids = puntos.map((p) => p.id).join();
@@ -99,7 +141,7 @@ export class MapaSeguimiento {
   /** Etiqueta tipo "pin" centrada sobre el punto; sin imágenes (Leaflet las pide para su icono por defecto). */
   private html(p: PuntoMapa): string {
     const color = COLOR[p.tipo];
-    const borde = p.atenuado ? 'border:2px dashed #fff;opacity:.7' : 'border:2px solid #fff';
+    const borde = (p.atenuado ? 'border:2px dashed #fff;opacity:.7' : 'border:2px solid #fff') + (p.resaltado ? ';outline:3px solid #1A1A1C' : '');
     const texto = p.etiqueta.replace(/[<>&"]/g, '');
     // La obra va debajo de su punto para no quedar tapada por un camión que está descargando ahí.
     const desplazamiento = p.tipo === 'obra' ? 'translate(-50%,4px)' : 'translate(-50%,-100%)';

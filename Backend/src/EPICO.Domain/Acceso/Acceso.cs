@@ -58,7 +58,8 @@ public class Usuario : BaseEntity
     public string Correo { get => _correo; set => _correo = value.Trim().ToLowerInvariant(); }
     string _correo = "";
     [JsonIgnore] public string PasswordHash { get; set; } = "";
-    [Rastreado("Tipo", TipoDatoCambio.Opcion)] public TipoUsuario Tipo { get; set; }
+    /// <summary>Solo lectura en la API: los internos nacen en /usuarios y los del portal en /clientes/{id}/cuenta-portal.</summary>
+    [Editable(false), Rastreado("Tipo", TipoDatoCambio.Opcion)] public TipoUsuario Tipo { get; set; }
     /// <summary>Su perfil: la plantilla de sus permisos en todas sus empresas (más sus ajustes en UsuarioPermiso).</summary>
     [Rastreado("Rol", TipoDatoCambio.Referencia)] public Guid? RolId { get; set; }
     [MaxLength(120), Rastreado("Nombre")] public string Nombre { get; set; } = "";

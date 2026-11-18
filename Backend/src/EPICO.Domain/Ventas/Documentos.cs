@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using EPICO.Domain.Common;
 
 namespace EPICO.Domain.Ventas;
@@ -26,6 +27,10 @@ public class Cotizacion : BaseEntity, IDeEmpresa, ILugarEntrega
     public int Revision { get; set; }
     /// <summary>Nueva basada en otra (comparar precios).</summary>
     public Guid? BaseId { get; set; }
+    /// <summary>Negociación: la oferta que esta mejora (se fija al crear; al enviarla, la anterior queda reemplazada).</summary>
+    public Guid? ReemplazaId { get; set; }
+    /// <summary>La oferta enviada que reemplazó a esta: ya no se envía, confirma ni acepta.</summary>
+    public Guid? ReemplazadaPorId { get; set; }
     [Rastreado("Estado", TipoDatoCambio.Opcion)] public EstadoCotizacion Estado { get; set; }
     public OrigenCotizacion Origen { get; set; }
     [Rastreado("Oculta al cliente")] public bool OcultaAlCliente { get; set; }
@@ -107,7 +112,14 @@ public class Pedido : BaseEntity, IDeEmpresa, ILugarEntrega
     [Rastreado("Entrega")] public DateTime FechaHoraEntrega { get; set; }
     [Rastreado("Estado", TipoDatoCambio.Opcion)] public EstadoPedido Estado { get; set; }
     [Rastreado("Cobro", TipoDatoCambio.Opcion)] public EstadoCobro Cobro { get; set; }
+    /// <summary>Cuándo pasó el cobro a crédito (null fuera de crédito); vence a los DiasCredito del cliente.</summary>
+    public DateTime? CreditoDesde { get; set; }
+    /// <summary>Ventas confirmó la orden (null = por confirmar). También al confirmar la planta.</summary>
+    public DateTime? ConfirmadaEn { get; set; }
+    public Guid? ConfirmadaPorId { get; set; }
     [Rastreado("Método de pago", TipoDatoCambio.Opcion)] public MetodoPago MetodoPago { get; set; }
+    /// <summary>Ida y vuelta en minutos; null = calculado con la distancia (PUT /pedidos/{id}/tiempos).</summary>
+    [Editable(false), Rastreado("Tiempo de transporte")] public int? TiempoTransporteMin { get; set; }
     [Rastreado("Estatus planta", TipoDatoCambio.Opcion)] public EstatusPlanta EstatusPlanta { get; set; }
     /// <summary>Nueva fecha que pidió la planta.</summary>
     [Rastreado("Fecha pedida por planta")] public DateTime? SolicitudPlantaFecha { get; set; }
@@ -117,6 +129,15 @@ public class Pedido : BaseEntity, IDeEmpresa, ILugarEntrega
     public decimal Iva { get; set; }
     [Rastreado("Total", TipoDatoCambio.Dinero)] public decimal Total { get; set; }
     public List<PedidoLinea> Lineas { get; set; } = [];
+    /// <summary>Números económicos de sus viajes (solo en la lista y el detalle de /pedidos).</summary>
+    [NotMapped] public List<string>? Unidades { get; set; }
+    /// <summary>m³ en viajes asignados (solo en la lista y el detalle de /pedidos).</summary>
+    [NotMapped] public decimal? M3Asignados { get; set; }
+    /// <summary>Transporte, servicio y total por viaje (solo en la lista y el detalle de /pedidos).</summary>
+    [NotMapped] public TiemposPedido? Tiempos { get; set; }
+    [NotMapped] public ReagendaPendiente? ReagendaPendiente { get; set; }
+    /// <summary>¿Hay a quién avisar al reagendar? (contacto principal o correo del cliente).</summary>
+    [NotMapped] public bool? ClienteTieneCorreo { get; set; }
 }
 
 public class PedidoLinea : IEntidad
@@ -143,11 +164,42 @@ public class Remision : BaseEntity, IDePadre
     [MaxLength(200), Rastreado("Operador")] public string? OperadorNombre { get; set; }
     [Range(0.01, 9999), Rastreado("Volumen m³")] public decimal VolumenM3 { get; set; }
     [Rastreado("Estado", TipoDatoCambio.Opcion)] public EstadoViaje Estado { get; set; }
+    [Rastreado("Cargando")] public DateTime? CargandoEn { get; set; }
     [Rastreado("Salida")] public DateTime? SalidaEn { get; set; }
     public DateTime? LlegadaEstimada { get; set; }
     [Rastreado("Llegada")] public DateTime? LlegadaEn { get; set; }
+    [Rastreado("Regresando")] public DateTime? RegresandoEn { get; set; }
     [Rastreado("Terminada")] public DateTime? TerminadaEn { get; set; }
-    public Guid? FirmaArchivoId { get; set; }
+    /// <summary>Ventana que ocupa a la unidad: sale de planta y regresa (transporte de ida y vuelta + servicio).</summary>
+    [Rastreado("Salida programada")] public DateTime? SalidaProgramada { get; set; }
+    public DateTime? RegresoEstimado { get; set; }
+    [Rastreado("Firma", TipoDatoCambio.Referencia)] public Guid? FirmaArchivoId { get; set; }
+    /// <summary>Quién recibió en obra (firma).</summary>
+    [MaxLength(200), Rastreado("Recibe")] public string? RecibeNombre { get; set; }
+    string? IDePadre.PadreTipo => nameof(Pedido);
+    Guid? IDePadre.PadreId => PedidoId;
+}
+
+/// <summary>TransporteCalculado = sale de la distancia (no se capturó); TotalMin = transporte + servicio.</summary>
+public record TiemposPedido(int TransporteMin, bool TransporteCalculado, int ServicioMin, int TotalMin);
+
+public record ReagendaPendiente(Guid Id, DateTime FechaPropuesta, string Motivo, OrigenReagenda Origen);
+
+/// <summary>Propuesta de cambiar la entrega de un pedido. Una pendiente por pedido; se acepta (reagenda y avisa) o se rechaza.</summary>
+public class SolicitudReagenda : BaseEntity, IDePadre
+{
+    public Guid PedidoId { get; set; }
+    public DateTime FechaPropuesta { get; set; }
+    [MaxLength(500)] public string Motivo { get; set; } = "";
+    public OrigenReagenda Origen { get; set; }
+    public EstadoSolicitud Estado { get; set; }
+    public Guid? SolicitadoPorId { get; set; }
+    public DateTime SolicitadoEn { get; set; }
+    public Guid? ResueltaPorId { get; set; }
+    public DateTime? ResueltaEn { get; set; }
+    [MaxLength(500)] public string? NotaResolucion { get; set; }
+    /// <summary>Folio del pedido (solo en las listas).</summary>
+    [NotMapped] public string? PedidoFolio { get; set; }
     string? IDePadre.PadreTipo => nameof(Pedido);
     Guid? IDePadre.PadreId => PedidoId;
 }

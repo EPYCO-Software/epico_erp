@@ -71,6 +71,14 @@ import { permisosSesion } from '../../core/permisos';
           <dt class="text-texto-suave">Renta de</dt>
           <dd>{{ textoEquipo(e) }}</dd>
         }
+        @if (p().tiempoServicioMin; as ts) {
+          <dt class="text-texto-suave">Servicio</dt>
+          <dd>{{ ts }} min por viaje</dd>
+        }
+        @if (p().pedidoMinimo; as pm) {
+          <dt class="text-texto-suave">Pedido mínimo</dt>
+          <dd>{{ pm }} {{ p().unidad }} (con menos no se deja pedir)</dd>
+        }
         @if (p().minimo; as minimo) {
           <dt class="text-texto-suave">Mínimo</dt>
           <dd>{{ minimo }} m³ (se cobra al menos eso)</dd>

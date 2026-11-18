@@ -61,6 +61,21 @@ public partial class AppDbContext
                     }
                     break;
                 }
+                case SolicitudReagenda s when nuevo && s.Estado == EstadoSolicitud.Pendiente:
+                {
+                    var p = await Set<Pedido>().IgnoreQueryFilters().FirstAsync(x => x.Id == s.PedidoId, ct);
+                    var texto = $"{p.Folio} · propone {s.FechaPropuesta:dd/MM/yyyy HH:mm} UTC. {s.Motivo}";
+                    foreach (var d in await UsuariosConPermisoAsync(p.EmpresaId, "ventas.pedidos.reagendar", ct))
+                        Para(d, "pedidos", $"Solicitud de reagenda ({Etiqueta(s.Origen)})", texto, $"/ventas/ordenes/{Uri.EscapeDataString(p.Folio)}");
+                    break;
+                }
+                case SolicitudReagenda s when !nuevo && Cambio(e, nameof(SolicitudReagenda.Estado)) && s.Estado != EstadoSolicitud.Pendiente:
+                {
+                    var folio = await Set<Pedido>().IgnoreQueryFilters().Where(x => x.Id == s.PedidoId).Select(x => x.Folio).FirstAsync(ct);
+                    Para(s.SolicitadoPorId, "pedidos", $"Reagenda de {folio} {(s.Estado == EstadoSolicitud.Aceptada ? "aceptada" : "rechazada")}",
+                        s.NotaResolucion?.Trim() is { Length: > 0 } n ? n : folio, $"/ventas/ordenes/{Uri.EscapeDataString(folio)}");
+                    break;
+                }
                 case Actividad a when (nuevo || Cambio(e, nameof(Actividad.AsignadaAId))) && a is { HechaEn: null, CanceladaEn: null }:
                     Para(a.AsignadaAId, "crm", "Te asignaron una actividad", $"{a.Resumen} · vence {a.FechaLimite:dd/MM/yyyy}",
                         RutaDe(a.RegistroTipo, a.RegistroId));
@@ -98,10 +113,13 @@ public partial class AppDbContext
 
     /// <summary>Internos activos con acceso a la empresa y permiso efectivo de ver cotizaciones (rol + agregados − quitados).
     /// Root ("*") no cuenta: solo quien tiene ventas explícito.</summary>
-    async Task<List<Guid>> VendedoresDe(Guid empresaId, CancellationToken ct)
+    Task<List<Guid>> VendedoresDe(Guid empresaId, CancellationToken ct) => UsuariosConPermisoAsync(empresaId, "ventas.cotizaciones.ver", ct);
+
+    public async Task<List<Guid>> UsuariosConPermisoAsync(Guid empresaId, string pedido, CancellationToken ct = default)
     {
-        const string pedido = "ventas.cotizaciones.ver";
-        string[] cubren = ["ventas.*", "ventas.cotizaciones.*", pedido];
+        // ventas.pedidos.reagendar lo cubren él mismo, ventas.pedidos.* y ventas.*
+        var partes = pedido.Split('.');
+        string[] cubren = [pedido, .. Enumerable.Range(1, partes.Length - 1).Select(n => string.Join('.', partes[..n]) + ".*")];
         var candidatos = await Set<Usuario>()
             .Where(u => u.Activo && u.Tipo == TipoUsuario.Interno
                         && Set<UsuarioAcceso>().IgnoreQueryFilters().Any(a => a.UsuarioId == u.Id && a.EmpresaId == empresaId))

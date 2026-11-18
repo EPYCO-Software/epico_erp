@@ -36,6 +36,8 @@ public sealed class Api : WebApplicationFactory<Program>, IAsyncLifetime
         b.UseSetting("Jwt:Key", new string('k', 48));
         b.UseSetting("Seed:RootPassword", RootPassword);
         b.UseSetting("Cifrado:Llave", new string('c', 40));
+        b.UseSetting("Flota:AvisosCombustible", "false"); // las pruebas lo corren a mano
+        b.UseSetting("Flota:GuardarPosiciones", "false");
     }
 
     public AppDbContext Db() => Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>();
@@ -409,6 +411,26 @@ public class ApiTests(Api api) : IClassFixture<Api>
         Assert.Equal(HttpStatusCode.OK, (await c.GetAsync("/api/v1/productos")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync("/api/v1/productos", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/api/v1/usuarios")).StatusCode);
+
+        // Los obligatorios existen y el seed los repone si el rol ya no los cubre, sin quitar nada.
+        Assert.All(Seed.Obligatorios, p => Assert.Contains(p, Permisos.Todos));
+        var rolVentas = roles.Single(r => r.Nombre == Seed.RolVentas).Id;
+        var pedidos = permisos.Single(p => p.RolId == rolVentas && p.Permiso == "ventas.pedidos.*");
+        db.Remove(pedidos);
+        await db.SaveChangesAsync();
+        await api.SeedAsync();
+        await api.SeedAsync();
+        await using (var d = api.Db())
+        {
+            var ahora = await d.Set<RolPermiso>().Where(p => p.RolId == rolVentas).Select(p => p.Permiso).ToListAsync();
+            Assert.Equal(1, ahora.Count(p => p == "ventas.pedidos.confirmar"));
+            Assert.Contains("ventas.pedidos.planta", ahora);
+            Assert.DoesNotContain("ventas.cotizaciones.confirmar", ahora);   // ya lo cubre ventas.cotizaciones.*
+            Assert.Equal(De(Seed.RolVentas).Length - 1 + 2, ahora.Count);
+            d.Set<RolPermiso>().RemoveRange(d.Set<RolPermiso>().Where(p => p.RolId == rolVentas && p.Permiso.StartsWith("ventas.pedidos.")));
+            d.Add(new RolPermiso { RolId = rolVentas, Permiso = "ventas.pedidos.*" });
+            await d.SaveChangesAsync();
+        }
     }
 
     [Fact]
